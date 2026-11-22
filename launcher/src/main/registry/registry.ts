@@ -61,7 +61,7 @@ function envGet(env: NodeJS.ProcessEnv, key: string): string | undefined {
 }
 
 /** Expands `%VAR%` (case-insensitive); undefined when any variable is unknown. */
-function expandEnv(s: string, env: NodeJS.ProcessEnv): string | undefined {
+export function expandEnv(s: string, env: NodeJS.ProcessEnv): string | undefined {
   let missing = false
   const out = s.replace(/%([^%]+)%/g, (_, name: string) => {
     const v = envGet(env, name)
