@@ -23,8 +23,14 @@ export function toMcpResult(r: { text: string; images?: { png: Uint8Array }[] })
   }
 }
 
-export function createMcpServer(ctx: ToolContext, version = '0.1.0'): McpServer {
-  const server = new McpServer({ name: 'squarel', version }, { instructions: SERVER_INSTRUCTIONS })
+export function createMcpServer(
+  ctx: ToolContext,
+  opts: { version?: string; onToolCall?: (name: string) => void } = {},
+): McpServer {
+  const server = new McpServer(
+    { name: 'squarel', version: opts.version ?? '0.1.0' },
+    { instructions: SERVER_INSTRUCTIONS },
+  )
   for (const tool of ALL_TOOLS) {
     server.registerTool(
       tool.name,
@@ -57,8 +63,11 @@ export function createMcpServer(ctx: ToolContext, version = '0.1.0'): McpServer 
               : undefined,
         }
         try {
-          return toMcpResult(await runTool(tool.name, args, callCtx))
+          const result = toMcpResult(await runTool(tool.name, args, callCtx))
+          opts.onToolCall?.(tool.name)
+          return result
         } catch (e) {
+          opts.onToolCall?.(tool.name)
           const err = e instanceof ToolError ? e : new ToolError('INVALID', String(e))
           return {
             isError: true,

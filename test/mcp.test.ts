@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -78,6 +79,11 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
     })
     const client = new Client({ name: 'stdio-test', version: '1.0.0' })
     await client.connect(transport)
+    const runDir = join(t.dir, 'run')
+    const presenceFiles = () =>
+      existsSync(runDir) ? readdirSync(runDir).filter((f) => /^mcp-\d+\.json$/.test(f)) : []
+    for (let i = 0; i < 100 && presenceFiles().length === 0; i++) await new Promise((r) => setTimeout(r, 50))
+    expect(presenceFiles()).toHaveLength(1)
     const info = client.getServerVersion()
     expect(info?.name).toBe('squarel')
     expect(client.getInstructions()).toContain('PROPOSALS')
@@ -91,5 +97,8 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
     const opened = await client.callTool({ name: 'open_in_editor', arguments: {} })
     expect((opened.content as Content[])[0].text).toMatch(/bridge/i)
     await client.close()
+    for (let i = 0; i < 100 && readdirSync(runDir).some((f) => f.startsWith('mcp-')); i++)
+      await new Promise((r) => setTimeout(r, 50))
+    expect(existsSync(runDir) ? readdirSync(runDir).filter((f) => f.startsWith('mcp-')) : []).toEqual([])
   }, 60000)
 })
