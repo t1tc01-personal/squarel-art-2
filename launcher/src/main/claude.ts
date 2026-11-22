@@ -56,17 +56,40 @@ export async function copySkills(squarelDir: string, homeDir: string, d: Deps): 
     .sort()
   if (names.length === 0) return []
   await d.fs.mkdir(dstRoot, { recursive: true })
+  for (const leftover of (await d.fs.readdir(dstRoot)) as string[]) {
+    if (/^\.pixel-.*\.(tmp|bak)-/.test(leftover)) {
+      await d.fs.rm(join(dstRoot, leftover), { recursive: true, force: true }).catch(() => {})
+    }
+  }
   for (const name of names) {
     const tmp = join(dstRoot, `.${name}.tmp-${process.pid}`)
-    await d.fs.rm(tmp, { recursive: true, force: true })
+    const bak = join(dstRoot, `.${name}.bak-${process.pid}`)
+    const live = join(dstRoot, name)
     try {
       await copyDir(join(srcRoot, name), tmp, d)
-      await d.fs.rm(join(dstRoot, name), { recursive: true, force: true })
-      await d.fs.rename(tmp, join(dstRoot, name))
     } catch (e) {
       await d.fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
       throw e
     }
+    // Move the old copy aside (not delete) so a failed swap can be rolled back.
+    let movedAside = true
+    try {
+      await d.fs.rename(live, bak)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+        await d.fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
+        throw e
+      }
+      movedAside = false
+    }
+    try {
+      await d.fs.rename(tmp, live)
+    } catch (e) {
+      if (movedAside) await d.fs.rename(bak, live).catch(() => {})
+      await d.fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
+      throw e
+    }
+    if (movedAside) await d.fs.rm(bak, { recursive: true, force: true }).catch(() => {})
   }
   return names
 }

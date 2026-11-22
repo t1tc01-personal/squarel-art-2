@@ -105,6 +105,60 @@ describe('copySkills', () => {
     expect((await readdir(dst)).sort()).toEqual(['mine', 'pixel-a', 'pixel-b', 'pixel-gone'])
   })
 
+  async function setup() {
+    root = await mkdtemp(join(tmpdir(), 'sq-skills-'))
+    const sq = join(root, 'sq')
+    const home = join(root, 'home')
+    const src = join(sq, '.claude', 'skills', 'pixel-a')
+    const dst = join(home, '.claude', 'skills')
+    await mkdir(src, { recursive: true })
+    await writeFile(join(src, 'SKILL.md'), 'new')
+    await mkdir(join(dst, 'pixel-a'), { recursive: true })
+    await writeFile(join(dst, 'pixel-a', 'SKILL.md'), 'old')
+    return { sq, home, dst }
+  }
+
+  it('keeps the old skill when the final rename fails, and sweeps leftovers next time', async () => {
+    const { sq, home, dst } = await setup()
+    const d = createDeps('real')
+    const realRename = d.fs.rename
+    d.fs = {
+      ...d.fs,
+      rename: async (a, b) => {
+        if (String(a).includes('.tmp-')) throw Object.assign(new Error('EPERM'), { code: 'EPERM' })
+        return realRename(a, b)
+      },
+    }
+    await expect(copySkills(sq, home, d)).rejects.toThrow('EPERM')
+    expect(await readFile(join(dst, 'pixel-a', 'SKILL.md'), 'utf8')).toBe('old')
+    expect((await readdir(dst)).sort()).toEqual(['pixel-a'])
+
+    await mkdir(join(dst, '.pixel-zz.tmp-1'))
+    await mkdir(join(dst, '.pixel-zz.bak-1'))
+    await writeFile(join(dst, '.other'), 'x')
+    expect(await copySkills(sq, home, createDeps('real'))).toEqual(['pixel-a'])
+    expect(await readFile(join(dst, 'pixel-a', 'SKILL.md'), 'utf8')).toBe('new')
+    expect((await readdir(dst)).sort()).toEqual(['.other', 'pixel-a'])
+  })
+
+  it('does not follow a junction at the destination', async (ctx) => {
+    const { sq, home, dst } = await setup()
+    const sentinel = join(root, 'sentinel')
+    await mkdir(sentinel)
+    await writeFile(join(sentinel, 'keep.txt'), 'keep')
+    await rm(join(dst, 'pixel-a'), { recursive: true })
+    try {
+      await symlink(sentinel, join(dst, 'pixel-a'), 'junction')
+    } catch {
+      ctx.skip()
+      return
+    }
+    await copySkills(sq, home, createDeps('real'))
+    expect(await readFile(join(sentinel, 'keep.txt'), 'utf8')).toBe('keep')
+    expect(await readdir(sentinel)).toEqual(['keep.txt'])
+    expect(await readFile(join(dst, 'pixel-a', 'SKILL.md'), 'utf8')).toBe('new')
+  })
+
   it('returns [] when the source has no skills', async () => {
     root = await mkdtemp(join(tmpdir(), 'sq-skills-'))
     expect(await copySkills(join(root, 'none'), join(root, 'home'), createDeps('real'))).toEqual([])
