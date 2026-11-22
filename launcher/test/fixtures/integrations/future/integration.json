@@ -1,0 +1,8 @@
+{
+  "schema": 2,
+  "id": "future",
+  "name": "Tương lai",
+  "description": "Cần launcher mới.",
+  "icon": "icon.png",
+  "newField": true
+}

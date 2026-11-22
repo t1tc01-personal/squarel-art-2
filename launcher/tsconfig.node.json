@@ -9,7 +9,8 @@
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "paths": { "@squarel/integration-schema": ["../integrations/schema/integration.schema.ts"] }
   },
   "include": [
     "electron.vite.config.ts",
