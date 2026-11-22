@@ -40,6 +40,26 @@ describe('env store', () => {
     expect(maskSecret('abcd1234wxyz')).toBe('••••wxyz')
     expect(maskSecret(undefined)).toBe('')
     expect(maskSecret('')).toBe('')
+    for (const n of [1, 4, 5, 7]) expect(maskSecret('a'.repeat(n))).toBe('••••')
+    expect(maskSecret('abcd1234')).toBe('••••1234')
+  })
+
+  it('mixed line endings stay byte-exact when one key is edited', () => {
+    const src = 'A=1\r\nB=2\nC=3\r\nD=4'
+    const doc = parseEnv(src)
+    expect(serializeEnv(doc)).toBe(src)
+    expect(['A', 'B', 'C', 'D'].map((k) => getVar(doc, k))).toEqual(['1', '2', '3', '4'])
+    expect(serializeEnv(setVar(doc, 'B', 'x'))).toBe('A=1\r\nB=x\nC=3\r\nD=4')
+    expect(serializeEnv(setVar(doc, 'C', 'y'))).toBe('A=1\r\nB=2\nC=y\r\nD=4')
+    expect(serializeEnv(setVar(doc, 'E', '5'))).toBe('A=1\r\nB=2\nC=3\r\nD=4\r\nE=5')
+  })
+
+  it('handles export-prefixed lines and keeps the prefix', () => {
+    const doc = parseEnv('export K=1\n  export  M = 2\n')
+    expect(getVar(doc, 'K')).toBe('1')
+    expect(getVar(doc, 'M')).toBe(' 2')
+    expect(serializeEnv(setVar(doc, 'K', '9'))).toBe('export K=9\n  export  M = 2\n')
+    expect(serializeEnv(setVar(doc, 'M', '8'))).toBe('export K=1\n  export  M=8\n')
   })
 
   it('rejects newlines in keys and values', () => {
