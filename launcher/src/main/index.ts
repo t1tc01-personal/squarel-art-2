@@ -1,10 +1,27 @@
-import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import type { EventName, EventPayload } from '../shared/ipc'
+import { type BridgeSupervisor, createBridgeSupervisor } from './bridge/supervisor'
+import type { BridgeState } from './bridge/types'
+import { createDeps } from './deps'
+import { getVar, parseEnv } from './env-store'
+import { createIpcHandlers, type IpcHandlers, unquoteEnv } from './ipc-handlers'
+import { appPaths } from './paths'
+import { createScheduler } from './scheduler'
+import { type LauncherState, loadState, saveState } from './state'
+import { createElectronUpdaterAdapter } from './updates/electron-updater'
+import { createLauncherUpdater } from './updates/launcher'
 
 const BG_APP = '#0D0E12'
 
 const RENDERER_FILE = join(import.meta.dirname, '../renderer/index.html')
+
+const CHECKS_MS = 600_000
+const UPDATES_MS = 21_600_000
+const PRESENCE_POLL_MS = 5_000
+const DEFAULT_BRIDGE_PORT = 4321
 
 /** True only for the app's own page: the dev server URL or the packaged index.html. */
 export function isAppUrl(url: string): boolean {
@@ -17,6 +34,8 @@ export function isAppUrl(url: string): boolean {
     return false
   }
 }
+
+let mainWindow: BrowserWindow | undefined
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -45,15 +64,163 @@ function createWindow(): BrowserWindow {
   win.webContents.on('will-navigate', block)
   win.webContents.on('will-redirect', block)
   win.once('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = undefined
+  })
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     void win.loadFile(RENDERER_FILE)
   }
+  mainWindow = win
   return win
 }
 
-app.whenReady().then(() => {
+function send<E extends EventName>(event: E, payload: EventPayload<E>): void {
+  const win = mainWindow
+  if (win && !win.isDestroyed()) win.webContents.send(event, payload)
+}
+
+/** Services behind the IPC channels: state, bridge supervisor, scheduler, presence polling. */
+async function startServices(): Promise<IpcHandlers> {
+  const d = createDeps('real')
+  const paths = appPaths(d.env)
+  const logsDir = join(dirname(paths.stateFile), 'logs')
+  const log = (m: string) => console.warn(`[launcher] ${m}`)
+
+  let state: LauncherState = await loadState(paths.stateFile)
+  const readPort = async (): Promise<number> => {
+    if (!state.squarelDir) return DEFAULT_BRIDGE_PORT
+    try {
+      const doc = parseEnv(String(await d.fs.readFile(join(state.squarelDir, '.env'), 'utf8')))
+      const n = Number(unquoteEnv(getVar(doc, 'BRIDGE_PORT')))
+      return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : DEFAULT_BRIDGE_PORT
+    } catch {
+      return DEFAULT_BRIDGE_PORT
+    }
+  }
+
+  // TODO(T15): quit wiring (before-quit → await sup.stop(); exit → sup.killOwnChild()) and orphan recovery.
+  let sup: BridgeSupervisor | undefined
+  let supPort = DEFAULT_BRIDGE_PORT
+  let unsubscribeBridge: (() => void) | undefined
+  const bridge = (): BridgeState =>
+    sup?.state() ?? { mode: 'down', port: supPort, clients: [], since: new Date(0).toISOString() }
+
+  let lastPresence = ''
+  let handlers: IpcHandlers | undefined
+  const pushPresence = async () => {
+    if (!handlers) return
+    try {
+      const groups = await handlers.presence()
+      const json = JSON.stringify(groups)
+      if (json === lastPresence) return
+      lastPresence = json
+      send('presence:changed', groups)
+    } catch (e) {
+      log(`presence failed: ${(e as Error)?.name ?? 'Error'}`)
+    }
+  }
+
+  let bridgeChain: Promise<void> = Promise.resolve()
+  const restartBridge = () => {
+    bridgeChain = bridgeChain.then(async () => {
+      unsubscribeBridge?.()
+      await sup?.stop()
+      sup = undefined
+      supPort = await readPort()
+      if (!state.squarelDir) return
+      sup = createBridgeSupervisor({ port: supPort, squarelDir: state.squarelDir }, d)
+      unsubscribeBridge = sup.onChange(() => void pushPresence())
+      await sup.start()
+    })
+    bridgeChain = bridgeChain.catch((e) => log(`bridge restart failed: ${(e as Error)?.name ?? 'Error'}`))
+  }
+
+  const updater = app.isPackaged
+    ? createLauncherUpdater(createElectronUpdaterAdapter())
+    : {
+        check: async () =>
+          ({ ok: false, reason: 'not-found', message: 'Bản chạy từ mã nguồn không tự cập nhật' }) as const,
+      }
+
+  handlers = createIpcHandlers({
+    d,
+    launcherVersion: app.getVersion(),
+    isDev: !app.isPackaged,
+    homeDir: homedir(),
+    logsDir,
+    isAppUrl,
+    state: {
+      load: async () => state,
+      save: async (s) => {
+        const dirChanged = s.squarelDir !== state.squarelDir
+        await saveState(paths.stateFile, s)
+        state = s
+        if (dirChanged) restartBridge()
+      },
+    },
+    bridge,
+    dialogs: {
+      async pickFolder() {
+        const opts = { properties: ['openDirectory' as const] }
+        const r = mainWindow
+          ? await dialog.showOpenDialog(mainWindow, opts)
+          : await dialog.showOpenDialog(opts)
+        return r.canceled ? null : (r.filePaths[0] ?? null)
+      },
+      async pickFile(filters) {
+        const opts = { properties: ['openFile' as const], filters }
+        const r = mainWindow
+          ? await dialog.showOpenDialog(mainWindow, opts)
+          : await dialog.showOpenDialog(opts)
+        return r.canceled ? null : (r.filePaths[0] ?? null)
+      },
+    },
+    showItemInFolder: (p) => shell.showItemInFolder(p),
+    launcherUpdater: updater,
+    emit: send,
+    onEnvChanged: (key) => {
+      if (key === 'BRIDGE_PORT') restartBridge()
+    },
+    log,
+  })
+
+  for (const channel of handlers.channels) {
+    ipcMain.handle(channel, (event, payload) =>
+      (handlers as IpcHandlers).handle(
+        channel,
+        {
+          url: event.senderFrame?.url,
+          fromAppWindow: !!mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents,
+        },
+        payload,
+      ),
+    )
+  }
+
+  restartBridge()
+  const scheduler = createScheduler(
+    { checksMs: CHECKS_MS, updatesMs: UPDATES_MS },
+    {
+      checks: () => (handlers as IpcHandlers).runChecks(),
+      updates: () => (handlers as IpcHandlers).checkUpdates(),
+    },
+    { setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h as NodeJS.Timeout) },
+    { onError: (job, e) => log(`${job} failed: ${(e as Error)?.name ?? 'Error'}`) },
+  )
+  scheduler.start()
+  setInterval(() => void pushPresence(), PRESENCE_POLL_MS).unref()
+  return handlers
+}
+
+app.whenReady().then(async () => {
+  // Handlers first, so the page never calls a channel that is not registered yet.
+  try {
+    await startServices()
+  } catch (e) {
+    console.error('[launcher] services failed to start:', (e as Error)?.message ?? e)
+  }
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -61,5 +228,6 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  // TODO(T15): closeToTray / supervisor.stop() before quitting.
   app.quit()
 })

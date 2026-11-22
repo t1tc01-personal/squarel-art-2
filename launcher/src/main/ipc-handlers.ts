@@ -1,0 +1,543 @@
+/**
+ * Pure IPC handlers (no Electron import): index.ts registers `handle` for every channel in
+ * CHANNELS and supplies the Electron pieces (dialogs, shell, window events) through IpcContext.
+ * Every call checks the sender, validates the input, runs, then validates the output; errors that
+ * reach the renderer carry only fixed messages (never .env values).
+ */
+
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { gunzipSync } from 'node:zlib'
+import type { z } from 'zod'
+import {
+  CHANNELS,
+  type Channel,
+  type ChecksSnapshot,
+  ENV_KEYS,
+  type EnvKey,
+  type EnvView,
+  EVENTS,
+  type EventName,
+  type EventPayload,
+  type FileFilter,
+  IMAGE_PROVIDERS,
+  type LauncherStateView,
+  type RecentProject,
+  SECRET_ENV_KEYS,
+  type UpdatesInfo,
+} from '../shared/ipc'
+import type { CheckResult, PresenceGroup, TaskEvent } from '../shared/model'
+import { type ActionCtx, type Resolved, resolveAction, squarelUpdate } from './actions'
+import type { BridgeState } from './bridge/types'
+import { type CheckCtx, runChecks } from './checks/runner'
+import type { Deps } from './deps'
+import { type EnvDoc, getVar, maskSecret, parseEnv, serializeEnv, setVar } from './env-store'
+import { appPaths } from './paths'
+import { buildPresence } from './presence'
+import { loadRegistry, type Registry, viewComponents } from './registry/registry'
+import type { LauncherState } from './state'
+import { planSquarelUpdate } from './updates/squarel'
+import { maskCredentials } from './updates/tools'
+import type { Latest } from './versions'
+
+// Compile-time: shared/ipc.ts mirrors main/state.ts.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+const _stateMirror: Same<LauncherState, LauncherStateView> = true
+void _stateMirror
+
+/** An error whose message is safe to show in the renderer. */
+export class IpcError extends Error {}
+
+export interface SenderInfo {
+  /** URL of the frame that sent the message (`event.senderFrame.url`). */
+  url?: string
+  /** True when the message came from the launcher's own BrowserWindow. */
+  fromAppWindow: boolean
+}
+
+export interface IpcContext {
+  d: Deps
+  launcherVersion: string
+  isDev: boolean
+  homeDir: string
+  /** %APPDATA%\SquarelArt Launcher\logs */
+  logsDir: string
+  /** True only for the app's own renderer page. */
+  isAppUrl(url: string): boolean
+  state: { load(): Promise<LauncherState>; save(s: LauncherState): Promise<void> }
+  bridge(): BridgeState
+  dialogs: {
+    pickFolder(): Promise<string | null>
+    pickFile(filters: FileFilter[]): Promise<string | null>
+  }
+  /** shell.showItemInFolder; called only with a checked, real path. */
+  showItemInFolder(path: string): void
+  launcherUpdater: { check(): Promise<Latest> }
+  emit<E extends EventName>(event: E, payload: EventPayload<E>): void
+  /** Called after a successful env:set (e.g. BRIDGE_PORT → restart the supervisor). */
+  onEnvChanged?(key: EnvKey): void
+  /** Diagnostics; messages never contain .env values. */
+  log?(message: string): void
+  /** Test seam for the MCP smoke test of checks:run. */
+  smoke?: CheckCtx['smoke']
+}
+
+export interface IpcHandlers {
+  readonly channels: readonly Channel[]
+  handle(channel: string, sender: SenderInfo, payload: unknown): Promise<unknown>
+  /** Shared with the scheduler: one run at a time, result also pushed as `checks:changed`. */
+  runChecks(): Promise<CheckResult[]>
+  checkUpdates(): Promise<UpdatesInfo>
+  presence(): Promise<PresenceGroup[]>
+  /** Resolves once no task started by action:run / updates:apply is running. */
+  idle(): Promise<void>
+}
+
+const UNC = /^[\\/]{2}/
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/
+const VERSION_ID = /^v\d{6}$/
+const MAX_TEXT = 20_000
+
+const errMsg = (e: unknown) => String((e as Error)?.message ?? e)
+
+/** Strips surrounding quotes or an inline comment, like Node's .env parser. */
+export function unquoteEnv(raw: string | undefined): string {
+  const v = (raw ?? '').trim()
+  const q = /^(['"`])([\s\S]*)\1$/.exec(v)
+  if (q) return q[2] as string
+  return v.replace(/\s+#.*$/, '').trim()
+}
+
+export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
+  const { d } = ctx
+  const isWin = d.platform === 'win32'
+  const isDriveAbsolute = (p: string) => (isWin ? /^[A-Za-z]:[\\/]/.test(p) : p.startsWith('/'))
+
+  // ---- state --------------------------------------------------------------------------------
+  let cached: LauncherState | undefined
+  let stateChain: Promise<unknown> = Promise.resolve()
+  const getState = async () => {
+    cached ??= await ctx.state.load()
+    return cached
+  }
+  /** Serialized read-modify-write so concurrent setters never lose an update. */
+  function updateState(
+    fn: (s: LauncherState) => LauncherState | Promise<LauncherState>,
+  ): Promise<LauncherState> {
+    const next = stateChain.then(async () => {
+      const s = await fn(await getState())
+      await ctx.state.save(s)
+      cached = s
+      return s
+    })
+    stateChain = next.catch(() => {})
+    return next
+  }
+
+  function paths() {
+    try {
+      return appPaths(d.env)
+    } catch (e) {
+      throw new IpcError(errMsg(e))
+    }
+  }
+
+  // ---- push events --------------------------------------------------------------------------
+  function push<E extends EventName>(event: E, payload: EventPayload<E>): void {
+    const r = EVENTS[event].safeParse(payload)
+    if (!r.success) {
+      ctx.log?.(`ipc: dropped invalid ${event} event`)
+      return
+    }
+    ctx.emit(event, r.data as EventPayload<E>)
+  }
+
+  // ---- .env ---------------------------------------------------------------------------------
+  function envFile(s: LauncherState): string | undefined {
+    return s.squarelDir ? join(s.squarelDir, '.env') : undefined
+  }
+  /** Secret values seen in the last .env read: scrubbed from anything logged. */
+  let knownSecrets: string[] = []
+  async function readEnv(s: LauncherState): Promise<EnvDoc> {
+    const file = envFile(s)
+    let doc = parseEnv('')
+    if (file) {
+      try {
+        doc = parseEnv(String(await d.fs.readFile(file, 'utf8')))
+      } catch {}
+    }
+    knownSecrets = secretValues(doc)
+    return doc
+  }
+  function scrub(t: string, secrets: string[] = knownSecrets): string {
+    let out = maskCredentials(t)
+    for (const v of secrets) out = out.split(v).join(maskSecret(v))
+    return out
+  }
+  function envView(doc: EnvDoc): EnvView {
+    const view = {} as EnvView
+    for (const key of ENV_KEYS) {
+      const value = unquoteEnv(getVar(doc, key))
+      const secret = SECRET_ENV_KEYS.includes(key)
+      view[key] = { set: value !== '', value: secret ? maskSecret(value) : value, secret }
+    }
+    return view
+  }
+  /** Fixed message per key; never includes the value. */
+  function envValueError(key: EnvKey, v: string): string | undefined {
+    if (v === '') return undefined
+    const path = (exe: boolean) =>
+      isDriveAbsolute(v) && !UNC.test(v) && !/["*?<>|]/.test(v) && (!exe || /\.exe$/i.test(v))
+        ? undefined
+        : `${key} phải là đường dẫn tuyệt đối trên máy${exe ? ' tới file .exe' : ''}`
+    switch (key) {
+      case 'BRIDGE_PORT': {
+        const n = Number(v)
+        return /^\d{1,5}$/.test(v) && n >= 1 && n <= 65535 ? undefined : 'BRIDGE_PORT phải là số cổng 1–65535'
+      }
+      case 'IMAGE_DAILY_BUDGET_USD':
+        return /^\d{1,6}(\.\d{1,4})?$/.test(v) ? undefined : 'IMAGE_DAILY_BUDGET_USD phải là số không âm'
+      case 'IMAGE_PROVIDER':
+        return (IMAGE_PROVIDERS as readonly string[]).includes(v)
+          ? undefined
+          : `IMAGE_PROVIDER phải là ${IMAGE_PROVIDERS.join(', ')}`
+      case 'LOCAL_SD_URL':
+        try {
+          const u = new URL(v)
+          return u.protocol === 'http:' || u.protocol === 'https:'
+            ? undefined
+            : 'LOCAL_SD_URL phải là URL http(s)'
+        } catch {
+          return 'LOCAL_SD_URL phải là URL http(s)'
+        }
+      case 'DATA_DIR':
+        return path(false)
+      case 'ASEPRITE_PATH':
+        return path(true)
+      default:
+        return /^\S{1,512}$/.test(v) ? undefined : `${key} không được chứa khoảng trắng`
+    }
+  }
+  /** Single quotes (literal in Node's parser) only when the plain form would be misread. */
+  function encodeEnvValue(v: string): string {
+    if (!/[#'"`]|^\s|\s$/.test(v)) return v
+    if (v.includes("'")) throw new IpcError('Giá trị không được chứa dấu nháy đơn')
+    return `'${v}'`
+  }
+  async function writeEnv(file: string, doc: EnvDoc): Promise<void> {
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+    await d.fs.writeFile(tmp, serializeEnv(doc), 'utf8')
+    try {
+      await d.fs.rename(tmp, file)
+    } catch (e) {
+      await d.fs.rm(tmp, { force: true }).catch(() => {})
+      throw e
+    }
+  }
+  function secretValues(doc: EnvDoc): string[] {
+    return SECRET_ENV_KEYS.map((k) => unquoteEnv(getVar(doc, k))).filter((v) => v.length >= 4)
+  }
+
+  function dataDir(s: LauncherState, doc: EnvDoc): string {
+    const v = unquoteEnv(getVar(doc, 'DATA_DIR'))
+    return v ? resolve(s.squarelDir ?? ctx.homeDir, v) : join(ctx.homeDir, 'SquarelArt-data')
+  }
+
+  // ---- shared pieces ------------------------------------------------------------------------
+  async function registry(s: LauncherState): Promise<Registry> {
+    return loadRegistry(
+      { squarelDir: s.squarelDir, userIntegrationsDir: paths().userIntegrations, platform: d.platform },
+      d,
+    )
+  }
+
+  let lastChecks: ChecksSnapshot | null = null
+  let checksInFlight: Promise<CheckResult[]> | undefined
+  function runChecksOnce(): Promise<CheckResult[]> {
+    checksInFlight ??= (async () => {
+      try {
+        const s = await getState()
+        const env = await readEnv(s)
+        const reg = await registry(s)
+        const results = await runChecks(
+          reg,
+          {
+            squarelDir: s.squarelDir,
+            dataDir: dataDir(s, env),
+            env,
+            bridge: ctx.bridge(),
+            selected: s.selected,
+            ...(ctx.smoke ? { smoke: ctx.smoke } : {}),
+          },
+          d,
+        )
+        lastChecks = { at: d.now().toISOString(), results }
+        push('checks:changed', lastChecks)
+        return results
+      } finally {
+        checksInFlight = undefined
+      }
+    })()
+    return checksInFlight
+  }
+
+  async function presence(): Promise<PresenceGroup[]> {
+    const s = await getState()
+    const env = await readEnv(s)
+    return buildPresence({ dataDir: dataDir(s, env), bridge: ctx.bridge(), reg: await registry(s), env }, d)
+  }
+
+  async function checkUpdates(): Promise<UpdatesInfo> {
+    const s = await getState()
+    const launcher = ctx.launcherUpdater
+      .check()
+      .catch((e): Latest => ({ ok: false, reason: 'error', message: maskCredentials(errMsg(e)) }))
+    const squarel: Promise<UpdatesInfo['squarel']> = s.squarelDir
+      ? planSquarelUpdate(s.squarelDir, ctx.launcherVersion, d, { isDev: ctx.isDev }).catch(
+          (e): UpdatesInfo['squarel'] => ({ kind: 'error', message: maskCredentials(errMsg(e)) }),
+        )
+      : Promise.resolve({ kind: 'error', message: 'Chưa chọn thư mục Squarel' })
+    const checkedAt = d.now().toISOString()
+    const info: UpdatesInfo = { checkedAt, launcher: await launcher, squarel: await squarel }
+    await updateState((st) => ({ ...st, lastUpdateCheck: checkedAt })).catch(() => {})
+    push('components:changed', null) // tool rows recompute their `latest`
+    return info
+  }
+
+  // ---- tasks --------------------------------------------------------------------------------
+  const running = new Map<string, Promise<void>>()
+  let seq = 0
+  function startTask(resolved: Resolved, secrets: string[]): string {
+    if ('error' in resolved) throw new IpcError(resolved.error)
+    const { key, body } = resolved
+    if (running.has(key)) throw new IpcError('Thao tác này đang chạy')
+    const taskId = `${key}#${++seq}`
+    const redact = (t: string) => {
+      const out = scrub(t, secrets)
+      return out.length > MAX_TEXT ? `${out.slice(0, MAX_TEXT)}…` : out
+    }
+    let finished = false
+    const emit = (e: TaskEvent) => {
+      if (finished) return
+      if (e.kind === 'done' || e.kind === 'error') finished = true
+      push('task:event', { ...e, taskId, ...(e.text !== undefined ? { text: redact(e.text) } : {}) })
+    }
+    const p = (async () => {
+      try {
+        await body(taskId, emit)
+        if (!finished) emit({ taskId, kind: 'done', code: 0 })
+      } catch (e) {
+        emit({ taskId, kind: 'error', text: errMsg(e) })
+      } finally {
+        running.delete(key)
+        push('components:changed', null)
+      }
+    })()
+    running.set(key, p)
+    return taskId
+  }
+  async function actionCtx(): Promise<{ actx: ActionCtx; secrets: string[] }> {
+    const s = await getState()
+    const env = await readEnv(s)
+    const p = paths()
+    return {
+      actx: {
+        d,
+        state: s,
+        reg: await registry(s),
+        launcherVersion: ctx.launcherVersion,
+        isDev: ctx.isDev,
+        toolsDir: p.toolsDir,
+      },
+      secrets: secretValues(env),
+    }
+  }
+
+  // ---- shell:reveal -------------------------------------------------------------------------
+  function within(root: string, p: string): boolean {
+    const rel = relative(root, p)
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  }
+  async function realOrResolved(p: string): Promise<string> {
+    try {
+      return await d.fs.realpath(p)
+    } catch {
+      return resolve(p)
+    }
+  }
+  async function revealPath(p: string): Promise<void> {
+    const refused = new IpcError('Đường dẫn nằm ngoài các thư mục của Squarel')
+    if (/[\0\r\n]/.test(p) || UNC.test(p) || !isDriveAbsolute(p)) throw refused
+    let real: string
+    try {
+      real = await d.fs.realpath(resolve(p))
+    } catch {
+      throw new IpcError('Không tìm thấy đường dẫn')
+    }
+    if (UNC.test(real) || !isDriveAbsolute(real)) throw refused
+    const s = await getState()
+    const env = await readEnv(s)
+    const candidates = [s.squarelDir, dataDir(s, env), ctx.logsDir]
+    try {
+      candidates.push(dirname(appPaths(d.env).toolsDir('x')))
+    } catch {}
+    const roots: string[] = []
+    for (const c of candidates) {
+      if (!c || !isDriveAbsolute(c)) continue
+      const r = await realOrResolved(c)
+      // A drive root as "known folder" would allow everything on that drive.
+      if (UNC.test(r) || dirname(r) === r) continue
+      roots.push(r)
+    }
+    if (!roots.some((r) => within(r, real))) throw refused
+    ctx.showItemInFolder(real)
+  }
+
+  // ---- projects:recent ----------------------------------------------------------------------
+  async function recentProjects(): Promise<RecentProject[]> {
+    const s = await getState()
+    const projects = join(dataDir(s, await readEnv(s)), 'projects')
+    let names: string[]
+    try {
+      names = (await d.fs.readdir(projects)).map(String).filter((n) => SLUG.test(n))
+    } catch {
+      return []
+    }
+    const infos: RecentProject[] = []
+    for (const slug of names) {
+      try {
+        const file = join(projects, slug, 'project.json')
+        if ((await d.fs.stat(file)).size > 64 * 1024) continue
+        const raw = JSON.parse(String(await d.fs.readFile(file, 'utf8')).replace(/^﻿/, ''))
+        if (typeof raw?.updatedAt !== 'string' || typeof raw?.head !== 'string') continue
+        infos.push({
+          slug,
+          name: typeof raw.name === 'string' ? raw.name.slice(0, 300) : slug,
+          version: VERSION_ID.test(raw.head) ? raw.head : '',
+          updatedAt: raw.updatedAt.slice(0, 40),
+        })
+      } catch {
+        /* broken project: skip */
+      }
+    }
+    infos.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    const top = infos.slice(0, 3)
+    for (const p of top) {
+      if (!p.version) continue
+      try {
+        const file = join(projects, p.slug, 'versions', `${p.version}.json.gz`)
+        if ((await d.fs.stat(file)).size > 16 * 1024 * 1024) continue
+        const buf = Buffer.from((await d.fs.readFile(file)) as Uint8Array)
+        const json = JSON.parse(gunzipSync(buf, { maxOutputLength: 256 * 1024 * 1024 }).toString('utf8'))
+        const { width, height } = json?.doc ?? {}
+        if (Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0) {
+          p.width = width
+          p.height = height
+        }
+      } catch {
+        /* size is optional */
+      }
+    }
+    return top
+  }
+
+  // ---- channel table ------------------------------------------------------------------------
+  type Impl = { [C in Channel]: (input: z.infer<(typeof CHANNELS)[C]['input']>) => Promise<unknown> }
+  const impl: Impl = {
+    'state:get': () => getState(),
+    'state:set': async (patch) => {
+      if (patch.squarelDir !== undefined) patch.squarelDir = await checkSquarelDir(patch.squarelDir)
+      const s = await updateState((st) => ({ ...st, ...patch }))
+      push('components:changed', null)
+      return s
+    },
+    'components:list': async () => {
+      const s = await getState()
+      const env = await readEnv(s)
+      return viewComponents(await registry(s), s, env, d, {
+        launcherVersion: ctx.launcherVersion,
+        isDev: ctx.isDev,
+      })
+    },
+    'checks:run': () => runChecksOnce(),
+    'checks:last': async () => lastChecks,
+    'presence:get': () => presence(),
+    'env:get': async () => envView(await readEnv(await getState())),
+    'env:set': async ({ key, value }) => {
+      const problem = envValueError(key, value)
+      if (problem) throw new IpcError(problem)
+      const s = await getState()
+      const file = envFile(s)
+      if (!file) throw new IpcError('Chưa chọn thư mục Squarel')
+      const doc = setVar(await readEnv(s), key, encodeEnvValue(value))
+      await writeEnv(file, doc)
+      ctx.log?.(`env: ${key} updated`)
+      ctx.onEnvChanged?.(key)
+      push('components:changed', null)
+      return envView(doc)
+    },
+    'action:run': async (ref) => {
+      const { actx, secrets } = await actionCtx()
+      return startTask(resolveAction(ref, actx), secrets)
+    },
+    'updates:check': () => checkUpdates(),
+    'updates:apply': async () => {
+      // TODO(T15): launcher self-update (quitAndInstall) and stopping the own bridge belong to the quit wiring.
+      const { actx, secrets } = await actionCtx()
+      return startTask(squarelUpdate(actx), secrets)
+    },
+    'dialog:pickFolder': () => ctx.dialogs.pickFolder(),
+    'dialog:pickFile': ({ filters }) => ctx.dialogs.pickFile(filters),
+    'shell:reveal': async ({ path }) => {
+      await revealPath(path)
+      return undefined
+    },
+    'projects:recent': () => recentProjects(),
+  }
+
+  async function checkSquarelDir(dir: string): Promise<string> {
+    if (UNC.test(dir) || !isDriveAbsolute(dir))
+      throw new IpcError('Thư mục Squarel phải là đường dẫn tuyệt đối trên máy')
+    const full = resolve(dir)
+    try {
+      const pkg = JSON.parse(String(await d.fs.readFile(join(full, 'package.json'), 'utf8')).replace(/^﻿/, ''))
+      if (pkg?.name === 'squarel-art') return full
+    } catch {}
+    throw new IpcError('Thư mục này không phải Squarel (cần package.json tên "squarel-art")')
+  }
+
+  const channels = Object.keys(CHANNELS) as Channel[]
+
+  return {
+    channels,
+    async handle(channel, sender, payload) {
+      if (!Object.hasOwn(CHANNELS, channel))
+        throw new IpcError(`Kênh IPC không tồn tại: ${channel.slice(0, 40)}`)
+      if (!sender.fromAppWindow || !sender.url || !ctx.isAppUrl(sender.url))
+        throw new IpcError('Từ chối yêu cầu IPC không đến từ cửa sổ launcher')
+      const ch = channel as Channel
+      const spec = CHANNELS[ch]
+      const input = spec.input.safeParse(payload)
+      if (!input.success) throw new IpcError(`Tham số không hợp lệ cho ${ch}`)
+      let result: unknown
+      try {
+        result = await (impl[ch] as (i: unknown) => Promise<unknown>)(input.data)
+      } catch (e) {
+        if (e instanceof IpcError) throw e
+        ctx.log?.(`ipc ${ch} failed: ${scrub(errMsg(e))}`)
+        throw new IpcError(`Lỗi khi xử lý ${ch}`)
+      }
+      const output = spec.output.safeParse(result)
+      if (!output.success) {
+        ctx.log?.(`ipc ${ch}: invalid output dropped`)
+        throw new IpcError(`Kết quả không hợp lệ từ ${ch}`)
+      }
+      return output.data
+    },
+    runChecks: runChecksOnce,
+    checkUpdates,
+    presence,
+    async idle() {
+      while (running.size) await Promise.all([...running.values()])
+    },
+  }
+}
