@@ -145,6 +145,34 @@ describe('integration manifests', () => {
     unknownVarLabel.launch[0].label = 'Open {user}'
     expect(issues(unknownVarLabel).join(' ')).toMatch(/\{user\}/)
   })
+
+  it('latest.repo must be https', () => {
+    const ok = minimal()
+    ok.latest = { type: 'git-tags', repo: 'https://github.com/aseprite/aseprite.git' }
+    expect(issues(ok)).toEqual([])
+    for (const repo of ['http://example.com/r.git', 'git://example.com/r.git', 'file:///c:/r']) {
+      const bad = minimal()
+      bad.latest = { type: 'git-tags', repo }
+      expect(issues(bad), repo).not.toEqual([])
+    }
+  })
+
+  it('builtin checks need the section they read', () => {
+    const noBridge = minimal()
+    noBridge.checks.push({ id: 'connected', label: 'Connected', builtin: 'bridge-client' })
+    expect(issues(noBridge).join(' ')).toMatch(/bridge-client needs a `bridge`/)
+    noBridge.bridge = { client: 'other' }
+    expect(issues(noBridge)).toEqual([])
+
+    const noExt = minimal()
+    noExt.checks.push({ id: 'extension', label: 'Extension', builtin: 'extension-version' })
+    expect(issues(noExt).join(' ')).toMatch(/extension-version needs an `extension`/)
+    noExt.extension = {
+      version: { source: 'a/package.json', installed: 'b/package.json' },
+      install: { run: ['x'] },
+    }
+    expect(issues(noExt)).toEqual([])
+  })
 })
 
 describe('substitute', () => {

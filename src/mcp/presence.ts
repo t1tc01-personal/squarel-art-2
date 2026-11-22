@@ -18,6 +18,19 @@ export interface McpPresence {
   bridge: 'own' | 'shared' | 'none'
 }
 
+/**
+ * 'own' = this process runs the bridge; 'shared' = another process owns the port (start() returned false);
+ * 'none' = no bridge (disabled, or start() threw).
+ */
+export function bridgeMode(s: {
+  disabled: boolean
+  up: boolean
+  startThrew: boolean
+}): McpPresence['bridge'] {
+  if (s.disabled || s.startThrew) return 'none'
+  return s.up ? 'own' : 'shared'
+}
+
 export function presenceFile(dataDir: string, pid: number = process.pid): string {
   return join(dataDir, 'run', `mcp-${pid}.json`)
 }

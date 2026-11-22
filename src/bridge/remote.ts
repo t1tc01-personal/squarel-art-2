@@ -44,7 +44,13 @@ export function openViaBridge(opts: {
       else finish(new Error(`${prefix}: ${m.text}`))
     })
     ws.on('unexpected-response', (_req, res) => finish(new Error(`${prefix} (HTTP ${res.statusCode})`)))
-    ws.on('error', (e) => finish(new Error(`${prefix}: ${e.message}`)))
+    ws.on('error', (e) => {
+      const refused = (e as NodeJS.ErrnoException).code === 'ECONNREFUSED'
+      const hint = refused
+        ? ' (start the Squarel launcher or `pnpm bridge`, or restart this Claude Code session)'
+        : ''
+      finish(new Error(`${prefix}: ${e.message}${hint}`))
+    })
     ws.on('close', () => finish(new Error(`${prefix} (connection closed)`)))
   })
 }

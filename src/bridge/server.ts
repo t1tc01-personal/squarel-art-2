@@ -10,6 +10,7 @@ import type { PixelDocJSON } from '../shared/types.ts'
 import { ConflictError } from '../store/store.ts'
 import { runTool } from '../tools/registry.ts'
 import type { EditorHost, ToolContext } from '../tools/types.ts'
+import { SQUAREL_VERSION } from '../version.ts'
 import { asepriteAvailable, CLI_SCRIPTS, launchAseprite, runAsepriteScript } from './aseprite-cli.ts'
 import { BRIDGE_PATH, type BridgeClientInfo, type ClientMessage, type ServerMessage } from './protocol.ts'
 
@@ -32,8 +33,6 @@ export interface BridgeOptions {
   token?: string
   watchFiles?: boolean
 }
-
-const VERSION = '0.1.1'
 
 /**
  * Who may connect: native clients only. No Origin (Node `ws`, most tools) or a `ws://` origin on this machine
@@ -171,7 +170,7 @@ export class BridgeServer implements EditorHost {
         return this.send(c, {
           type: 'welcome',
           server: 'squarel-bridge',
-          version: VERSION,
+          version: SQUAREL_VERSION,
           projects: await this.projectList(),
         })
       case 'list':
@@ -179,7 +178,7 @@ export class BridgeServer implements EditorHost {
       case 'ping':
         return this.send(c, { type: 'pong' })
       case 'status':
-        return this.send(c, { type: 'status', version: VERSION, clients: this.clientInfos() })
+        return this.send(c, { type: 'status', version: SQUAREL_VERSION, clients: this.clientInfos() })
       case 'open': {
         const { versionId, doc } = await this.ctx.store.readHead(m.slug)
         c.slug = m.slug

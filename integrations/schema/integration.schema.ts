@@ -202,7 +202,7 @@ const DetectSchema = z
 
 const LatestSchema = z.strictObject({
   type: z.literal('git-tags'),
-  repo: z.url(),
+  repo: z.url({ protocol: /^https$/ }),
   stable: z.boolean().optional(),
 })
 
@@ -255,31 +255,48 @@ const CheckSchema = z
   })
   .superRefine(exactlyOne(['builtin', 'run']))
 
-export const IntegrationManifest: z.ZodType<IntegrationManifestT> = z.strictObject({
-  schema: z.literal(1),
-  id,
-  name: text,
-  description: text,
-  icon: iconFile,
-  accent,
-  platforms: z.array(z.enum(PLATFORMS)).min(1),
-  detect: DetectSchema,
-  latest: LatestSchema.optional(),
-  install: z.array(InstallSchema).superRefine(uniqueIds),
-  update: TaskSchema.optional(),
-  extension: ExtensionSchema.optional(),
-  bridge: z.strictObject({ client: id }).optional(),
-  launch: z
-    .array(LaunchSchema)
-    .min(1)
-    .superRefine(uniqueIds)
-    .superRefine((list, ctx) => {
-      const n = list.filter((a) => a.default === true).length
-      if (n !== 1)
-        ctx.addIssue({ code: 'custom', message: `exactly one launch action must be default (found ${n})` })
-    }),
-  checks: z.array(CheckSchema).superRefine(uniqueIds),
-})
+export const IntegrationManifest: z.ZodType<IntegrationManifestT> = z
+  .strictObject({
+    schema: z.literal(1),
+    id,
+    name: text,
+    description: text,
+    icon: iconFile,
+    accent,
+    platforms: z.array(z.enum(PLATFORMS)).min(1),
+    detect: DetectSchema,
+    latest: LatestSchema.optional(),
+    install: z.array(InstallSchema).superRefine(uniqueIds),
+    update: TaskSchema.optional(),
+    extension: ExtensionSchema.optional(),
+    bridge: z.strictObject({ client: id }).optional(),
+    launch: z
+      .array(LaunchSchema)
+      .min(1)
+      .superRefine(uniqueIds)
+      .superRefine((list, ctx) => {
+        const n = list.filter((a) => a.default === true).length
+        if (n !== 1)
+          ctx.addIssue({ code: 'custom', message: `exactly one launch action must be default (found ${n})` })
+      }),
+    checks: z.array(CheckSchema).superRefine(uniqueIds),
+  })
+  .superRefine((m, ctx) => {
+    m.checks.forEach((c, i) => {
+      if (c.builtin === 'bridge-client' && !m.bridge)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'builtin check bridge-client needs a `bridge` section',
+          path: ['checks', i],
+        })
+      if (c.builtin === 'extension-version' && !m.extension)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'builtin check extension-version needs an `extension` section',
+          path: ['checks', i],
+        })
+    })
+  })
 
 const CatalogEntry = z.strictObject({
   id,

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { type McpPresence, presenceFile, startPresence } from '../src/mcp/presence.ts'
+import { bridgeMode, type McpPresence, presenceFile, startPresence } from '../src/mcp/presence.ts'
 import { tempDir } from './helpers.ts'
 
 let t: ReturnType<typeof tempDir>
@@ -12,6 +12,15 @@ afterEach(() => t.cleanup())
 
 const read = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as McpPresence
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+describe('bridgeMode', () => {
+  it('own / shared / none, and none when start() threw', () => {
+    expect(bridgeMode({ disabled: false, up: true, startThrew: false })).toBe('own')
+    expect(bridgeMode({ disabled: false, up: false, startThrew: false })).toBe('shared')
+    expect(bridgeMode({ disabled: false, up: false, startThrew: true })).toBe('none')
+    expect(bridgeMode({ disabled: true, up: false, startThrew: false })).toBe('none')
+  })
+})
 
 describe('mcp presence', () => {
   it('writes run/mcp-<pid>.json at start with bridge mode and cwd', async () => {

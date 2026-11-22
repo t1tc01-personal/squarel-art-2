@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
@@ -8,6 +10,7 @@ import { celKey, deserializeDoc, serializeDoc } from '../src/core/index.ts'
 import { silentLogger } from '../src/log.ts'
 import { MockProvider } from '../src/providers/mock.ts'
 import { Store } from '../src/store/store.ts'
+import { SQUAREL_VERSION } from '../src/version.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { runTool } from '../src/tools/registry.ts'
 import type { ToolContext } from '../src/tools/types.ts'
@@ -193,6 +196,10 @@ describe('bridge', () => {
     probe.send({ type: 'status' })
     const s = await probe.next('status')
     expect(s.version).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(s.version).toBe(SQUAREL_VERSION)
+    expect(SQUAREL_VERSION).toBe(
+      JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')).version,
+    )
     const ase = s.clients.find((x) => x.name === 'aseprite')!
     expect(ase.slug).toBe('bridge')
     expect(Date.parse(ase.lastSeen)).toBeGreaterThan(0)
@@ -244,6 +251,18 @@ describe('bridge', () => {
     const text = await openViaBridge({ port: bridge.port, slug: 'bridge' })
     expect(text).toContain('live sync on')
     expect((await c.next('open.request')).slug).toBe('bridge')
+  })
+
+  it('openViaBridge on a closed port says what to do', async () => {
+    const srv = createServer()
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r))
+    const port = (srv.address() as { port: number }).port
+    await new Promise((r) => srv.close(r))
+    const err = await openViaBridge({ port, slug: 'bridge' }).catch((e: Error) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toContain(`bridge on port ${port} did not answer`)
+    expect((err as Error).message).toContain('pnpm bridge')
+    expect((err as Error).message).toContain('restart this Claude Code session')
   })
 
   it('openViaBridge fails fast when something else holds the port', async () => {

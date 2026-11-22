@@ -1,4 +1,5 @@
 import { existsSync, readdirSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -66,6 +67,11 @@ describe('MCP server (in-memory transport)', () => {
 
 describe('MCP server over stdio (as Claude Code runs it)', () => {
   it('starts with node, keeps stdout clean and answers tool calls', async () => {
+    // A port known to be closed, so open_in_editor never reaches a developer's live bridge on 4321.
+    const probe = createServer()
+    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', r))
+    const closedPort = (probe.address() as { port: number }).port
+    await new Promise((r) => probe.close(r))
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [join(import.meta.dirname, '..', 'src', 'mcp', 'index.ts')],
@@ -74,6 +80,7 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
         DATA_DIR: t.dir,
         IMAGE_PROVIDER: 'mock',
         SQUAREL_NO_BRIDGE: '1',
+        BRIDGE_PORT: String(closedPort),
       },
       stderr: 'pipe',
     })
@@ -95,7 +102,7 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
     })
     expect(created.isError).toBeFalsy()
     const opened = await client.callTool({ name: 'open_in_editor', arguments: {} })
-    expect((opened.content as Content[])[0].text).toMatch(/bridge/i)
+    expect((opened.content as Content[])[0].text).toContain(`bridge on port ${closedPort} did not answer`)
     await client.close()
     for (let i = 0; i < 100 && readdirSync(runDir).some((f) => f.startsWith('mcp-')); i++)
       await new Promise((r) => setTimeout(r, 50))

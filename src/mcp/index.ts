@@ -3,17 +3,13 @@
  * Squarel MCP server (stdio). Claude Code starts it from .mcp.json.
  * stdout carries the MCP protocol: never print to it — log via createLogger (stderr + file).
  */
-import { readFileSync } from 'node:fs'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { openViaBridge } from '../bridge/remote.ts'
 import { BridgeServer, readBridgeToken } from '../bridge/server.ts'
 import { createToolContext } from '../tools/context.ts'
-import { startPresence } from './presence.ts'
+import { SQUAREL_VERSION as VERSION } from '../version.ts'
+import { bridgeMode, startPresence } from './presence.ts'
 import { createMcpServer } from './server.ts'
-
-const VERSION: string = JSON.parse(
-  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
-).version
 
 async function main() {
   const ctx = await createToolContext({ source: 'claude', logName: 'mcp' })
@@ -22,10 +18,12 @@ async function main() {
     token: readBridgeToken(ctx.config.dataDir),
   })
   let bridgeUp = false
+  let startThrew = false
   if (process.env.SQUAREL_NO_BRIDGE !== '1') {
     try {
       bridgeUp = await bridge.start()
     } catch (e) {
+      startThrew = true
       ctx.log.warn('bridge failed to start', { error: String(e) })
     }
   }
@@ -43,7 +41,7 @@ async function main() {
   const presence = startPresence({
     dataDir: ctx.config.dataDir,
     version: VERSION,
-    bridge: process.env.SQUAREL_NO_BRIDGE === '1' ? 'none' : bridgeUp ? 'own' : 'shared',
+    bridge: bridgeMode({ disabled: process.env.SQUAREL_NO_BRIDGE === '1', up: bridgeUp, startThrew }),
   })
   const server = createMcpServer(ctx, { version: VERSION, onToolCall: (name) => presence.touch(name) })
   await server.connect(new StdioServerTransport())
