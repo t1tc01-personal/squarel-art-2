@@ -5,6 +5,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { openViaBridge } from '../bridge/remote.ts'
 import { BridgeServer, readBridgeToken } from '../bridge/server.ts'
 import { createToolContext } from '../tools/context.ts'
 import { startPresence } from './presence.ts'
@@ -35,10 +36,9 @@ async function main() {
     }
   } else {
     // Another process owns the port (e.g. `pnpm bridge`); it sees our commits through its file watcher.
-    ctx.editor = {
-      open: async (slug) =>
-        `Another Squarel bridge is running on port ${ctx.config.bridgePort}; it will show "${slug}" when Aseprite opens it from the Squarel menu.`,
-    }
+    const port = ctx.config.bridgePort
+    const token = readBridgeToken(ctx.config.dataDir)
+    ctx.editor = { open: (slug) => openViaBridge({ port, token, slug }) }
   }
   const presence = startPresence({
     dataDir: ctx.config.dataDir,

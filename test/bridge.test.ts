@@ -1,6 +1,8 @@
+import { createServer, type Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { ServerMessage } from '../src/bridge/protocol.ts'
+import { openViaBridge } from '../src/bridge/remote.ts'
 import { BridgeServer, isLocalClientOrigin } from '../src/bridge/server.ts'
 import { celKey, deserializeDoc, serializeDoc } from '../src/core/index.ts'
 import { silentLogger } from '../src/log.ts'
@@ -236,5 +238,28 @@ describe('bridge', () => {
   it('explains setup when no Aseprite is connected', async () => {
     const r = await runTool('open_in_editor', { project: 'bridge' }, ctx)
     expect(r.text).toContain('ASEPRITE_PATH')
+  })
+  it('openViaBridge asks the running bridge to open the project in the connected editor', async () => {
+    const c = await connect()
+    const text = await openViaBridge({ port: bridge.port, slug: 'bridge' })
+    expect(text).toContain('live sync on')
+    expect((await c.next('open.request')).slug).toBe('bridge')
+  })
+
+  it('openViaBridge fails fast when something else holds the port', async () => {
+    const held: Socket[] = []
+    const srv = createServer((sock) => held.push(sock)) // accepts TCP, never speaks websocket
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r))
+    const port = (srv.address() as { port: number }).port
+    const started = Date.now()
+    try {
+      await expect(openViaBridge({ port, slug: 'bridge', timeoutMs: 300 })).rejects.toThrow(
+        `bridge on port ${port} did not answer`,
+      )
+      expect(Date.now() - started).toBeLessThan(800)
+    } finally {
+      for (const sock of held) sock.destroy()
+      await new Promise((r) => srv.close(r))
+    }
   })
 })
