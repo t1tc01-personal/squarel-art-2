@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest'
 import {
   cmakeConfigureArgs,
   parseBuildArgs,
+  parseNinjaProgress,
   parseSetOutput,
   pickLatestStableTag,
+  progressTracker,
   skiaAsset,
   upsertEnv,
   VS_BUILD_TOOLS_WINGET,
@@ -92,6 +94,22 @@ describe('aseprite:build helpers', () => {
     })
     expect(() => parseBuildArgs(['--src'])).toThrow(/needs a value/)
     expect(() => parseBuildArgs(['--fast'])).toThrow(/unknown option/)
+  })
+
+  it('parseBuildArgs accepts --json-progress', () => {
+    expect(parseBuildArgs([]).jsonProgress).toBe(false)
+    expect(parseBuildArgs(['--', '--json-progress']).jsonProgress).toBe(true) // pnpm forwards '--'
+    expect(parseBuildArgs(['--check', '--json-progress'])).toMatchObject({ check: true, jsonProgress: true })
+  })
+
+  it('parseNinjaProgress reads ninja counters', () => {
+    expect(parseNinjaProgress('[1000/1575] Building CXX object foo.obj')).toEqual({ done: 1000, total: 1575 })
+    expect(parseNinjaProgress('-- Looking for strerror')).toBeUndefined()
+  })
+
+  it('progressTracker never goes backwards and ignores noise', () => {
+    const t = progressTracker()
+    expect(['[10/100] a', 'warning: x', '[5/100] b', '[50/100] c'].map(t)).toEqual([10, undefined, 10, 50])
   })
 
   it('installs only the components Aseprite needs', () => {
