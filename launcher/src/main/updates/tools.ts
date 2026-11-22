@@ -21,6 +21,16 @@ const IMAGE_NAME = /^[\w.-]+\.exe$/i
 /** A release tag or version; never starts with "-" so it cannot become an option. */
 const TOOL_VERSION = /^v?\d+(\.\d+){1,3}(-[0-9A-Za-z.-]+)?$/
 
+/** Hides credentials embedded in URLs (`https://user:token@host` → `https://***@host`). */
+export function maskCredentials(text: string): string {
+  return text.replace(/\/\/[^/@\s]+@/g, '//***@')
+}
+
+/** " Đóng <exe> trước rồi thử lại." when the task declares a valid `requiresClosed`, else "". */
+export function closeHint(requiresClosed: string | undefined): string {
+  return requiresClosed && IMAGE_NAME.test(requiresClosed) ? ` Đóng ${requiresClosed} trước rồi thử lại.` : ''
+}
+
 /** Display form of an argv (for the task log only; never executed). */
 export function showArgv(argv: string[]): string {
   return argv.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ')
@@ -61,11 +71,11 @@ export async function runStep(
       argv,
       cwd,
       ...(env ? { env } : {}),
-      onLine: (text) => onEvent({ taskId, kind: 'line', text }),
+      onLine: (text) => onEvent({ taskId, kind: 'line', text: maskCredentials(text) }),
     })
     return code
   } catch (e) {
-    onEvent({ taskId, kind: 'line', text: String((e as Error)?.message ?? e) })
+    onEvent({ taskId, kind: 'line', text: maskCredentials(String((e as Error)?.message ?? e)) })
     return -1
   }
 }
@@ -92,6 +102,12 @@ export async function applyToolUpdate(
   }
   const code = await runStep(taskId, argv, manifestCwd(i, ctx.squarelDir), ctx.onEvent, d)
   if (code === 0) ctx.onEvent({ taskId, kind: 'done', code: 0, text: `Đã cập nhật ${m.name}` })
-  else ctx.onEvent({ taskId, kind: 'error', code, text: `Cập nhật ${m.name} thất bại (mã thoát ${code})` })
+  else
+    ctx.onEvent({
+      taskId,
+      kind: 'error',
+      code,
+      text: `Cập nhật ${m.name} thất bại (mã thoát ${code}).${closeHint(m.update.requiresClosed)}`,
+    })
   return {}
 }

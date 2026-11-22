@@ -11,14 +11,19 @@ import type { TaskEvent } from '../src/shared/model'
 const SQ = join('D:', 'sq')
 const TOOLS = join('D:', 'tools', 'aseprite')
 
-const TOPLEVEL = 'git rev-parse --show-toplevel'
+const PREFIX = 'git rev-parse --show-prefix'
+const GITPATH = 'git rev-parse --git-path squarel-update-pending'
+const FOREACH = 'git for-each-ref --contains HEAD --format=%(refname)'
+const MARKER = join(SQ, '.git', 'squarel-update-pending')
 const STATUS = 'git status --porcelain --untracked-files=no'
 const HEAD = 'git rev-parse --abbrev-ref HEAD'
 const DESCRIBE = 'git describe --tags --exact-match HEAD'
 
 function repo(extra: Fixtures['run'] = {}): Fixtures['run'] {
   return {
-    [TOPLEVEL]: { code: 0, lines: ['D:/sq'] },
+    [PREFIX]: { code: 0, lines: [''] },
+    [GITPATH]: { code: 0, lines: ['.git/squarel-update-pending'] },
+    [FOREACH]: { code: 0, lines: ['refs/heads/main'] },
     [STATUS]: { code: 0, lines: [] },
     [HEAD]: { code: 0, lines: ['HEAD'] },
     [DESCRIBE]: { code: 0, lines: ['v0.1.0'] },
@@ -114,18 +119,29 @@ describe('planSquarelUpdate', () => {
 
   it('a folder that is not the repo root is not-a-repo', async () => {
     const notRepo = recording({
-      run: repo({ [TOPLEVEL]: { code: 128, lines: ['fatal: not a git repository'] } }),
+      run: repo({ [PREFIX]: { code: 128, lines: ['fatal: not a git repository'] } }),
     })
     expect(await planSquarelUpdate(SQ, '0.2.0', notRepo.d)).toMatchObject({
       kind: 'blocked',
       reason: 'not-a-repo',
     })
     // Squarel installed inside some other repo must never move that repo.
-    const nested = recording({ run: repo({ [TOPLEVEL]: { code: 0, lines: ['D:/'] } }) })
+    const nested = recording({ run: repo({ [PREFIX]: { code: 0, lines: ['sub/'] } }) })
     expect(await planSquarelUpdate(SQ, '0.2.0', nested.d)).toMatchObject({
       kind: 'blocked',
       reason: 'not-a-repo',
     })
+  })
+
+  it('detached HEAD on commits no ref contains is blocked', async () => {
+    const { d, calls } = recording({
+      run: repo({ [DESCRIBE]: { code: 128 }, [FOREACH]: { code: 0, lines: [] } }),
+    })
+    const plan = await planSquarelUpdate(SQ, '0.2.0', d)
+    expect(plan).toMatchObject({ kind: 'blocked', reason: 'orphan-commits' })
+    if (plan.kind !== 'blocked') throw new Error('unreachable')
+    expect(plan.message).toMatch(/HEAD có commit chưa thuộc nhánh nào/)
+    expect(calls.map((c) => c.cmd)).not.toContain(STATUS)
   })
 
   it('dev launcher never moves the repo', async () => {
@@ -145,7 +161,7 @@ describe('applySquarelUpdate', () => {
   it('apply runs fetch, checkout, install, extension reinstall in order and streams TaskEvents', async () => {
     const { d, calls } = recording({
       run: repo({
-        'git fetch --tags': { code: 0, lines: ['From github.com:x'] },
+        'git fetch --tags --force': { code: 0, lines: ['From github.com:x'] },
         'git checkout --detach refs/tags/v0.2.0': { code: 0 },
         'pnpm install': { code: 0, lines: ['Done'] },
         'pnpm aseprite:pack -- --install': { code: 0, lines: ['installed'] },
@@ -160,7 +176,8 @@ describe('applySquarelUpdate', () => {
     )
     expect(calls.map((c) => c.cmd)).toEqual([
       STATUS,
-      'git fetch --tags',
+      GITPATH,
+      'git fetch --tags --force',
       'git checkout --detach refs/tags/v0.2.0',
       'pnpm install',
       'pnpm aseprite:pack -- --install',
@@ -184,13 +201,16 @@ describe('applySquarelUpdate', () => {
       { squarelDir: SQ, reg, selected: [], onEvent: (e) => events.push(e) },
       d,
     )
-    expect(calls.map((c) => c.cmd)).toEqual([STATUS, 'git pull --ff-only', 'pnpm install'])
+    expect(calls.map((c) => c.cmd)).toEqual([STATUS, GITPATH, 'git pull --ff-only', 'pnpm install'])
     expect(events.at(-1)).toMatchObject({ kind: 'done', code: 0 })
   })
 
   it('a failing step stops the update and emits an error', async () => {
     const { d, calls } = recording({
-      run: repo({ 'git fetch --tags': { code: 0 }, 'git checkout --detach refs/tags/v0.2.0': { code: 1 } }),
+      run: repo({
+        'git fetch --tags --force': { code: 0 },
+        'git checkout --detach refs/tags/v0.2.0': { code: 1 },
+      }),
     })
     const events: TaskEvent[] = []
     await applySquarelUpdate(
@@ -218,7 +238,7 @@ describe('applySquarelUpdate', () => {
     const { d, calls } = recording({
       running: ['Aseprite.exe'],
       run: repo({
-        'git fetch --tags': { code: 0 },
+        'git fetch --tags --force': { code: 0 },
         'git checkout --detach refs/tags/v0.2.0': { code: 0 },
         'pnpm install': { code: 0 },
       }),
@@ -242,6 +262,62 @@ describe('applySquarelUpdate', () => {
     await applySquarelUpdate({ kind: 'blocked', reason: 'dirty', message: 'bẩn' }, ctx, d)
     expect(calls).toEqual([])
     expect(events.map((e) => e.kind)).toEqual(['done', 'error'])
+  })
+})
+
+describe('retry after a failed apply', () => {
+  it('install failure after checkout is planned again and finishes on retry', async () => {
+    const run = repo({
+      'git fetch --tags --force': { code: 0 },
+      'git checkout --detach refs/tags/v0.2.0': { code: 0 },
+      'pnpm install': { code: 1, lines: ['ERR_PNPM_FETCH'] },
+      'pnpm aseprite:pack -- --install': { code: 0 },
+    }) as NonNullable<Fixtures['run']>
+    const { d } = recording({ run })
+    const events: TaskEvent[] = []
+    const ctx = { squarelDir: SQ, reg, selected: ['aseprite'], onEvent: (e: TaskEvent) => events.push(e) }
+
+    const first = await planSquarelUpdate(SQ, '0.2.0', d)
+    await applySquarelUpdate(first, ctx, d)
+    const err = events.at(-1)
+    expect(err).toMatchObject({ kind: 'error', code: 1 })
+    expect(err?.text).toMatch(/v0\.2\.0/)
+    expect(err?.text).toMatch(/Cập nhật lần nữa/)
+    await expect(d.fs.stat(MARKER)).resolves.toBeTruthy()
+
+    // The checkout moved HEAD onto the target tag.
+    run[DESCRIBE] = { code: 0, lines: ['v0.2.0'] }
+    const again = await planSquarelUpdate(SQ, '0.2.0', d)
+    expect(again).toEqual({ kind: 'tag', from: '0.2.0', to: '0.2.0' })
+
+    run['pnpm install'] = { code: 0 }
+    events.length = 0
+    await applySquarelUpdate(again, ctx, d)
+    expect(events.at(-1)).toMatchObject({ kind: 'done', code: 0 })
+    await expect(d.fs.stat(MARKER)).rejects.toThrow()
+    expect(await planSquarelUpdate(SQ, '0.2.0', d)).toEqual({ kind: 'none' })
+  })
+
+  it('a failed fetch does not claim the code moved, and masks credentials in streamed lines', async () => {
+    const { d } = recording({
+      run: repo({
+        'git fetch --tags --force': {
+          code: 128,
+          lines: ["fatal: unable to access 'https://user:ghp_SECRET123@example.com/o/r.git/'"],
+        },
+      }),
+    })
+    const events: TaskEvent[] = []
+    await applySquarelUpdate(
+      { kind: 'tag', to: '0.2.0' },
+      { squarelDir: SQ, reg, selected: [], onEvent: (e) => events.push(e) },
+      d,
+    )
+    const all = events.map((e) => e.text ?? '').join(' | ')
+    expect(all).not.toContain('ghp_SECRET123')
+    expect(all).toContain('https://***@example.com')
+    expect(events.at(-1)?.kind).toBe('error')
+    expect(events.at(-1)?.text).not.toMatch(/Cập nhật lần nữa/)
   })
 })
 
@@ -282,6 +358,15 @@ describe('applyToolUpdate', () => {
     expect((await applyToolUpdate(noUpdate, '1.3.19', ctx(events), d)).blocked).toBeTruthy()
     expect((await applyToolUpdate(aseprite, '--upload-pack=x', ctx(events), d)).blocked).toBeTruthy()
     expect(calls).toEqual([])
+  })
+
+  it('a failed update with requiresClosed hints to close the tool', async () => {
+    const cmd = `pnpm aseprite:build -- --src ${TOOLS} --ref v1.3.19`
+    const { d } = recording({ run: { [cmd]: { code: 2 } } })
+    const events: TaskEvent[] = []
+    await applyToolUpdate(aseprite, 'v1.3.19', ctx(events), d)
+    expect(events.at(-1)).toMatchObject({ kind: 'error', code: 2 })
+    expect(events.at(-1)?.text).toMatch(/Đóng aseprite\.exe trước/)
   })
 
   it('user integrations run from their own folder', async () => {
