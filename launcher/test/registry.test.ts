@@ -16,6 +16,8 @@ const state: LauncherState = {
   closeToTray: true,
   autostart: false,
 }
+const ctx = { launcherVersion: '0.2.0', isDev: false }
+const selState: LauncherState = { ...state, selected: ['aseprite'] }
 const read = (p: string) => readFile(p, 'utf8')
 const asepriteManifest = () => read(join(repoRoot, 'integrations/aseprite/integration.json'))
 
@@ -60,7 +62,7 @@ describe('registry', () => {
       'Cần launcher mới hơn',
     )
     const d = createDeps('fake', {})
-    const v = (await viewComponents(reg, state, parseEnv(''), d)).find((c) => c.id === 'future')
+    const v = (await viewComponents(reg, state, parseEnv(''), d, ctx)).find((c) => c.id === 'future')
     expect(v?.incompatible).toBe('Cần launcher mới hơn')
     expect(v?.actions).toEqual([])
     expect(reg.problems).toEqual([])
@@ -134,7 +136,7 @@ describe('registry', () => {
   it('node 22.17 is installed but level=error with label "Cần Node ≥ 22.18"', async () => {
     const d = createDeps('fake', { run: { 'node --version': { code: 0, lines: ['v22.17.0'] } } })
     const reg = await loadRegistry({ userIntegrationsDir: '/u', platform: 'win32' }, d)
-    const n = (await viewComponents(reg, state, parseEnv(''), d)).find((v) => v.id === 'node')
+    const n = (await viewComponents(reg, state, parseEnv(''), d, ctx)).find((v) => v.id === 'node')
     expect(n).toMatchObject({
       installed: true,
       version: '22.17.0',
@@ -154,7 +156,7 @@ describe('registry', () => {
     const tags = 'git ls-remote --tags --refs https://github.com/aseprite/aseprite.git'
     const view = async (d: ReturnType<typeof createDeps>, id: string) => {
       const reg = await loadRegistry({ squarelDir: '/sq', userIntegrationsDir: '/u', platform: 'win32' }, d)
-      return (await viewComponents(reg, state, parseEnv(''), d)).find((v) => v.id === id)
+      return (await viewComponents(reg, selState, parseEnv(''), d, ctx)).find((v) => v.id === id)
     }
 
     const a = await view(
@@ -202,5 +204,114 @@ describe('registry', () => {
     const g = await view(dNone, 'git')
     expect(g).toMatchObject({ installed: false, level: 'error', levelLabel: 'Chưa cài' })
     expect(g?.actions[0]?.needsConsent?.command).toContain('winget install')
+  })
+})
+
+describe('registry hardening', () => {
+  const exeOf = (extra: string) =>
+    `{ "schema": 1, "id": "tool", "name": "T", "description": "d", "icon": "icon.png", "accent": "#112233", "platforms": ["win32"], ${extra}, "install": [], "launch": [{ "id": "open", "label": "Mở", "default": true, "run": ["{exe}"] }], "checks": [] }`
+  const PNG = '\x89PNG\r\n\x1a\n'
+  const setup = async (
+    detect: string,
+    files: Record<string, string> = {},
+    run: Record<string, { code: number; lines?: string[] }> = {},
+  ) => {
+    const spy: string[] = []
+    const d = createDeps('fake', {
+      files: { '/sq/integrations/tool/integration.json': exeOf(`"detect": ${detect}`), ...files },
+      run,
+      env: { ProgramFiles: 'C:/Program Files' },
+    })
+    const realRun = d.run
+    d.run = async (spec) => {
+      spy.push(spec.argv.join(' '))
+      return realRun(spec)
+    }
+    const reg = await loadRegistry({ squarelDir: '/sq', userIntegrationsDir: '/u', platform: 'win32' }, d)
+    if (reg.problems.length) throw new Error(JSON.stringify(reg.problems))
+    return { d, reg, spy }
+  }
+  const ver = ',"version": {"args": ["--version"], "pattern": "([0-9]+)"}'
+
+  it('never executes an integration that is not selected', async () => {
+    const exe = 'C:/Program Files/Tool/tool.exe'
+    const { d, reg, spy } = await setup(
+      `{"candidates": ["${exe}"]${ver}}`,
+      { [exe]: 'x' },
+      { [`${exe} --version`]: { code: 0, lines: ['1'] } },
+    )
+    const v = (await viewComponents(reg, state, parseEnv(''), d, ctx)).find((c) => c.id === 'tool')
+    expect(v).toMatchObject({ installed: false, level: 'idle', levelLabel: 'Chưa chọn' })
+    expect(spy.filter((a) => a.includes('tool'))).toEqual([])
+    const v2 = (await viewComponents(reg, { ...state, selected: ['tool'] }, parseEnv(''), d, ctx)).find(
+      (c) => c.id === 'tool',
+    )
+    expect(v2).toMatchObject({ installed: true, version: '1' })
+    expect(spy.filter((a) => a.includes('tool'))).toEqual([`${exe} --version`])
+  })
+
+  it('rejects powershell, node, .cmd and relative paths: never executed', async () => {
+    const bad = [
+      'C:/Windows/System32/WindowsPowerShell/v1.0/PowerShell.exe',
+      'C:/Program Files/nodejs/node.exe',
+      'C:/Tools/tool.cmd',
+      'tool.exe',
+      './tool.exe',
+    ]
+    const files = Object.fromEntries(bad.map((b) => [b, 'x']))
+    const cands = bad.map((b) => JSON.stringify(b)).join(',')
+    const { d, reg, spy } = await setup(`{"candidates": [${cands}]${ver}}`, files)
+    const r = await detectIntegration(reg.integrations[0] as never, parseEnv(''), d)
+    expect(r.installed).toBe(false)
+    expect(spy).toEqual([])
+  })
+
+  it('rejects secret and malformed detect.env names', async () => {
+    const exe = 'C:/Secrets/x.exe'
+    for (const name of ['CLOUDFLARE_API_TOKEN', 'retro_diffusion_api_key', 'BAD NAME']) {
+      const { d, reg, spy } = await setup(`{"env": "${name}"}`, { [exe]: 'x' })
+      const r = await detectIntegration(reg.integrations[0] as never, parseEnv(`${name}=${exe}\n`), d)
+      expect(r.installed).toBe(false)
+      expect(spy).toEqual([])
+    }
+  })
+
+  it('integration icon becomes a data URL; core icons are names', async () => {
+    const { d, reg } = await setup('{"candidates": ["C:/a.exe"]}', {
+      '/sq/integrations/tool/icon.png': `${PNG}abc`,
+    })
+    const views = await viewComponents(reg, state, parseEnv(''), d, ctx)
+    const t = views.find((c) => c.id === 'tool')
+    expect(t?.iconKind).toBe('data')
+    expect(t?.icon).toBe(`data:image/png;base64,${Buffer.from(`${PNG}abc`, 'latin1').toString('base64')}`)
+    expect(views.find((c) => c.id === 'node')).toMatchObject({ iconKind: 'name', icon: 'box' })
+  })
+
+  it('icon falls back to box with a note when missing, not PNG, or too large', async () => {
+    for (const files of <Record<string, string>[]>[
+      {},
+      { '/sq/integrations/tool/icon.png': 'not a png' },
+      { '/sq/integrations/tool/icon.png': PNG + 'a'.repeat(70 * 1024) },
+    ]) {
+      const { d, reg } = await setup('{"candidates": ["C:/a.exe"]}', files)
+      const t = (await viewComponents(reg, state, parseEnv(''), d, ctx)).find((c) => c.id === 'tool')
+      expect(t).toMatchObject({ iconKind: 'name', icon: 'box' })
+      expect(t?.note).toBeTruthy()
+    }
+  })
+
+  it('incompatible stub with a traversal icon falls back to icon.png', async () => {
+    const d = createDeps('fake', {
+      files: {
+        '/u/future/integration.json': JSON.stringify({
+          schema: 2,
+          id: 'future',
+          name: 'F',
+          icon: '..' + String.fromCharCode(92) + '..' + String.fromCharCode(92) + 'x.png',
+        }),
+      },
+    })
+    const reg = await loadRegistry({ userIntegrationsDir: '/u', platform: 'win32' }, d)
+    expect(reg.integrations[0]?.manifest.icon).toBe('icon.png')
   })
 })

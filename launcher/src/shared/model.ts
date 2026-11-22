@@ -4,7 +4,9 @@ export interface ComponentView {
   name: string
   description: string
   kind: 'core' | 'integration'
+  /** Icon name from the design list ('name') or a `data:image/png;base64,…` URL ('data'). */
   icon: string
+  iconKind: 'name' | 'data'
   accent?: string
   required: boolean
   installed: boolean
@@ -14,6 +16,8 @@ export interface ComponentView {
   level: Level
   levelLabel: string
   incompatible?: string
+  /** Non-fatal detail (e.g. why an icon fell back). */
+  note?: string
   actions: ActionRef[]
 }
 export interface ActionRef {

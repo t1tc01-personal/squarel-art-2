@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Deps } from '../deps'
 import { type EnvDoc, getVar } from '../env-store'
-import { type Latest, latestGithubRelease } from '../versions'
+import { type Latest, latestGitTag } from '../versions'
 
 export interface Detected {
   installed: boolean
@@ -87,7 +87,7 @@ export const CORE: CoreComponent[] = [
     id: 'launcher',
     name: 'Squarel Launcher',
     description: 'Ứng dụng quản lý Squarel Art và các công cụ đi kèm.',
-    icon: 'launcher',
+    icon: 'home',
     required: true,
     async detect(_d, ctx) {
       return { installed: true, version: ctx.launcherVersion, note: ctx.isDev ? 'dev' : undefined }
@@ -97,7 +97,7 @@ export const CORE: CoreComponent[] = [
     id: 'squarel',
     name: 'Squarel Art',
     description: 'Bộ công cụ pixel-art và cầu nối MCP cho Claude.',
-    icon: 'squarel',
+    icon: 'grid',
     required: true,
     async detect(d, ctx) {
       if (!ctx.squarelDir) return { installed: false }
@@ -122,13 +122,13 @@ export const CORE: CoreComponent[] = [
         note: note || undefined,
       }
     },
-    latest: (d) => latestGithubRelease('t1tc01-personal/squarel-art-2', d),
+    latest: (d) => latestGitTag('https://github.com/t1tc01-personal/squarel-art-2.git', d),
   },
   {
     id: 'claude-code',
     name: 'Claude Code',
     description: 'Trợ lý lập trình của Anthropic, dùng Squarel qua MCP.',
-    icon: 'claude',
+    icon: 'sparkle',
     required: true,
     detect: versionDetector(['claude', '--version'], /(\d+(?:\.\d+)+)/),
     install: {
@@ -139,7 +139,7 @@ export const CORE: CoreComponent[] = [
     id: 'node',
     name: 'Node.js',
     description: `Chạy Squarel, cần phiên bản ${MIN_NODE} trở lên.`,
-    icon: 'node',
+    icon: 'box',
     required: true,
     detect: versionDetector(['node', '--version'], /v?(\d+(?:\.\d+)+)/),
     install: { winget: 'OpenJS.NodeJS.LTS', sizeHint: '~30 MB' },
@@ -148,7 +148,7 @@ export const CORE: CoreComponent[] = [
     id: 'pnpm',
     name: 'pnpm',
     description: 'Trình quản lý gói dùng để cài và build Squarel.',
-    icon: 'pnpm',
+    icon: 'box',
     required: true,
     detect: versionDetector(['pnpm', '-v'], /(\d+(?:\.\d+)+)/),
     install: { winget: 'pnpm.pnpm', sizeHint: '~30 MB' },
@@ -157,7 +157,7 @@ export const CORE: CoreComponent[] = [
     id: 'git',
     name: 'Git',
     description: 'Tải mã nguồn và kiểm tra bản mới.',
-    icon: 'git',
+    icon: 'link',
     required: true,
     detect: versionDetector(['git', '--version'], /(\d+(?:\.\d+)+)/),
     install: { winget: 'Git.Git', sizeHint: '~60 MB' },
@@ -166,7 +166,7 @@ export const CORE: CoreComponent[] = [
     id: 'vs-build-tools',
     name: 'Visual Studio Build Tools',
     description: 'Cần để tự build Aseprite từ source.',
-    icon: 'vs',
+    icon: 'gear',
     required: false,
     async detect(d) {
       const pf = Object.entries(d.env).find(([k]) => k.toUpperCase() === 'PROGRAMFILES(X86)')?.[1]
@@ -191,7 +191,7 @@ export const CORE: CoreComponent[] = [
     id: 'local-sd',
     name: 'Stable Diffusion cục bộ',
     description: 'Máy chủ ảnh chạy trên máy bạn (chỉ phát hiện).',
-    icon: 'sd',
+    icon: 'chip',
     required: false,
     async detect(d, ctx) {
       const url = getVar(ctx.env, 'LOCAL_SD_URL')?.trim()

@@ -1,5 +1,5 @@
 /** Loads integration manifests (Squarel's own and the user's) without ever aborting on a bad file. */
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import {
   Catalog,
   type CatalogEntryT,
@@ -20,6 +20,15 @@ export interface LoadedIntegration {
 export interface Problem {
   path: string
   error: string
+}
+
+export const ICON_FILE = /^[\w.-]+\.png$/
+
+/** True when `name` resolves to a path strictly inside `dir`. */
+export function isInsideDir(dir: string, name: string): boolean {
+  const root = resolve(dir)
+  const full = resolve(root, name)
+  return full.startsWith(root.endsWith(sep) ? root : root + sep)
 }
 
 const INCOMPATIBLE = 'Cần launcher mới hơn'
@@ -52,7 +61,7 @@ function stub(raw: Record<string, unknown>, id: string): IntegrationManifestT {
     id,
     name: str(raw.name, id),
     description: str(raw.description, ''),
-    icon: str(raw.icon, 'icon.png'),
+    icon: typeof raw.icon === 'string' && ICON_FILE.test(raw.icon) ? raw.icon : 'icon.png',
     accent: typeof raw.accent === 'string' && /^#[0-9A-Fa-f]{6}$/.test(raw.accent) ? raw.accent : '#808080',
     platforms: [],
     detect: {},

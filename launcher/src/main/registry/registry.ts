@@ -1,6 +1,6 @@
 /** The component registry: core list + integration manifests, and the views the UI renders. */
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, win32 } from 'node:path'
 import { substitute } from '@squarel/integration-schema'
 import type { ActionRef, ComponentView, Level } from '../../shared/model'
 import type { Deps } from '../deps'
@@ -10,6 +10,8 @@ import { compareVersions, type Latest, latestGitTag, satisfiesMin } from '../ver
 import { CORE, type CoreComponent, type Ctx, type Detected, MIN_NODE } from './core'
 import {
   type CatalogEntry,
+  ICON_FILE,
+  isInsideDir,
   type LoadedIntegration,
   loadCatalog,
   loadIntegrationsFrom,
@@ -78,12 +80,45 @@ async function fileExists(d: Deps, p: string): Promise<boolean> {
   }
 }
 
+const DENY_EXE = new Set([
+  'cmd',
+  'powershell',
+  'pwsh',
+  'wscript',
+  'cscript',
+  'mshta',
+  'rundll32',
+  'regsvr32',
+  'node',
+  'python',
+  'python3',
+  'bash',
+  'sh',
+  'conhost',
+  'explorer',
+])
+const SECRET_VARS = new Set(['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'RETRO_DIFFUSION_API_KEY'])
+
+/** Why a detected path may not be executed, or undefined when acceptable. */
+function rejectPath(p: string): string | undefined {
+  if (!win32.isAbsolute(p)) return 'đường dẫn không tuyệt đối'
+  const base = win32.basename(p).toLowerCase()
+  if (!base.endsWith('.exe')) return 'chỉ chấp nhận file .exe'
+  if (DENY_EXE.has(base.slice(0, -4))) return `không cho phép chạy ${base}`
+  return undefined
+}
+
 export async function detectIntegration(i: LoadedIntegration, envDoc: EnvDoc, d: Deps): Promise<Detected> {
   const { detect } = i.manifest
   const candidates: string[] = []
+  const notes: string[] = []
   if (detect.env) {
-    const v = getVar(envDoc, detect.env)?.trim() || envGet(d.env, detect.env)?.trim()
-    if (v) candidates.push(v)
+    if (!/^[A-Z_][A-Z0-9_]*$/i.test(detect.env) || SECRET_VARS.has(detect.env.toUpperCase()))
+      notes.push(`Biến môi trường "${detect.env}" không được phép dùng để dò`)
+    else {
+      const v = getVar(envDoc, detect.env)?.trim() || envGet(d.env, detect.env)?.trim()
+      if (v) candidates.push(v)
+    }
   }
   for (const c of detect.candidates ?? []) {
     const e = expandEnv(c, d.env)
@@ -91,12 +126,17 @@ export async function detectIntegration(i: LoadedIntegration, envDoc: EnvDoc, d:
   }
   let path: string | undefined
   for (const c of candidates) {
+    const why = rejectPath(c)
+    if (why) {
+      notes.push(`Bỏ qua ${c}: ${why}`)
+      continue
+    }
     if (await fileExists(d, c)) {
       path = c
       break
     }
   }
-  if (!path) return { installed: false }
+  if (!path) return notes.length ? { installed: false, note: notes.join('; ') } : { installed: false }
   if (!detect.version) return { installed: true, path }
 
   const lines: string[] = []
@@ -127,6 +167,29 @@ export async function detectIntegration(i: LoadedIntegration, envDoc: EnvDoc, d:
     if (m?.[1]) return { installed: true, path, version: m[1] }
   }
   return { installed: true, path, note: 'Không đọc được phiên bản' }
+}
+
+const MAX_ICON = 64 * 1024
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+/** Reads the integration icon as a data URL; any problem falls back to the 'box' icon with a note. */
+async function loadIcon(
+  i: LoadedIntegration,
+  d: Deps,
+): Promise<{ icon: string; iconKind: 'name' | 'data'; note?: string }> {
+  const fallback = (note: string) => ({ icon: 'box', iconKind: 'name' as const, note })
+  const name = i.manifest.icon
+  if (!ICON_FILE.test(name) || !isInsideDir(i.dir, name)) return fallback('Tên file icon không hợp lệ')
+  try {
+    const raw = await d.fs.readFile(join(i.dir, name))
+    const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'latin1')
+    if (buf.length > MAX_ICON) return fallback('Icon quá lớn (tối đa 64 KB)')
+    if (buf.length < PNG_SIG.length || !buf.subarray(0, PNG_SIG.length).equals(PNG_SIG))
+      return fallback('Icon không phải file PNG')
+    return { icon: `data:image/png;base64,${buf.toString('base64')}`, iconKind: 'data' }
+  } catch {
+    return fallback('Không đọc được file icon')
+  }
 }
 
 function shell(argv: string[]): string {
@@ -190,6 +253,7 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
     description: c.description,
     kind: 'core',
     icon: c.icon,
+    iconKind: 'name',
     required: c.required,
     installed: det.installed,
     ...(det.version ? { version: det.version } : {}),
@@ -206,12 +270,14 @@ async function viewIntegration(
   d: Deps,
 ): Promise<ComponentView> {
   const m = i.manifest
+  const { note: iconNote, ...iconPart } = await loadIcon(i, d)
   const base = {
     id: m.id,
     name: m.name,
     description: m.description,
     kind: 'integration' as const,
-    icon: join(i.dir, m.icon),
+    ...iconPart,
+    ...(iconNote ? { note: iconNote } : {}),
     accent: m.accent,
     required: false,
   }
@@ -224,6 +290,8 @@ async function viewIntegration(
       incompatible: i.incompatible,
       actions: [],
     }
+  if (!state.selected.includes(m.id))
+    return { ...base, installed: false, level: 'idle', levelLabel: 'Chưa chọn', actions: [] }
   const det = await detectIntegration(i, envDoc, d)
   let latest: Latest | undefined
   if (det.installed && m.latest) {
@@ -283,12 +351,12 @@ export async function viewComponents(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
-  ctx: Partial<Pick<Ctx, 'launcherVersion' | 'isDev'>> = {},
+  ctx: Pick<Ctx, 'launcherVersion' | 'isDev'>,
 ): Promise<ComponentView[]> {
   const full: Ctx = {
     squarelDir: state.squarelDir,
-    launcherVersion: ctx.launcherVersion ?? '0.0.0',
-    isDev: ctx.isDev ?? false,
+    launcherVersion: ctx.launcherVersion,
+    isDev: ctx.isDev,
     env: envDoc,
   }
   const core = Promise.all(reg.core.map((c) => viewCore(c, full, d)))
