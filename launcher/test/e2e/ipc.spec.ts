@@ -1,7 +1,10 @@
-import { _electron as electron, expect, test } from '@playwright/test'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { expect, test } from '@playwright/test'
+import { launchIsolated } from './launch'
 
 test('window.squarel exposes only the typed API and main validates calls', async () => {
-  const app = await electron.launch({ args: ['.'] })
+  const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
     await expect(page.getByText('SQUAREL', { exact: true })).toBeVisible()
@@ -42,7 +45,13 @@ test('window.squarel exposes only the typed API and main validates calls', async
     expect(r.bad).toMatch(/không hợp lệ/)
     expect(r.hasIpc).toBe(false)
     expect(r.frozen).toBe(true)
+
+    // State goes to the throwaway profile, never the real one.
+    await page.evaluate(() => (window as any).squarel.setState({ closeToTray: false }))
+    const appData = await app.evaluate(() => process.env.APPDATA ?? '')
+    expect(appData).toContain('squarel-launcher-e2e-')
+    expect(existsSync(join(appData, 'SquarelArt Launcher', 'state.json'))).toBe(true)
   } finally {
-    await app.close()
+    await close()
   }
 })

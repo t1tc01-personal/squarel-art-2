@@ -5,7 +5,7 @@ import { substitute } from '@squarel/integration-schema'
 import type { ActionRef, CheckResult } from '../../shared/model'
 import type { BridgeState } from '../bridge/types'
 import type { Deps } from '../deps'
-import { type EnvDoc, getVar } from '../env-store'
+import { type EnvDoc, readVar } from '../env-store'
 import { isInsideDir, type LoadedIntegration } from '../registry/integrations'
 import { detectIntegration, expandEnv } from '../registry/registry'
 import { compareVersions } from '../versions'
@@ -103,9 +103,9 @@ export function bridgeListening(b: BridgeState): Draft {
 }
 
 export async function cloudflareToken(d: Deps, env: EnvDoc): Promise<Draft> {
-  const token = getVar(env, 'CLOUDFLARE_API_TOKEN')?.trim()
+  const token = readVar(env, 'CLOUDFLARE_API_TOKEN')?.trim()
   if (!token) return { result: 'warn', detail: 'chưa có token', fix: OPEN_SETTINGS }
-  const account = getVar(env, 'CLOUDFLARE_ACCOUNT_ID')?.trim()
+  const account = readVar(env, 'CLOUDFLARE_ACCOUNT_ID')?.trim()
   const base = 'https://api.cloudflare.com/client/v4'
   const urls = [`${base}/user/tokens/verify`]
   if (account) urls.push(`${base}/accounts/${encodeURIComponent(account)}/tokens/verify`)
@@ -141,7 +141,7 @@ export async function cloudflareToken(d: Deps, env: EnvDoc): Promise<Draft> {
 }
 
 export function retroDiffusionKey(env: EnvDoc): Draft {
-  return getVar(env, 'RETRO_DIFFUSION_API_KEY')?.trim()
+  return readVar(env, 'RETRO_DIFFUSION_API_KEY')?.trim()
     ? { result: 'pass', detail: 'đã có key' }
     : { result: 'warn', detail: 'chưa có key (tuỳ chọn)', fix: { ...OPEN_SETTINGS, label: 'Thêm key' } }
 }

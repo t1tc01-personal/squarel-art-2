@@ -34,15 +34,19 @@ export function createScheduler(
   function runNow(job: JobName): Promise<void> {
     const running = inFlight.get(job)
     if (running) return running
-    const p = (async () => {
-      try {
-        await jobs[job]()
-      } catch (e) {
-        opts.onError?.(job, e)
-      } finally {
-        inFlight.delete(job)
-      }
-    })()
+    // Started in a later microtask, so the map entry exists before the job body runs and a
+    // synchronous throw becomes a rejection like any other failure.
+    const p: Promise<void> = Promise.resolve()
+      .then(jobs[job])
+      .then(
+        () => {},
+        (e) => {
+          opts.onError?.(job, e)
+        },
+      )
+      .finally(() => {
+        if (inFlight.get(job) === p) inFlight.delete(job)
+      })
     inFlight.set(job, p)
     return p
   }

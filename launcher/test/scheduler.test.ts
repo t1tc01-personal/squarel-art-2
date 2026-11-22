@@ -93,4 +93,27 @@ describe('scheduler', () => {
     expect(errors).toHaveLength(4)
     sched.stop()
   })
+
+  it('a job that throws synchronously does not stop the schedule', async () => {
+    let n = 0
+    const errors: unknown[] = []
+    const sched = createScheduler(
+      { checksMs: 1000, updatesMs: 1_000_000 },
+      {
+        checks: () => {
+          n++
+          throw new Error('sync boom')
+        },
+        updates: async () => {},
+      },
+      clock,
+      { onError: (_job, e) => errors.push(e) },
+    )
+    sched.start()
+    await vi.advanceTimersByTimeAsync(2000)
+    await expect(sched.runNow('checks')).resolves.toBeUndefined()
+    expect(n).toBe(4)
+    expect(errors).toHaveLength(4)
+    sched.stop()
+  })
 })

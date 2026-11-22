@@ -84,6 +84,24 @@ describe('registry', () => {
     expect(reg.problems).toHaveLength(1)
   })
 
+  it('detectIntegration reads a quoted ASEPRITE_PATH containing # the way Node does', async () => {
+    const exe = 'D:\\Tools #2\\Aseprite.exe'
+    const d = createDeps('fake', {
+      files: { '/sq/integrations/aseprite/integration.json': await asepriteManifest(), [exe]: 'x' },
+      run: { [`${exe} -b --version`]: { code: 0, lines: ['Aseprite 1.3.18.6'] } },
+    })
+    const reg = await loadRegistry({ squarelDir: '/sq', userIntegrationsDir: '/u', platform: 'win32' }, d)
+    const i = reg.integrations[0] as never
+    expect(await detectIntegration(i, parseEnv(`ASEPRITE_PATH='${exe}'\r\n`), d)).toMatchObject({
+      installed: true,
+      path: exe,
+    })
+    expect(await detectIntegration(i, parseEnv(`ASEPRITE_PATH="${exe}" # mine\n`), d)).toMatchObject({
+      installed: true,
+      path: exe,
+    })
+  })
+
   it('detectIntegration prefers ASEPRITE_PATH from .env, then candidates with %ProgramFiles(x86)% expanded, parses "Aseprite 1.3.18.6-dev"', async () => {
     const base = { '/sq/integrations/aseprite/integration.json': await asepriteManifest() }
     const envPath = 'D:\\Tools\\Aseprite\\Aseprite.exe'

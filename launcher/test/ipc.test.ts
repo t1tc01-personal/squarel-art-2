@@ -48,6 +48,7 @@ function setup(fx: Fixtures = {}) {
     autostart: false,
   }
   const revealed: string[] = []
+  const picked: { folder: string | null; file: string | null } = { folder: null, file: null }
   const events: { event: string; payload: unknown }[] = []
   const logs: string[] = []
   const ctx: IpcContext = {
@@ -64,13 +65,13 @@ function setup(fx: Fixtures = {}) {
       },
     },
     bridge: () => ({ mode: 'down', port: 4321, clients: [], since: '2026-01-01T00:00:00Z' }),
-    dialogs: { pickFolder: async () => null, pickFile: async () => null },
+    dialogs: { pickFolder: async () => picked.folder, pickFile: async () => picked.file },
     showItemInFolder: (p) => void revealed.push(p),
     launcherUpdater: { check: async () => ({ ok: true, version: '0.2.0' }) },
     emit: (event, payload) => void events.push({ event, payload }),
     log: (m) => void logs.push(m),
   }
-  return { h: createIpcHandlers(ctx), d, revealed, events, logs, getState: () => state }
+  return { h: createIpcHandlers(ctx), d, revealed, events, logs, picked, getState: () => state }
 }
 
 describe('ipc handlers', () => {
@@ -86,7 +87,7 @@ describe('ipc handlers', () => {
     await expect(h.handle('state:set', APP, { schema: 2 })).rejects.toThrow(/không hợp lệ/i)
     await expect(h.handle('state:set', APP, { selected: ['../../evil'] })).rejects.toThrow(/không hợp lệ/i)
     await expect(h.handle('state:set', APP, { squarelDir: 'relative\\dir' })).rejects.toThrow()
-    await expect(h.handle('state:set', APP, { squarelDir: ELSEWHERE })).rejects.toThrow(/squarel-art/)
+    await expect(h.handle('state:set', APP, { squarelDir: ELSEWHERE })).rejects.toThrow(/hộp thoại/)
     await expect(
       h.handle('action:run', APP, { componentId: 'squarel', kind: 'nuke', id: 'x', label: 'x' }),
     ).rejects.toThrow(/không hợp lệ/i)
@@ -169,7 +170,7 @@ describe('ipc handlers', () => {
   it('shell:reveal refuses paths outside known roots', async () => {
     const { h, revealed } = setup({
       realpaths: { [join(DATA, 'projects', 'link')]: join(ELSEWHERE, 'secret.txt') },
-      files: { [join(DATA, 'projects', 'link')]: 'x' },
+      files: { [join(DATA, 'projects', 'link')]: 'x', [join(DATA, '..foo', 'x.txt')]: 'x' },
     })
     const refused = [
       join(ELSEWHERE, 'secret.txt'),
@@ -192,9 +193,93 @@ describe('ipc handlers', () => {
       join(SQ, 'package.json'),
       join(LOCAL, 'SquarelArt', 'tools', 'aseprite', 'build.log'),
       join(LOGS, 'launcher.log'),
+      join(DATA, '..foo', 'x.txt'), // a folder whose name starts with ".." is still inside
     ]
     for (const path of ok) await h.handle('shell:reveal', APP, { path })
     expect(revealed).toEqual(ok)
+  })
+
+  it('path settings are accepted only from a pick dialog or the stored value', async () => {
+    const SQ2 = join(ROOT, 'squarel-2')
+    const EXE = join(ROOT, 'tools', 'Aseprite.exe')
+    const { h, picked, getState } = setup({
+      files: { [join(SQ2, 'package.json')]: '{"name":"squarel-art"}' },
+    })
+    // The stored folder may be set again; another valid Squarel folder needs the dialog.
+    await h.handle('state:set', APP, { squarelDir: SQ })
+    await expect(h.handle('state:set', APP, { squarelDir: SQ2 })).rejects.toThrow(/hộp thoại/)
+    picked.folder = ELSEWHERE
+    await h.handle('dialog:pickFolder', APP, undefined)
+    // Picked, but still has to be a Squarel folder.
+    await expect(h.handle('state:set', APP, { squarelDir: ELSEWHERE })).rejects.toThrow(/squarel-art/)
+    picked.folder = SQ2
+    expect(await h.handle('dialog:pickFolder', APP, undefined)).toBe(SQ2)
+    await h.handle('state:set', APP, { squarelDir: SQ2 })
+    expect(getState().squarelDir).toBe(SQ2)
+    // Going back to the previous folder also needs the dialog (only the stored one is implied).
+    await expect(h.handle('state:set', APP, { squarelDir: SQ })).rejects.toThrow(/hộp thoại/)
+    picked.folder = SQ
+    await h.handle('dialog:pickFolder', APP, undefined)
+    await h.handle('state:set', APP, { squarelDir: SQ })
+
+    await expect(h.handle('env:set', APP, { key: 'ASEPRITE_PATH', value: EXE })).rejects.toThrow(/hộp thoại/)
+    picked.file = EXE
+    await h.handle('dialog:pickFile', APP, { filters: [{ name: 'Aseprite', extensions: ['exe'] }] })
+    const view = (await h.handle('env:set', APP, { key: 'ASEPRITE_PATH', value: EXE })) as Record<
+      string,
+      { value: string }
+    >
+    expect(view.ASEPRITE_PATH?.value).toBe(EXE)
+    // Current DATA_DIR may be written back; clearing is always allowed; a new one needs the dialog.
+    await h.handle('env:set', APP, { key: 'DATA_DIR', value: DATA })
+    await expect(h.handle('env:set', APP, { key: 'DATA_DIR', value: ELSEWHERE })).rejects.toThrow(/hộp thoại/)
+    await h.handle('env:set', APP, { key: 'DATA_DIR', value: '' })
+  })
+
+  it('LOCAL_SD_URL must not carry credentials', async () => {
+    const { h } = setup()
+    await expect(
+      h.handle('env:set', APP, { key: 'LOCAL_SD_URL', value: 'http://user:pass@127.0.0.1:7861' }),
+    ).rejects.toThrow(/mật khẩu/)
+    await expect(
+      h.handle('env:set', APP, { key: 'LOCAL_SD_URL', value: 'http://u@127.0.0.1:7861' }),
+    ).rejects.toThrow()
+    await h.handle('env:set', APP, { key: 'LOCAL_SD_URL', value: 'http://127.0.0.1:7861' })
+  })
+
+  it('only one action at a time may work in the Squarel folder', async () => {
+    const { h, d, events } = setup()
+    let release: (() => void) | undefined
+    const run = d.run
+    d.run = async (spec) => {
+      if (!release && spec.argv.join(' ').startsWith('claude mcp add'))
+        await new Promise<void>((r) => (release = r))
+      return run(spec)
+    }
+    const ref = { componentId: 'squarel', kind: 'fix', id: 'register-mcp', label: 'x' }
+    await h.handle('action:run', APP, ref)
+    await expect(h.handle('action:run', APP, ref)).rejects.toThrow(/đang chạy/)
+    await expect(
+      h.handle('action:run', APP, { componentId: 'squarel', kind: 'update', id: 'update', label: 'x' }),
+    ).rejects.toThrow(/thư mục Squarel/)
+    await expect(h.handle('updates:apply', APP, undefined)).rejects.toThrow(/thư mục Squarel/)
+    // Actions outside the Squarel folder are not blocked.
+    await h.handle('action:run', APP, {
+      componentId: 'settings',
+      kind: 'fix',
+      id: 'open-settings',
+      label: 'x',
+    })
+    while (!release) await new Promise((r) => setTimeout(r, 1))
+    release()
+    await h.idle()
+    const ends = events.filter((e) =>
+      ['done', 'error'].includes((e.payload as { kind?: string })?.kind ?? ''),
+    )
+    expect(ends).toHaveLength(2) // open-settings + the first register-mcp
+    // Released: a new Squarel-folder action may start.
+    expect(typeof (await h.handle('action:run', APP, ref))).toBe('string')
+    await h.idle()
   })
 
   it('action:run starts a known action and streams task events', async () => {

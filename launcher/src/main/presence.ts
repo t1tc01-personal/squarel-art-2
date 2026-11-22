@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { PresenceGroup, PresenceItem } from '../shared/model'
 import type { BridgeState } from './bridge/types'
 import type { Deps } from './deps'
-import { type EnvDoc, getVar } from './env-store'
+import { type EnvDoc, readVar } from './env-store'
 import type { Registry } from './registry/registry'
 
 const STALE_MS = 30_000
@@ -142,7 +142,7 @@ export async function buildPresence(
   }
 
   const services: PresenceItem[] = [bridgeItem(bridge)]
-  if (getVar(env, 'CLOUDFLARE_API_TOKEN')?.trim()) {
+  if (readVar(env, 'CLOUDFLARE_API_TOKEN')?.trim()) {
     const left = Math.max(0, NEURON_BUDGET - (await neuronsUsedToday(dataDir, d)))
     services.push({
       id: 'svc-cloudflare',
@@ -159,7 +159,7 @@ export async function buildPresence(
       status: 'offline',
       icon: 'cloud',
     })
-  const rd = !!getVar(env, 'RETRO_DIFFUSION_API_KEY')?.trim()
+  const rd = !!readVar(env, 'RETRO_DIFFUSION_API_KEY')?.trim()
   services.push({
     id: 'svc-retrodiffusion',
     title: 'Retro Diffusion',

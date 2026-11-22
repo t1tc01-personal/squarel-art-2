@@ -238,3 +238,25 @@ describe('smokeTestMcp', () => {
     expect(d.isPidAlive(pid)).toBe(false)
   }, 20_000)
 })
+
+describe('checks read .env values like Node', () => {
+  it('a quoted CLOUDFLARE_API_TOKEN is sent unquoted; a quoted RD key counts as set', async () => {
+    const { cloudflareToken, retroDiffusionKey } = await import('../src/main/checks/builtin')
+    const d = createDeps('fake', {
+      fetch: { [VERIFY]: { status: 200, body: JSON.stringify({ result: { status: 'active' } }) } },
+    })
+    const seen: string[] = []
+    const real = d.fetch
+    d.fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      seen.push(String((init?.headers as Record<string, string>)?.Authorization))
+      return real(url, init)
+    }) as typeof fetch
+    const env = parseEnv(
+      'CLOUDFLARE_API_TOKEN="tok-abc_123" # main token\r\nRETRO_DIFFUSION_API_KEY=\'rd#key\'\r\n',
+    )
+    expect((await cloudflareToken(d, env)).result).toBe('pass')
+    expect(seen).toEqual(['Bearer tok-abc_123'])
+    expect(retroDiffusionKey(env).result).toBe('pass')
+    expect(retroDiffusionKey(parseEnv('RETRO_DIFFUSION_API_KEY= # nothing\n')).result).toBe('warn')
+  })
+})

@@ -37,7 +37,11 @@ export interface ActionCtx {
   toolsDir(id: string): string
 }
 
-export type Resolved = { key: string; body: ActionBody } | { error: string }
+/**
+ * `squarelDir: true` = the task runs in or changes the Squarel folder; at most one such task runs
+ * at a time (a git checkout must never race a `pnpm install` or an extension build).
+ */
+export type Resolved = { key: string; body: ActionBody; squarelDir?: boolean } | { error: string }
 
 const msg = (e: unknown) => maskCredentials(String((e as Error)?.message ?? e))
 
@@ -47,6 +51,7 @@ export function squarelUpdate(ctx: ActionCtx): Resolved {
   if (!dir) return { error: 'Chưa chọn thư mục Squarel' }
   return {
     key: 'squarel:update',
+    squarelDir: true,
     body: async (taskId, emit) => {
       // TODO(T15): stop the launcher's own bridge before moving the Squarel checkout, restart after.
       let plan: Awaited<ReturnType<typeof planSquarelUpdate>>
@@ -136,6 +141,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
       if (!dir) return { error: 'Chưa chọn thư mục Squarel' }
       return {
         key: 'squarel:register-mcp',
+        squarelDir: true,
         body: async (taskId, emit) => {
           const r = await registerMcp(dir, ctx.d)
           for (const text of r.output.split(/\r?\n/).filter(Boolean))
@@ -163,6 +169,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     if (typeof i === 'string') return { error: i }
     return {
       key: `${cid}:extension`,
+      squarelDir: i.source === 'squarel',
       body: (taskId, emit) =>
         runManifestCommand(
           taskId,
@@ -184,6 +191,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     if (typeof i === 'string') return { error: i }
     return {
       key: `${cid}:update`,
+      squarelDir: i.source === 'squarel',
       body: async (taskId, emit) => {
         const latest = await latestGitTag(repo, ctx.d)
         if (!latest.ok)
@@ -214,6 +222,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     if (typeof i === 'string') return { error: i }
     return {
       key: `${cid}:install`,
+      squarelDir: i.source === 'squarel',
       body: (taskId, emit) =>
         runManifestCommand(taskId, emit, ctx, i, run, { toolsDir: ctx.toolsDir(cid) }, `Cài ${m.name}`),
     }

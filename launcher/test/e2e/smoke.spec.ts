@@ -1,7 +1,8 @@
-import { _electron as electron, expect, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { launchIsolated } from './launch'
 
 test('launches a frameless 1280x800 window showing the SQUAREL wordmark', async () => {
-  const app = await electron.launch({ args: ['.'] })
+  const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
     await expect(page.getByText('SQUAREL', { exact: true })).toBeVisible()
@@ -18,12 +19,12 @@ test('launches a frameless 1280x800 window showing the SQUAREL wordmark', async 
     expect(prefs.hasRequire).toBe('undefined')
     expect(prefs.hasProcess).toBe('undefined')
   } finally {
-    await app.close()
+    await close()
   }
 })
 
 test('blocks new windows and navigation away from the app page', async () => {
-  const app = await electron.launch({ args: ['.'] })
+  const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
     await expect(page.getByText('SQUAREL', { exact: true })).toBeVisible()
@@ -52,6 +53,6 @@ test('blocks new windows and navigation away from the app page', async () => {
     expect(page.url()).toBe(appUrl)
     expect(await page.evaluate(() => document.body.innerText)).toContain('SQUAREL')
   } finally {
-    await app.close()
+    await close()
   }
 })

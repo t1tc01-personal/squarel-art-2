@@ -2,7 +2,7 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Deps } from '../deps'
-import { type EnvDoc, getVar } from '../env-store'
+import { type EnvDoc, readVar } from '../env-store'
 import { type Latest, latestGitTag } from '../versions'
 
 export interface Detected {
@@ -194,7 +194,7 @@ export const CORE: CoreComponent[] = [
     icon: 'chip',
     required: false,
     async detect(d, ctx) {
-      const url = getVar(ctx.env, 'LOCAL_SD_URL')?.trim()
+      const url = readVar(ctx.env, 'LOCAL_SD_URL')?.trim()
       if (!url) return { installed: false }
       try {
         const res = await d.fetch(`${url.replace(/\/+$/, '')}/health`, { signal: AbortSignal.timeout(3000) })

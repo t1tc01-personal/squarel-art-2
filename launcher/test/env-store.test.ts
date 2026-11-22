@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getVar, maskSecret, parseEnv, serializeEnv, setVar } from '../src/main/env-store'
+import { getVar, maskSecret, parseEnv, readVar, serializeEnv, setVar } from '../src/main/env-store'
 
 describe('env store', () => {
   it('round-trips CRLF, BOM, comments and blank lines byte for byte', () => {
@@ -65,5 +65,40 @@ describe('env store', () => {
   it('rejects newlines in keys and values', () => {
     expect(() => setVar(parseEnv(''), 'A', 'x\ny')).toThrow()
     expect(() => setVar(parseEnv(''), 'A=B', 'x')).toThrow()
+  })
+})
+
+describe('readVar (Node loadEnvFile rules)', () => {
+  it('unquotes like process.loadEnvFile', () => {
+    const doc = parseEnv(
+      [
+        'A="x#y" # c',
+        'B=plain # comment',
+        'C=a#b',
+        "D='C:\\p #1\\a.exe'",
+        'E=`a\'b"c`',
+        'F="l1\\nl2"',
+        "G='s\\n'",
+        'H=  spaced  ',
+        'I="x" trailing',
+        "J='unterminated",
+        'K=#start',
+        'export L=l',
+        '',
+      ].join('\n'),
+    )
+    expect(readVar(doc, 'A')).toBe('x#y')
+    expect(readVar(doc, 'B')).toBe('plain')
+    expect(readVar(doc, 'C')).toBe('a')
+    expect(readVar(doc, 'D')).toBe('C:\\p #1\\a.exe')
+    expect(readVar(doc, 'E')).toBe('a\'b"c')
+    expect(readVar(doc, 'F')).toBe('l1\nl2')
+    expect(readVar(doc, 'G')).toBe('s\\n')
+    expect(readVar(doc, 'H')).toBe('spaced')
+    expect(readVar(doc, 'I')).toBe('x')
+    expect(readVar(doc, 'J')).toBe("'unterminated")
+    expect(readVar(doc, 'K')).toBe('')
+    expect(readVar(doc, 'L')).toBe('l')
+    expect(readVar(doc, 'MISSING')).toBeUndefined()
   })
 })

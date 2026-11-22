@@ -6,8 +6,8 @@ import type { EventName, EventPayload } from '../shared/ipc'
 import { type BridgeSupervisor, createBridgeSupervisor } from './bridge/supervisor'
 import type { BridgeState } from './bridge/types'
 import { createDeps } from './deps'
-import { getVar, parseEnv } from './env-store'
-import { createIpcHandlers, type IpcHandlers, unquoteEnv } from './ipc-handlers'
+import { parseEnv, readVar } from './env-store'
+import { createIpcHandlers, type IpcHandlers } from './ipc-handlers'
 import { appPaths } from './paths'
 import { createScheduler } from './scheduler'
 import { type LauncherState, loadState, saveState } from './state'
@@ -23,9 +23,21 @@ const UPDATES_MS = 21_600_000
 const PRESENCE_POLL_MS = 5_000
 const DEFAULT_BRIDGE_PORT = 4321
 
+/** The electron-vite dev server URL; never honoured in a packaged build. */
+function devRendererUrl(): string | undefined {
+  return app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL || undefined
+}
+
+/**
+ * Test mode (e2e): no bridge supervisor, no scheduler (so no network checks), and Electron's own
+ * profile goes under the (temporary) APPDATA the test passes. Ignored in a packaged build.
+ */
+const TEST_MODE = !app.isPackaged && process.env.SQUAREL_LAUNCHER_TEST === '1'
+if (TEST_MODE && process.env.APPDATA) app.setPath('userData', join(process.env.APPDATA, 'electron-user-data'))
+
 /** True only for the app's own page: the dev server URL or the packaged index.html. */
 export function isAppUrl(url: string): boolean {
-  const dev = process.env.ELECTRON_RENDERER_URL
+  const dev = devRendererUrl()
   try {
     if (dev) return new URL(url).origin === new URL(dev).origin
     const target = new URL(url)
@@ -67,8 +79,9 @@ function createWindow(): BrowserWindow {
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = undefined
   })
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  const dev = devRendererUrl()
+  if (dev) {
+    void win.loadURL(dev)
   } else {
     void win.loadFile(RENDERER_FILE)
   }
@@ -79,6 +92,14 @@ function createWindow(): BrowserWindow {
 function send<E extends EventName>(event: E, payload: EventPayload<E>): void {
   const win = mainWindow
   if (win && !win.isDestroyed()) win.webContents.send(event, payload)
+}
+
+let stopBackground: (() => void) | undefined
+
+/** Stops the scheduler and presence polling (for the quit path, T15). The bridge is separate. */
+export function stopBackgroundWork(): void {
+  stopBackground?.()
+  stopBackground = undefined
 }
 
 /** Services behind the IPC channels: state, bridge supervisor, scheduler, presence polling. */
@@ -93,7 +114,7 @@ async function startServices(): Promise<IpcHandlers> {
     if (!state.squarelDir) return DEFAULT_BRIDGE_PORT
     try {
       const doc = parseEnv(String(await d.fs.readFile(join(state.squarelDir, '.env'), 'utf8')))
-      const n = Number(unquoteEnv(getVar(doc, 'BRIDGE_PORT')))
+      const n = Number(readVar(doc, 'BRIDGE_PORT'))
       return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : DEFAULT_BRIDGE_PORT
     } catch {
       return DEFAULT_BRIDGE_PORT
@@ -109,21 +130,38 @@ async function startServices(): Promise<IpcHandlers> {
 
   let lastPresence = ''
   let handlers: IpcHandlers | undefined
-  const pushPresence = async () => {
+  /** Single flight: a request during a run marks it dirty and triggers exactly one rerun. */
+  let presenceRunning = false
+  let presenceDirty = false
+  const pushPresence = async (): Promise<void> => {
     if (!handlers) return
+    if (presenceRunning) {
+      presenceDirty = true
+      return
+    }
+    presenceRunning = true
     try {
-      const groups = await handlers.presence()
-      const json = JSON.stringify(groups)
-      if (json === lastPresence) return
-      lastPresence = json
-      send('presence:changed', groups)
-    } catch (e) {
-      log(`presence failed: ${(e as Error)?.name ?? 'Error'}`)
+      do {
+        presenceDirty = false
+        try {
+          const groups = await handlers.presence()
+          const json = JSON.stringify(groups)
+          if (json !== lastPresence) {
+            lastPresence = json
+            send('presence:changed', groups)
+          }
+        } catch (e) {
+          log(`presence failed: ${(e as Error)?.name ?? 'Error'}`)
+        }
+      } while (presenceDirty)
+    } finally {
+      presenceRunning = false
     }
   }
 
   let bridgeChain: Promise<void> = Promise.resolve()
   const restartBridge = () => {
+    if (TEST_MODE) return
     bridgeChain = bridgeChain.then(async () => {
       unsubscribeBridge?.()
       await sup?.stop()
@@ -137,12 +175,13 @@ async function startServices(): Promise<IpcHandlers> {
     bridgeChain = bridgeChain.catch((e) => log(`bridge restart failed: ${(e as Error)?.name ?? 'Error'}`))
   }
 
-  const updater = app.isPackaged
-    ? createLauncherUpdater(createElectronUpdaterAdapter())
-    : {
-        check: async () =>
-          ({ ok: false, reason: 'not-found', message: 'Bản chạy từ mã nguồn không tự cập nhật' }) as const,
-      }
+  const updater =
+    app.isPackaged && !TEST_MODE
+      ? createLauncherUpdater(createElectronUpdaterAdapter())
+      : {
+          check: async () =>
+            ({ ok: false, reason: 'not-found', message: 'Bản chạy từ mã nguồn không tự cập nhật' }) as const,
+        }
 
   handlers = createIpcHandlers({
     d,
@@ -209,8 +248,13 @@ async function startServices(): Promise<IpcHandlers> {
     { setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h as NodeJS.Timeout) },
     { onError: (job, e) => log(`${job} failed: ${(e as Error)?.name ?? 'Error'}`) },
   )
-  scheduler.start()
-  setInterval(() => void pushPresence(), PRESENCE_POLL_MS).unref()
+  if (!TEST_MODE) scheduler.start()
+  const presenceTimer = setInterval(() => void pushPresence(), PRESENCE_POLL_MS)
+  presenceTimer.unref()
+  stopBackground = () => {
+    scheduler.stop()
+    clearInterval(presenceTimer)
+  }
   return handlers
 }
 

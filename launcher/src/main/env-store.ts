@@ -68,3 +68,31 @@ export function maskSecret(v: string | undefined): string {
   if (!v) return ''
   return v.length >= 8 ? `\u2022\u2022\u2022\u2022${v.slice(-4)}` : '\u2022\u2022\u2022\u2022'
 }
+
+/**
+ * The value Squarel actually sees for a raw `.env` value, mirroring Node's `process.loadEnvFile`
+ * (checked against Node 24) for single-line values:
+ * - trimmed;
+ * - `"…"`, `'…'` or `` `…` `` with a closing quote: the text up to the first closing quote
+ *   (anything after it is dropped); inside double quotes `\n` becomes a newline;
+ * - otherwise (no quote, or an unterminated one): cut at the first `#`, then trimmed.
+ */
+export function unquoteValue(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined
+  const v = raw.trim()
+  const q = v[0]
+  if (q === '"' || q === "'" || q === '`') {
+    const end = v.indexOf(q, 1)
+    if (end > 0) {
+      const inner = v.slice(1, end)
+      return q === '"' ? inner.replace(/\\n/g, '\n') : inner
+    }
+  }
+  const hash = v.indexOf('#')
+  return (hash >= 0 ? v.slice(0, hash) : v).trim()
+}
+
+/** `getVar` + `unquoteValue`: the value as Node (and so Squarel) reads it; undefined when absent. */
+export function readVar(doc: EnvDoc, key: string): string | undefined {
+  return unquoteValue(getVar(doc, key))
+}

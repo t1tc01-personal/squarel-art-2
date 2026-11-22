@@ -5,7 +5,7 @@
  * reach the renderer carry only fixed messages (never .env values).
  */
 
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import type { z } from 'zod'
 import {
@@ -30,7 +30,7 @@ import { type ActionCtx, type Resolved, resolveAction, squarelUpdate } from './a
 import type { BridgeState } from './bridge/types'
 import { type CheckCtx, runChecks } from './checks/runner'
 import type { Deps } from './deps'
-import { type EnvDoc, getVar, maskSecret, parseEnv, serializeEnv, setVar } from './env-store'
+import { type EnvDoc, maskSecret, parseEnv, readVar, serializeEnv, setVar } from './env-store'
 import { appPaths } from './paths'
 import { buildPresence } from './presence'
 import { loadRegistry, type Registry, viewComponents } from './registry/registry'
@@ -98,14 +98,6 @@ const VERSION_ID = /^v\d{6}$/
 const MAX_TEXT = 20_000
 
 const errMsg = (e: unknown) => String((e as Error)?.message ?? e)
-
-/** Strips surrounding quotes or an inline comment, like Node's .env parser. */
-export function unquoteEnv(raw: string | undefined): string {
-  const v = (raw ?? '').trim()
-  const q = /^(['"`])([\s\S]*)\1$/.exec(v)
-  if (q) return q[2] as string
-  return v.replace(/\s+#.*$/, '').trim()
-}
 
 export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   const { d } = ctx
@@ -176,7 +168,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   function envView(doc: EnvDoc): EnvView {
     const view = {} as EnvView
     for (const key of ENV_KEYS) {
-      const value = unquoteEnv(getVar(doc, key))
+      const value = readVar(doc, key) ?? ''
       const secret = SECRET_ENV_KEYS.includes(key)
       view[key] = { set: value !== '', value: secret ? maskSecret(value) : value, secret }
     }
@@ -203,6 +195,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       case 'LOCAL_SD_URL':
         try {
           const u = new URL(v)
+          if (u.username || u.password) return 'LOCAL_SD_URL không được chứa tên đăng nhập hoặc mật khẩu'
           return u.protocol === 'http:' || u.protocol === 'https:'
             ? undefined
             : 'LOCAL_SD_URL phải là URL http(s)'
@@ -234,11 +227,11 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     }
   }
   function secretValues(doc: EnvDoc): string[] {
-    return SECRET_ENV_KEYS.map((k) => unquoteEnv(getVar(doc, k))).filter((v) => v.length >= 4)
+    return SECRET_ENV_KEYS.map((k) => readVar(doc, k) ?? '').filter((v) => v.length >= 4)
   }
 
   function dataDir(s: LauncherState, doc: EnvDoc): string {
-    const v = unquoteEnv(getVar(doc, 'DATA_DIR'))
+    const v = readVar(doc, 'DATA_DIR')
     return v ? resolve(s.squarelDir ?? ctx.homeDir, v) : join(ctx.homeDir, 'SquarelArt-data')
   }
 
@@ -305,11 +298,16 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
 
   // ---- tasks --------------------------------------------------------------------------------
   const running = new Map<string, Promise<void>>()
+  /** One task at a time may run in / change the Squarel folder. */
+  let squarelBusy = false
   let seq = 0
   function startTask(resolved: Resolved, secrets: string[]): string {
     if ('error' in resolved) throw new IpcError(resolved.error)
     const { key, body } = resolved
     if (running.has(key)) throw new IpcError('Thao tác này đang chạy')
+    if (resolved.squarelDir && squarelBusy)
+      throw new IpcError('Đang có thao tác khác trên thư mục Squarel, chờ thao tác đó xong rồi thử lại')
+    if (resolved.squarelDir) squarelBusy = true
     const taskId = `${key}#${++seq}`
     const redact = (t: string) => {
       const out = scrub(t, secrets)
@@ -328,6 +326,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       } catch (e) {
         emit({ taskId, kind: 'error', text: errMsg(e) })
       } finally {
+        if (resolved.squarelDir) squarelBusy = false
         running.delete(key)
         push('components:changed', null)
       }
@@ -355,7 +354,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   // ---- shell:reveal -------------------------------------------------------------------------
   function within(root: string, p: string): boolean {
     const rel = relative(root, p)
-    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+    return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
   }
   async function realOrResolved(p: string): Promise<string> {
     try {
@@ -466,6 +465,10 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       const problem = envValueError(key, value)
       if (problem) throw new IpcError(problem)
       const s = await getState()
+      if ((key === 'DATA_DIR' || key === 'ASEPRITE_PATH') && value !== '') {
+        if (!fromMain(value, readVar(await readEnv(s), key)))
+          throw new IpcError(`Hãy chọn ${key === 'DATA_DIR' ? 'thư mục' : 'file'} bằng hộp thoại`)
+      }
       const file = envFile(s)
       if (!file) throw new IpcError('Chưa chọn thư mục Squarel')
       const doc = setVar(await readEnv(s), key, encodeEnvValue(value))
@@ -485,8 +488,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       const { actx, secrets } = await actionCtx()
       return startTask(squarelUpdate(actx), secrets)
     },
-    'dialog:pickFolder': () => ctx.dialogs.pickFolder(),
-    'dialog:pickFile': ({ filters }) => ctx.dialogs.pickFile(filters),
+    'dialog:pickFolder': async () => remember(await ctx.dialogs.pickFolder()),
+    'dialog:pickFile': async ({ filters }) => remember(await ctx.dialogs.pickFile(filters)),
     'shell:reveal': async ({ path }) => {
       await revealPath(path)
       return undefined
@@ -494,9 +497,32 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'projects:recent': () => recentProjects(),
   }
 
+  // ---- paths chosen by the user ----------------------------------------------------------------
+  /**
+   * Defense in depth: paths that steer where commands run or what gets executed (squarelDir,
+   * DATA_DIR, ASEPRITE_PATH) are only accepted when main itself produced them, i.e. the result of
+   * the most recent pick dialog, or the value already stored.
+   */
+  let lastPicked: string | undefined
+  function remember(p: string | null): string | null {
+    lastPicked = p ?? lastPicked
+    return p
+  }
+  const samePath = (a: string, b: string) =>
+    isWin ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
+  function fromMain(p: string, ...known: (string | undefined)[]): boolean {
+    return [lastPicked, ...known].some((k) => !!k && samePath(k, p))
+  }
+
   async function checkSquarelDir(dir: string): Promise<string> {
     if (UNC.test(dir) || !isDriveAbsolute(dir))
       throw new IpcError('Thư mục Squarel phải là đường dẫn tuyệt đối trên máy')
+    let defaultInstall: string | undefined
+    try {
+      defaultInstall = appPaths(d.env).defaultInstall
+    } catch {}
+    if (!fromMain(dir, (await getState()).squarelDir, defaultInstall))
+      throw new IpcError('Hãy chọn thư mục Squarel bằng hộp thoại chọn thư mục')
     const full = resolve(dir)
     try {
       const pkg = JSON.parse(String(await d.fs.readFile(join(full, 'package.json'), 'utf8')).replace(/^﻿/, ''))

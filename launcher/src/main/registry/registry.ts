@@ -4,7 +4,7 @@ import { dirname, join, win32 } from 'node:path'
 import { substitute } from '@squarel/integration-schema'
 import type { ActionRef, ComponentView, Level } from '../../shared/model'
 import type { Deps } from '../deps'
-import { type EnvDoc, getVar } from '../env-store'
+import { type EnvDoc, readVar } from '../env-store'
 import type { LauncherState } from '../state'
 import { compareVersions, type Latest, latestGitTag, satisfiesMin } from '../versions'
 import { CORE, type CoreComponent, type Ctx, type Detected, MIN_NODE } from './core'
@@ -120,7 +120,7 @@ export async function detectIntegration(i: LoadedIntegration, envDoc: EnvDoc, d:
     if (!/^[A-Z_][A-Z0-9_]*$/i.test(detect.env) || SECRET_VARS.has(detect.env.toUpperCase()))
       notes.push(`Biến môi trường "${detect.env}" không được phép dùng để dò`)
     else {
-      const v = getVar(envDoc, detect.env)?.trim() || envGet(d.env, detect.env)?.trim()
+      const v = readVar(envDoc, detect.env)?.trim() || envGet(d.env, detect.env)?.trim()
       if (v) candidates.push(v)
     }
   }
