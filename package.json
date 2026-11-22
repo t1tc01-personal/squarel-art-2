@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pixel art toolkit plugged into Claude Code (MCP) with two-way Aseprite sync",
+  "license": "PolyForm-Shield-1.0.0",
   "type": "module",
   "engines": {
     "node": ">=22.18"

@@ -5,7 +5,7 @@
   "version": "0.1.1",
   "author": { "name": "Squarel Art" },
   "publisher": "squarel",
-  "license": "MIT",
+  "license": "PolyForm-Shield-1.0.0",
   "categories": ["Scripts"],
   "contributes": {
     "scripts": [{ "path": "./plugin.lua" }]

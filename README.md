@@ -156,6 +156,24 @@ pnpm cli export --project test --preset print-png --options '{\"widthMm\":200}'
 - [Cài đặt từng bước](docs/setup.md) · [Kiến trúc](docs/architecture.md) · [Kế hoạch](docs/plans/2026-11-22-personal-tool-plan.md) · [Kế hoạch SaaS (để dành)](docs/plans/2026-11-22-saas-plan.md)
 - [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md)
 
+## Giấy phép
+
+Squarel Art dùng giấy phép **[PolyForm Shield 1.0.0](LICENSE.md)**.
+
+**Được làm:**
+- dùng miễn phí cho cá nhân, công việc hay công ty;
+- bán sản phẩm làm ra bằng nó (sprite cho game, áo in, sticker…);
+- sửa code cho mình dùng;
+- chia sẻ lại, miễn là kèm giấy phép này.
+
+**Không được làm:** dùng code này để làm hoặc cung cấp một sản phẩm **cạnh tranh** với Squarel Art, dù bán hay cho miễn phí. Ví dụ: đổi tên rồi phát hành lại, hoặc dựng một dịch vụ tạo pixel art bằng AI dựa trên code này.
+
+**Lưu ý:**
+- Giấy phép bảo vệ **code và tài liệu**, không bảo vệ được **ý tưởng**. Người khác vẫn có thể tự viết một công cụ tương tự từ đầu.
+- Đây không phải giấy phép "open source" theo định nghĩa OSI. Nó là giấy phép "source-available": công khai code nhưng có giới hạn.
+- Thư viện bên thứ ba vẫn theo giấy phép riêng của chúng. Aseprite theo EULA riêng: chỉ tự build để dùng cá nhân.
+- Phần này chỉ là tóm tắt, không phải tư vấn pháp lý. Văn bản trong [LICENSE.md](LICENSE.md) là bản có hiệu lực.
+
 ## Cấu trúc
 
 ```
