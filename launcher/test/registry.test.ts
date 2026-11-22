@@ -335,6 +335,8 @@ describe('registry hardening', () => {
       `${bs}${bs}host${bs}share${bs}tool.exe`,
       `${bs}${bs}?${bs}UNC${bs}host${bs}share${bs}tool.exe`,
       '//host/share/tool.exe',
+      `/${bs}host${bs}share${bs}x.exe`,
+      `${bs}/host/share/x.exe`,
       `${bs}${bs}.${bs}C:${bs}tool.exe`,
     ]
     const { d, reg, spy } = await setup(`{"candidates": ${JSON.stringify(cands)}${ver}}`)

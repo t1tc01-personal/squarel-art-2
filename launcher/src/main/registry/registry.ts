@@ -101,7 +101,8 @@ const SECRET_VARS = new Set(['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'R
 
 /** Why a detected path may not be executed, or undefined when acceptable. */
 function rejectPath(p: string): string | undefined {
-  if (p.startsWith('//') || p.startsWith(String.fromCharCode(92).repeat(2)))
+  const BS = String.fromCharCode(92)
+  if ((p[0] === '/' || p[0] === BS) && (p[1] === '/' || p[1] === BS))
     return 'không cho phép đường dẫn mạng (UNC)'
   if (!win32.isAbsolute(p)) return 'đường dẫn không tuyệt đối'
   const base = win32.basename(p).toLowerCase()
