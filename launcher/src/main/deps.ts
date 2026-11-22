@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process'
 import * as nodeFs from 'node:fs/promises'
 import { WebSocket } from 'ws'
-import { type RunSpec, runCommand } from './run'
+import { isProcessRunning, type RunSpec, runCommand } from './run'
 
 export interface BridgeChild {
   pid?: number
@@ -29,6 +29,8 @@ export interface Deps {
   fs: FsApi
   now: () => Date
   isPidAlive: (pid: number) => boolean
+  /** True when a process with this image name (e.g. "aseprite.exe", case-insensitive) is running. */
+  isProcessRunning: (imageName: string) => Promise<boolean>
   statfs: (path: string) => Promise<{ freeBytes: number }>
   spawnBridge: (opts: { squarelDir: string; env?: Record<string, string> }) => BridgeChild
   connectWs: (url: string) => WsLike
@@ -50,6 +52,8 @@ export interface Fixtures {
   files?: Record<string, string>
   now?: Date
   alivePids?: number[]
+  /** Running process image names (case-insensitive). */
+  running?: string[]
   freeBytes?: number
   platform?: NodeJS.Platform
   env?: NodeJS.ProcessEnv
@@ -161,6 +165,7 @@ function createFake(fx: Fixtures): Deps {
     fs: fakeFs(fx.files ?? {}, fx.realpaths),
     now: () => fx.now ?? new Date('2026-01-01T00:00:00Z'),
     isPidAlive: (pid) => alive.has(pid),
+    isProcessRunning: async (name) => (fx.running ?? []).some((r) => r.toLowerCase() === name.toLowerCase()),
     statfs: async () => ({ freeBytes: fx.freeBytes ?? 100 * 1024 ** 3 }),
     spawnBridge: () => ({ exited: new Promise(() => {}), kill() {} }),
     connectWs: () => ({ on() {}, send() {}, close() {}, terminate() {} }),
@@ -178,6 +183,7 @@ function createReal(): Deps {
     fs: nodeFs,
     now: () => new Date(),
     isPidAlive: realIsPidAlive,
+    isProcessRunning,
     statfs: async (path) => {
       const s = await nodeFs.statfs(path)
       return { freeBytes: Number(s.bavail) * Number(s.bsize) }
