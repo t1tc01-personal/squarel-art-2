@@ -552,12 +552,12 @@ Gọi thẳng `node` thay vì `pnpm`/`npx` để tránh phải bọc `cmd /c` tr
 | extension → bridge | `open { slug }` | Mở một project |
 | bridge → extension | `doc { slug, versionId, doc }` | Toàn bộ PixelDoc (cel dạng RLE base64) |
 | extension → bridge | `cels { slug, baseVersion, doc, label? }` | Trạng thái hiện tại sau khi bạn vẽ |
-| bridge → extension | `ack { versionId }` | Ghi thành công |
-| bridge → extension | `rebased { versionId, doc }` | Đã gộp với một thay đổi mới hơn; extension áp lại doc này |
+| bridge → extension | `ack { slug, versionId }` | Ghi thành công |
+| bridge → extension | `rebased { slug, versionId, doc, warnings }` | Đã gộp với một thay đổi mới hơn; extension áp lại doc này |
 | bridge → extension | `doc.updated { slug, versionId, source, label, doc }` | Claude, AI hoặc CLI vừa tạo version mới |
 | bridge → extension | `open.request { slug }` | `open_in_editor` yêu cầu mở project |
-| extension → bridge | `status` | Hỏi ai đang kết nối. Bridge trả `status { version, clients }`, mỗi client là `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`. Launcher dùng để biết Aseprite đã kết nối chưa |
-| extension → bridge | `tool { id, name, input }` | Menu Xuất file, Lịch sử… gọi lại tool. Bridge trả `tool_result { id, text, files }` |
+| client → bridge | `status` | Hỏi ai đang kết nối. Bridge trả `status { version, clients }`, mỗi client là `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`; `version` là id version PixelDoc client nhận hoặc ghi gần nhất, không phải phiên bản công cụ (đó là `app`). Launcher dùng để biết Aseprite đã kết nối chưa |
+| extension → bridge | `tool { id, name, input }` | Menu Xuất file, Lịch sử… gọi lại tool. Bridge trả `tool_result { id, ok, text, files? }` |
 | hai chiều | `error { code, message }` | Báo lỗi |
 
 **Quy tắc phía extension:**

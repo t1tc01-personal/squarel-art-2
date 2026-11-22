@@ -30,7 +30,9 @@ Schema nằm ở `integrations/schema/integration.schema.ts` (zod, `schema: 1`).
 - Các cặp "đúng một trong": `install[]` là `run` | `pickFile`; `launch[]` là `run` | `bridgeTool` | `reveal`; `checks[]` là `builtin` | `run`.
 - `builtin` chỉ nhận `detect`, `bridge-client`, `extension-version`.
 - `setEnv` cần `pickFile`. `env` của `launch[]` cần `run`. `pickProject` cần `bridgeTool`.
-- `detect` cần `env` hoặc `candidates`.
+- `detect` cần `env` hoặc `candidates`; khi có `candidates` thì phải có ít nhất 1 phần tử.
+- Check `builtin: "bridge-client"` cần mục `bridge`; check `builtin: "extension-version"` cần mục `extension`.
+- `latest.repo` phải là URL `https`.
 - Khoá của `launch[].env` khớp `^[A-Za-z_][A-Za-z0-9_]*$`.
 
 ## Biến thay thế
@@ -112,7 +114,7 @@ Chỉ năm biến sau, viết `{tên}`. Biến khác bị từ chối khi nạp 
 | `default` | `true` cho nút Mở chính |
 | `run` | Chạy argv |
 | `env` | Biến môi trường thêm cho `run` |
-| `bridgeTool` | Gọi tool này qua bridge như Claude gọi |
+| `bridgeTool` | Gọi tool này qua bridge như Claude gọi. Launcher gửi `tool { name: bridgeTool, input: { project } }`, với `project` là project người dùng chọn khi có `pickProject`, nếu không thì `{recentProject}`. Biến thay thế không áp dụng cho giá trị `bridgeTool` và `env` |
 | `pickProject` | Hỏi người dùng chọn project trước, rồi truyền cho `bridgeTool` |
 | `reveal` | Mở thư mục này trong trình quản lý file |
 
@@ -181,7 +183,7 @@ Check có sẵn:
 
 ## Giao thức bridge
 
-Bridge nghe `ws://127.0.0.1:4321/bridge` (xem `src/bridge/protocol.ts`). Công cụ nói giao thức này gửi `hello` ngay sau khi nối. Mọi tin nhắn là JSON.
+Bridge nghe `ws://127.0.0.1:4321/bridge` (cổng 4321, hoặc `BRIDGE_PORT`) (xem `src/bridge/protocol.ts`). Công cụ nói giao thức này gửi `hello` ngay sau khi nối. Mọi tin nhắn là JSON.
 
 | Hướng | Tin nhắn | Ý nghĩa |
 |---|---|---|
@@ -201,7 +203,7 @@ Bridge nghe `ws://127.0.0.1:4321/bridge` (xem `src/bridge/protocol.ts`). Công c
 | client → bridge | `ping` | Giữ kết nối |
 | bridge → client | `pong` | Trả lời `ping` |
 | client → bridge | `status` | Hỏi ai đang kết nối |
-| bridge → client | `status { version, clients }` | `clients` là mảng `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`. `name` là `client` trong `hello` |
+| bridge → client | `status { version, clients }` | `clients` là mảng `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`. `name` là `client` trong `hello`. `version` của mỗi client là id version PixelDoc (ví dụ `v000002`) mà client nhận hoặc ghi gần nhất, không phải phiên bản công cụ (đó là `app`) |
 | bridge → client | `error { code, message }` | Lỗi |
 
 - Có thể gửi `status` mà không cần `hello` trước. Client chưa gửi `hello` có `name` là `unknown`.
@@ -223,6 +225,7 @@ Mỗi tiến trình MCP ghi `DATA_DIR/run/mcp-<pid>.json` để launcher biết 
 | `bridge` | `own` (tiến trình này giữ bridge), `shared` (bridge của tiến trình khác), `none` (`SQUAREL_NO_BRIDGE=1`) |
 
 - Ghi lại mỗi 10 giây và sau mỗi lần gọi tool. Xoá khi thoát.
+- Chỉ đọc file khớp `^mcp-\d+\.json$`. Ghi nguyên tử có thể để lại file `.tmp` sau khi tiến trình chết đột ngột.
 - Launcher coi file là cũ nếu `updatedAt` quá 30 giây.
 
 ## Tiến độ và tắt đồng bộ

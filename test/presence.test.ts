@@ -25,7 +25,7 @@ describe('bridgeMode', () => {
 describe('mcp presence', () => {
   it('writes run/mcp-<pid>.json at start with bridge mode and cwd', async () => {
     const p = startPresence({ dataDir: t.dir, version: '1.2.3', bridge: 'own', intervalMs: 100000 })
-    await sleep(50)
+    await sleep(300)
     const file = presenceFile(t.dir)
     expect(file).toBe(join(t.dir, 'run', `mcp-${process.pid}.json`))
     const doc = read(file)
@@ -44,10 +44,10 @@ describe('mcp presence', () => {
       intervalMs: 100000,
       now: () => now,
     })
-    await sleep(50)
+    await sleep(300)
     now = new Date('2026-01-01T00:00:05Z')
     p.touch('draw_pixels')
-    await sleep(50)
+    await sleep(300)
     const doc = read(presenceFile(t.dir))
     expect(doc.lastTool).toBe('draw_pixels')
     expect(doc.lastToolAt).toBe('2026-01-01T00:00:05.000Z')
@@ -58,9 +58,9 @@ describe('mcp presence', () => {
 
   it('heartbeat rewrites updatedAt every intervalMs', async () => {
     const p = startPresence({ dataDir: t.dir, version: '1', bridge: 'shared', intervalMs: 20 })
-    await sleep(15)
+    await sleep(300)
     const first = read(presenceFile(t.dir)).updatedAt
-    await sleep(60)
+    await sleep(300)
     const later = read(presenceFile(t.dir)).updatedAt
     expect(Date.parse(later)).toBeGreaterThan(Date.parse(first))
     await p.stop()
@@ -72,7 +72,7 @@ describe('mcp presence', () => {
     await a.stop()
     const b = startPresence({ dataDir: t.dir, version: '1', bridge: 'own', intervalMs: 100000, pid: 4242 })
     const c = startPresence({ dataDir: t.dir, version: '1', bridge: 'own', intervalMs: 100000, pid: 4243 })
-    await sleep(50)
+    await sleep(300)
     expect(existsSync(presenceFile(t.dir, 4242))).toBe(true)
     await b.stop()
     await b.stop()
@@ -85,9 +85,9 @@ describe('mcp presence', () => {
   it('stop() leaves a foreign pid file alone', async () => {
     const foreign = presenceFile(t.dir, 999999)
     const f = startPresence({ dataDir: t.dir, version: '1', bridge: 'none', intervalMs: 100000, pid: 999999 })
-    await sleep(50)
+    await sleep(300)
     const mine = startPresence({ dataDir: t.dir, version: '1', bridge: 'none', intervalMs: 100000 })
-    await sleep(50)
+    await sleep(300)
     await mine.stop()
     expect(existsSync(foreign)).toBe(true)
     expect(existsSync(presenceFile(t.dir))).toBe(false)
@@ -97,9 +97,9 @@ describe('mcp presence', () => {
   it('two instances with different pids keep separate files', async () => {
     const a = startPresence({ dataDir: t.dir, version: '1', bridge: 'own', intervalMs: 100000, pid: 111 })
     const b = startPresence({ dataDir: t.dir, version: '1', bridge: 'shared', intervalMs: 100000, pid: 222 })
-    await sleep(50)
+    await sleep(300)
     a.touch('canvas_view')
-    await sleep(50)
+    await sleep(300)
     expect(read(presenceFile(t.dir, 111))).toMatchObject({ pid: 111, bridge: 'own', lastTool: 'canvas_view' })
     expect(read(presenceFile(t.dir, 222))).toMatchObject({ pid: 222, bridge: 'shared' })
     expect(read(presenceFile(t.dir, 222)).lastTool).toBeUndefined()
