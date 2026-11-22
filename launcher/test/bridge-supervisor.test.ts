@@ -300,7 +300,7 @@ describe('bridge supervisor', () => {
     expect(spawn.calls).toHaveLength(3)
     expect(sup.state().mode).toBe('down')
     expect(sup.state().message).toMatch(/bridge/i)
-    await clock.advance(60_000)
+    await clock.advance(59_000) // one foreignRetryMs round (at 30 s); the next is due at ≥60 s
     expect(spawn.calls.length).toBeLessThanOrEqual(6)
   })
 
