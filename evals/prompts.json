@@ -1,0 +1,12 @@
+[
+  { "id": "knight-32", "prompt": "a small knight with a sword and shield", "width": 32, "height": 32, "purpose": "game" },
+  { "id": "slime-16", "prompt": "a green slime monster", "width": 16, "height": 16, "purpose": "game" },
+  { "id": "potion-16", "prompt": "a red health potion bottle", "width": 16, "height": 16, "purpose": "game", "palette": "pico8" },
+  { "id": "tree-32", "prompt": "a pine tree", "width": 32, "height": 32, "purpose": "game", "palette": "sweetie16" },
+  { "id": "cat-avatar-64", "prompt": "a cute orange cat face, avatar", "width": 64, "height": 64, "purpose": "digital" },
+  { "id": "coffee-48", "prompt": "a cup of vietnamese iced coffee", "width": 48, "height": 48, "purpose": "print" },
+  { "id": "heart-29", "prompt": "a red heart with a white highlight", "width": 29, "height": 29, "purpose": "craft" },
+  { "id": "rocket-32", "prompt": "a cartoon rocket", "width": 32, "height": 32, "purpose": "digital" },
+  { "id": "mushroom-16", "prompt": "a red mushroom with white dots", "width": 16, "height": 16, "purpose": "game", "palette": "db16" },
+  { "id": "sword-24", "prompt": "a glowing blue magic sword icon", "width": 24, "height": 24, "purpose": "game" }
+]

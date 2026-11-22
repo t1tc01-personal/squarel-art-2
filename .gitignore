@@ -1,0 +1,11 @@
+node_modules/
+.env
+dist/
+coverage/
+*.aseprite-extension
+.data/
+test/.tmp/
+evals/out/
+
+# Aseprite source + Skia + build (personal use only, never commit: Aseprite EULA)
+vendor/

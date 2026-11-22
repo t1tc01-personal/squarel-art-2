@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "squarel": {
+      "command": "node",
+      "args": ["src/mcp/index.ts"]
+    }
+  }
+}
