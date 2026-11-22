@@ -7,7 +7,7 @@
  * - `.exe`/`.com` are spawned directly (shell: false); libuv quotes each argument
  *   for CreateProcess/CommandLineToArgvW, so any string arrives unchanged.
  * - `.cmd`/`.bat` shims cannot be started without cmd.exe. They run as
- *   `cmd.exe /d /s /v:off /c "<line>"` where every part of <line> went through
+ *   `cmd.exe /d /e:on /s /v:off /c "<line>"` where every part of <line> went through
  *   quoteForCmd. That line is parsed twice: once by `cmd /c` and again by the
  *   shim when it expands `%*` (BatBadBut, CVE-2024-27980), so quoteForCmd keeps
  *   every metacharacter inside double quotes, where neither parse acts on it.
@@ -96,7 +96,7 @@ export function resolveExecutable(
 }
 
 /**
- * Quotes one argument for a `cmd.exe /d /s /v:off /c "<line>"` command line that
+ * Quotes one argument for a `cmd.exe /d /e:on /s /v:off /c "<line>"` command line that
  * starts a `.cmd`/`.bat` shim.
  *
  * - Rejects `"`, CR, LF and NUL (they cannot be passed through cmd safely).
@@ -108,7 +108,8 @@ export function resolveExecutable(
  *   shim's re-parse then executes `a&calc`.
  * - `%` expands even inside quotes, so each `%` becomes `%%cd:~,%`: the second `%`
  *   starts `%cd:~,%`, a zero-length substring, which leaves a lone literal `%` that
- *   can no longer pair with a later `%`.
+ *   can no longer pair with a later `%`. The substring syntax needs command
+ *   extensions, which a user-writable registry value can disable, hence `/e:on`.
  * - Trailing backslashes are doubled so they do not escape the closing quote when
  *   the target program splits its command line (CommandLineToArgvW rules).
  */
@@ -121,6 +122,18 @@ export function quoteForCmd(arg: string): string {
   if (/^[A-Za-z0-9_+\-.:\\/@]+$/.test(arg)) return arg
   const body = arg.replace(/%/g, '%%cd:~,%').replace(/(\\+)$/, '$1$1')
   return `"${body}"`
+}
+
+/**
+ * Arguments for cmd.exe (spawned with windowsVerbatimArguments) that run a
+ * `.cmd`/`.bat` shim with `args`. Flags are fixed so registry/AutoRun settings
+ * cannot change parsing: /d no AutoRun, /e:on extensions on (needed by the `%`
+ * neutralisation in quoteForCmd), /s strip only the outer quotes, /v:off no
+ * delayed `!` expansion.
+ */
+export function cmdShimArgs(shimPath: string, args: string[]): string[] {
+  const line = [shimPath, ...args].map(quoteForCmd).join(' ')
+  return ['/d', '/e:on', '/s', '/v:off', '/c', `"${line}"`]
 }
 
 /** Builds the env for the child: parent env with overrides replacing keys case-insensitively. */
@@ -203,10 +216,9 @@ export async function runCommand(spec: RunSpec): Promise<{ code: number }> {
   let fileArgs: string[]
   let verbatim = false
   if (resolved.kind === 'cmd') {
-    const line = [resolved.path, ...args].map(quoteForCmd).join(' ')
     file = envGet(env, 'ComSpec') ?? systemExe('cmd.exe')
     if (!isAbsolute(file)) file = systemExe('cmd.exe')
-    fileArgs = ['/d', '/s', '/v:off', '/c', `"${line}"`]
+    fileArgs = cmdShimArgs(resolved.path, args)
     verbatim = true
   } else {
     file = resolved.path

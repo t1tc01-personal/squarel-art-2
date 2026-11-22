@@ -1,8 +1,10 @@
+import { spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  cmdShimArgs,
   isProcessRunning,
   parseProgressLine,
   quoteForCmd,
@@ -229,6 +231,34 @@ describe('runCommand', () => {
     })
     expect(r.code).toBe(0)
     expect(JSON.parse(r.out[0] as string)).toEqual([1, nodeDir, 'Dự án'])
+  })
+})
+
+describe('cmdShimArgs', () => {
+  it('pins cmd.exe flags: no AutoRun, extensions on, outer quotes only, no delayed expansion', () => {
+    expect(cmdShimArgs('C:\\x y\\pnpm.cmd', ['install', '%PATH%'])).toEqual([
+      '/d',
+      '/e:on',
+      '/s',
+      '/v:off',
+      '/c',
+      '""C:\\x y\\pnpm.cmd" install "%%cd:~,%PATH%%cd:~,%""',
+    ])
+  })
+
+  it('/e:on keeps % neutralisation working even when extensions are disabled by default', async () => {
+    // EnableExtensions=0 in the registry behaves like /e:off; simulate it on the command line
+    // instead of touching the user's registry.
+    const cwd = await tmp('run-ext')
+    const shim = await makeEchoShim(cwd)
+    const hostile = ['%PATH%', '%cd%', 'a&echo PWNED']
+    const comspec = process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe'
+    const run = (args: string[]) =>
+      spawnSync(comspec, args, { cwd, windowsVerbatimArguments: true, encoding: 'utf8', windowsHide: true })
+    const good = cmdShimArgs(shim, hostile)
+    expect(JSON.parse(run(good).stdout)).toEqual(hostile)
+    const extOff = good.map((a) => (a === '/e:on' ? '/e:off' : a))
+    expect(run(extOff).stdout.trim()).not.toBe(JSON.stringify(hostile))
   })
 })
 
