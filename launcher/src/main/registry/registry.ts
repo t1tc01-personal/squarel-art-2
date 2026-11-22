@@ -101,8 +101,11 @@ const SECRET_VARS = new Set(['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'R
 
 /** Why a detected path may not be executed, or undefined when acceptable. */
 function rejectPath(p: string): string | undefined {
+  if (p.startsWith('//') || p.startsWith(String.fromCharCode(92).repeat(2)))
+    return 'không cho phép đường dẫn mạng (UNC)'
   if (!win32.isAbsolute(p)) return 'đường dẫn không tuyệt đối'
   const base = win32.basename(p).toLowerCase()
+  if (base.includes('~')) return 'tên file rút gọn (8.3) không được phép'
   if (!base.endsWith('.exe')) return 'chỉ chấp nhận file .exe'
   if (DENY_EXE.has(base.slice(0, -4))) return `không cho phép chạy ${base}`
   return undefined
@@ -131,10 +134,20 @@ export async function detectIntegration(i: LoadedIntegration, envDoc: EnvDoc, d:
       notes.push(`Bỏ qua ${c}: ${why}`)
       continue
     }
-    if (await fileExists(d, c)) {
-      path = c
-      break
+    if (!(await fileExists(d, c))) continue
+    let real: string
+    try {
+      real = await d.fs.realpath(c)
+    } catch {
+      continue
     }
+    const whyReal = rejectPath(real)
+    if (whyReal) {
+      notes.push(`Bỏ qua ${c}: đường dẫn thật ${whyReal}`)
+      continue
+    }
+    path = real
+    break
   }
   if (!path) return notes.length ? { installed: false, note: notes.join('; ') } : { installed: false }
   if (!detect.version) return { installed: true, path }
@@ -181,7 +194,11 @@ async function loadIcon(
   const name = i.manifest.icon
   if (!ICON_FILE.test(name) || !isInsideDir(i.dir, name)) return fallback('Tên file icon không hợp lệ')
   try {
-    const raw = await d.fs.readFile(join(i.dir, name))
+    const realIcon = await d.fs.realpath(join(i.dir, name))
+    const realDir = await d.fs.realpath(i.dir)
+    if (!isInsideDir(realDir, realIcon)) return fallback('Icon nằm ngoài thư mục tích hợp')
+    if ((await d.fs.stat(realIcon)).size > MAX_ICON) return fallback('Icon quá lớn (tối đa 64 KB)')
+    const raw = await d.fs.readFile(realIcon)
     const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'latin1')
     if (buf.length > MAX_ICON) return fallback('Icon quá lớn (tối đa 64 KB)')
     if (buf.length < PNG_SIG.length || !buf.subarray(0, PNG_SIG.length).equals(PNG_SIG))

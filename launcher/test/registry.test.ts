@@ -314,4 +314,53 @@ describe('registry hardening', () => {
     const reg = await loadRegistry({ userIntegrationsDir: '/u', platform: 'win32' }, d)
     expect(reg.integrations[0]?.manifest.icon).toBe('icon.png')
   })
+
+  it('rejects a candidate whose realpath is a denylisted exe, and 8.3 names', async () => {
+    const link = 'C:/Tools/harmless.exe'
+    const short = 'C:/Windows/System32/POWERS~1.EXE'
+    const { d, reg, spy } = await setup(`{"candidates": ["${link}", "${short}"]${ver}}`, {
+      [link]: 'x',
+      [short]: 'x',
+    })
+    d.fs.realpath = (async (p: unknown) =>
+      String(p) === link ? 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe' : String(p)) as never
+    const r = await detectIntegration(reg.integrations[0] as never, parseEnv(''), d)
+    expect(r.installed).toBe(false)
+    expect(spy.filter((a) => a.includes('.exe') || a.includes('.EXE'))).toEqual([])
+  })
+
+  it('rejects UNC candidates before any filesystem call', async () => {
+    const bs = String.fromCharCode(92)
+    const cands = [
+      `${bs}${bs}host${bs}share${bs}tool.exe`,
+      `${bs}${bs}?${bs}UNC${bs}host${bs}share${bs}tool.exe`,
+      '//host/share/tool.exe',
+      `${bs}${bs}.${bs}C:${bs}tool.exe`,
+    ]
+    const { d, reg, spy } = await setup(`{"candidates": ${JSON.stringify(cands)}${ver}}`)
+    const calls: string[] = []
+    for (const k of ['stat', 'realpath', 'readFile'] as const) {
+      const orig = d.fs[k] as (...a: unknown[]) => Promise<unknown>
+      ;(d.fs as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => {
+        calls.push(`${k}:${String(a[0])}`)
+        return orig(...a)
+      }
+    }
+    const r = await detectIntegration(reg.integrations[0] as never, parseEnv(''), d)
+    expect(r.installed).toBe(false)
+    expect(calls).toEqual([])
+    expect(spy).toEqual([])
+  })
+
+  it('icon whose realpath escapes the integration dir falls back to box', async () => {
+    const { d, reg } = await setup('{"candidates": ["C:/a.exe"]}', {
+      '/sq/integrations/tool/icon.png': `${PNG}abc`,
+      '/secret/x.png': `${PNG}zzz`,
+    })
+    d.fs.realpath = (async (p: unknown) =>
+      String(p).endsWith('icon.png') ? '/secret/x.png' : String(p)) as never
+    const t = (await viewComponents(reg, state, parseEnv(''), d, ctx)).find((c) => c.id === 'tool')
+    expect(t).toMatchObject({ iconKind: 'name', icon: 'box' })
+    expect(t?.note).toBeTruthy()
+  })
 })

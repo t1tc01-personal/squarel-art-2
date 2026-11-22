@@ -20,7 +20,7 @@ export interface WsLike {
 
 type FsApi = Pick<
   typeof import('node:fs/promises'),
-  'readFile' | 'writeFile' | 'readdir' | 'stat' | 'mkdir' | 'rm' | 'rename'
+  'readFile' | 'writeFile' | 'readdir' | 'stat' | 'mkdir' | 'rm' | 'rename' | 'realpath'
 >
 
 export interface Deps {
@@ -41,6 +41,8 @@ export interface Fixtures {
   run?: Record<string, { code: number; lines?: string[] }>
   /** Key: exact URL. Unknown URLs reject like a network failure. */
   fetch?: Record<string, { status: number; headers?: Record<string, string>; body?: string }>
+  /** realpath results by path (symlink / 8.3 simulation); other existing files resolve to themselves. */
+  realpaths?: Record<string, string>
   /** Initial in-memory files, by path. */
   files?: Record<string, string>
   now?: Date
@@ -77,7 +79,7 @@ function realSpawnBridge(opts: { squarelDir: string; env?: Record<string, string
   return { pid: child.pid, exited, kill: () => void child.kill() }
 }
 
-function fakeFs(files: Record<string, string>): FsApi {
+function fakeFs(files: Record<string, string>, realpaths: Record<string, string> = {}): FsApi {
   const norm = (s: string) => String(s).replace(/\\/g, '/')
   const store = new Map(Object.entries(files).map(([k, v]) => [norm(k), v]))
   const enoent = (p: string) =>
@@ -102,6 +104,13 @@ function fakeFs(files: Record<string, string>): FsApi {
       const v = store.get(norm(p))
       if (v === undefined) throw enoent(p)
       return { isFile: () => true, isDirectory: () => false, size: v.length }
+    },
+    async realpath(p: string) {
+      const mapped = Object.entries(realpaths).find(([k]) => norm(k) === norm(p))?.[1]
+      if (mapped !== undefined) return mapped
+      const prefix = `${norm(p).replace(/\/+$/, '')}/`
+      if (!store.has(norm(p)) && ![...store.keys()].some((k) => k.startsWith(prefix))) throw enoent(p)
+      return p
     },
     async mkdir() {
       return undefined
@@ -134,7 +143,7 @@ function createFake(fx: Fixtures): Deps {
       if (!hit) throw new TypeError(`fetch failed: no fixture for ${url}`)
       return new Response(hit.body ?? '', { status: hit.status, headers: hit.headers })
     }) as typeof fetch,
-    fs: fakeFs(fx.files ?? {}),
+    fs: fakeFs(fx.files ?? {}, fx.realpaths),
     now: () => fx.now ?? new Date('2026-01-01T00:00:00Z'),
     isPidAlive: (pid) => alive.has(pid),
     statfs: async () => ({ freeBytes: fx.freeBytes ?? 100 * 1024 ** 3 }),
