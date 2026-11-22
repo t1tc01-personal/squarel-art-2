@@ -78,6 +78,17 @@ describe('connections presence', () => {
     expect(g[0]?.items).toEqual([])
   })
 
+  it('drops future-dated updatedAt, ignores future lastToolAt, and requires filename pid = json pid', async () => {
+    const files = {
+      [`${DATA}/run/mcp-1.json`]: runFile(1, { updatedAt: iso(-60) }),
+      [`${DATA}/run/mcp-2.json`]: runFile(2, { lastTool: 'draw_pixels', lastToolAt: iso(-60) }),
+      [`${DATA}/run/mcp-3.json`]: runFile(4),
+      [`${DATA}/run/mcp-0.json`]: runFile(0),
+    }
+    const items = (await run(files, { alive: [1, 2, 3, 4, 0] }))[0]?.items ?? []
+    expect(items.map((i) => [i.id, i.status])).toEqual([['claude-2', 'online']])
+  })
+
   it('busy within 15s of lastToolAt', async () => {
     const files = {
       [`${DATA}/run/mcp-1.json`]: runFile(1, { lastTool: 'draw_pixels', lastToolAt: iso(5) }),

@@ -8,6 +8,7 @@ import type { Registry } from './registry/registry'
 
 const STALE_MS = 30_000
 const BUSY_MS = 15_000
+const FUTURE_SKEW_MS = 5_000
 const MAX_USAGE_BYTES = 2 * 1024 * 1024
 const NEURON_BUDGET = 10_000
 const RUN_FILE = /^mcp-\d+\.json$/
@@ -41,12 +42,17 @@ async function sessions(dataDir: string, d: Deps): Promise<PresenceItem[]> {
       continue
     }
     const pid = j.pid
-    if (typeof pid !== 'number' || !Number.isInteger(pid) || typeof j.cwd !== 'string') continue
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0 || typeof j.cwd !== 'string') continue
+    if (name !== `mcp-${pid}.json`) continue
     const updated = ms(j.updatedAt)
-    if (!Number.isFinite(updated) || now - updated > STALE_MS) continue
+    if (!Number.isFinite(updated) || now - updated > STALE_MS || updated - now > FUTURE_SKEW_MS) continue
     if (!d.isPidAlive(pid)) continue
     const lastAt = ms(j.lastToolAt)
-    const busy = typeof j.lastTool === 'string' && Number.isFinite(lastAt) && now - lastAt <= BUSY_MS
+    const busy =
+      typeof j.lastTool === 'string' &&
+      Number.isFinite(lastAt) &&
+      now - lastAt <= BUSY_MS &&
+      lastAt - now <= FUTURE_SKEW_MS
     out.push({
       pid,
       item: {
