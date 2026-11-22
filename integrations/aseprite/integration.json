@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "id": "aseprite",
+  "name": "Aseprite",
+  "description": "Vẽ tay, đồng bộ trực tiếp hai chiều với Claude.",
+  "icon": "icon.png",
+  "accent": "#FF77A8",
+  "platforms": ["win32"],
+  "detect": {
+    "env": "ASEPRITE_PATH",
+    "candidates": ["%ProgramFiles(x86)%\\Steam\\steamapps\\common\\Aseprite\\Aseprite.exe", "%ProgramFiles%\\Aseprite\\Aseprite.exe"],
+    "version": { "args": ["-b", "--version"], "pattern": "Aseprite (\\S+)" }
+  },
+  "latest": { "type": "git-tags", "repo": "https://github.com/aseprite/aseprite.git", "stable": true },
+  "install": [
+    { "id": "build", "label": "Tự build từ source", "note": "Miễn phí, dùng cá nhân. ~7GB Build Tools, ~6 phút build.",
+      "run": ["pnpm", "aseprite:build", "--", "--src", "{toolsDir}", "--install-deps"] },
+    { "id": "existing", "label": "Đã có Aseprite", "pickFile": "aseprite.exe", "setEnv": "ASEPRITE_PATH" }
+  ],
+  "update": { "run": ["pnpm", "aseprite:build", "--", "--src", "{toolsDir}", "--ref", "{version}"], "requiresClosed": "aseprite.exe" },
+  "extension": {
+    "version": { "source": "integrations/aseprite/squarel/package.json", "installed": "%APPDATA%\\Aseprite\\extensions\\squarel\\package.json" },
+    "install": { "run": ["pnpm", "aseprite:pack", "--", "--install"], "requiresClosed": "aseprite.exe" }
+  },
+  "bridge": { "client": "aseprite" },
+  "launch": [
+    { "id": "open", "label": "Mở Aseprite", "default": true, "run": ["{exe}"] },
+    { "id": "open-project", "label": "Mở project…", "pickProject": true, "bridgeTool": "open_in_editor" },
+    { "id": "open-recent", "label": "Mở {recentProject}", "bridgeTool": "open_in_editor" },
+    { "id": "open-plain", "label": "Mở không đồng bộ", "run": ["{exe}"], "env": { "SQUAREL_NO_SYNC": "1" } },
+    { "id": "folder", "label": "Mở thư mục cài đặt", "reveal": "{exeDir}" }
+  ],
+  "checks": [
+    { "id": "installed", "label": "Đã cài và chạy được", "builtin": "detect" },
+    { "id": "connected", "label": "Đã kết nối bridge", "builtin": "bridge-client" },
+    { "id": "extension", "label": "Extension đúng phiên bản", "builtin": "extension-version" },
+    { "id": "roundtrip", "label": "Chuyển đổi không mất dữ liệu", "run": ["pnpm", "aseprite:test"], "manual": true }
+  ]
+}
