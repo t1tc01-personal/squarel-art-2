@@ -183,15 +183,28 @@ describe('catalog', () => {
       '#FFA300',
       '#C2C3C7',
     ])
+    for (const c of doc.comingSoon) expect(c.status, c.id).toBe('coming-soon')
     // coming-soon entries must not collide with a real integration
     for (const c of doc.comingSoon) expect(manifestDirs).not.toContain(c.id)
   })
 
-  it('rejects unknown keys and duplicate ids', () => {
-    const entry = { id: 'tool', name: 'Tool', description: 'x', icon: 'T', accent: '#000000' }
+  it('rejects unknown keys, duplicate ids and entries without status coming-soon', () => {
+    const entry = {
+      id: 'tool',
+      name: 'Tool',
+      description: 'x',
+      icon: 'T',
+      accent: '#000000',
+      status: 'coming-soon',
+    }
     expect(Catalog.safeParse({ schema: 1, comingSoon: [entry] }).success).toBe(true)
     expect(Catalog.safeParse({ schema: 1, comingSoon: [entry], x: 1 }).success).toBe(false)
     expect(Catalog.safeParse({ schema: 1, comingSoon: [{ ...entry, x: 1 }] }).success).toBe(false)
     expect(Catalog.safeParse({ schema: 1, comingSoon: [entry, entry] }).success).toBe(false)
+    const { status: _status, ...noStatus } = entry
+    expect(Catalog.safeParse({ schema: 1, comingSoon: [noStatus] }).success).toBe(false)
+    expect(Catalog.safeParse({ schema: 1, comingSoon: [{ ...entry, status: 'available' }] }).success).toBe(
+      false,
+    )
   })
 })

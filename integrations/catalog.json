@@ -6,28 +6,32 @@
       "name": "LibreSprite",
       "description": "Editor pixel miễn phí, tách từ Aseprite bản cũ.",
       "icon": "L",
-      "accent": "#29ADFF"
+      "accent": "#29ADFF",
+      "status": "coming-soon"
     },
     {
       "id": "pixelorama",
       "name": "Pixelorama",
       "description": "Editor pixel mã nguồn mở, chạy cả trên web.",
       "icon": "P",
-      "accent": "#00E436"
+      "accent": "#00E436",
+      "status": "coming-soon"
     },
     {
       "id": "godot",
       "name": "Godot",
       "description": "Xuất sprite sheet thẳng vào project game.",
       "icon": "G",
-      "accent": "#FFA300"
+      "accent": "#FFA300",
+      "status": "coming-soon"
     },
     {
       "id": "export-folder",
       "name": "Thư mục xuất",
       "description": "Tự chép file xuất sang thư mục khác (Drive, máy in…).",
       "icon": "F",
-      "accent": "#C2C3C7"
+      "accent": "#C2C3C7",
+      "status": "coming-soon"
     }
   ]
 }

@@ -156,6 +156,7 @@ export type CatalogEntryT = {
   /** Short monogram (1–2 characters) drawn on an `accent` tile; catalog entries ship no icon file. */
   icon: string
   accent: string
+  status: 'coming-soon'
 }
 
 /** `integrations/catalog.json`: integrations shown as "coming soon" in the library. */
@@ -286,6 +287,7 @@ const CatalogEntry = z.strictObject({
   description: text,
   icon: z.string().min(1).max(2),
   accent,
+  status: z.literal('coming-soon'),
 })
 
 export const Catalog: z.ZodType<CatalogT> = z.strictObject({
