@@ -32,6 +32,9 @@ export interface Deps {
   statfs: (path: string) => Promise<{ freeBytes: number }>
   spawnBridge: (opts: { squarelDir: string; env?: Record<string, string> }) => BridgeChild
   connectWs: (url: string) => WsLike
+  /** Timer seam (setTimeout/clearTimeout in real deps) so state machines can run on a fake clock in tests. */
+  setTimer: (fn: () => void, ms: number) => unknown
+  clearTimer: (handle: unknown) => void
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
 }
@@ -149,6 +152,8 @@ function createFake(fx: Fixtures): Deps {
     statfs: async () => ({ freeBytes: fx.freeBytes ?? 100 * 1024 ** 3 }),
     spawnBridge: () => ({ exited: new Promise(() => {}), kill() {} }),
     connectWs: () => ({ on() {}, send() {}, close() {}, terminate() {} }),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     platform: fx.platform ?? 'win32',
     env: fx.env ?? {},
   }
@@ -167,6 +172,8 @@ function createReal(): Deps {
     },
     spawnBridge: realSpawnBridge,
     connectWs: (url) => new WebSocket(url) as unknown as WsLike,
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     platform: process.platform,
     env: process.env,
   }
