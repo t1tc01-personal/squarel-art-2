@@ -347,4 +347,108 @@ describe('bridge supervisor', () => {
     expect(spawn3.calls).toHaveLength(0)
     expect(mid.state().mode).toBe('down')
   })
+  it('own child alive but unreachable → backs off with a message, then is killed', async () => {
+    const port = await freePort() // nothing ever listens: our (fake) child never binds
+    const clock = fakeClock()
+    const spawn = spawnSpy()
+    const real = createDeps('real')
+    let connects = 0
+    const sup = createBridgeSupervisor(
+      { port, squarelDir: SQ, pollMs: 5000, foreignRetryMs: 30_000 },
+      realWsDeps({
+        spawnBridge: spawn.fn,
+        connectWs: (url) => {
+          connects++
+          return real.connectWs(url)
+        },
+        now: clock.now,
+        setTimer: clock.setTimer,
+        clearTimer: clock.clearTimer,
+      }),
+    )
+    cleanups.push(() => sup.stop())
+    await sup.start()
+    expect(sup.state().mode).toBe('own')
+    await clock.advance(10_000)
+    expect(sup.state().mode).toBe('own')
+    expect(sup.state().message).toBe('Bridge không phản hồi')
+    const after10s = connects
+    expect(after10s).toBeLessThanOrEqual(1 + 14 + 2) // probe + ~3 s of 250 ms retries + every 5 s
+    await clock.advance(60_000, 1000) // give-up lands on the first retry after 60 s of failures
+    expect(spawn.kills).toBe(1)
+    expect(sup.state().mode).toBe('down')
+    expect(sup.state().message).toMatch(/không phản hồi/)
+    expect(spawn.calls).toHaveLength(1)
+    expect(connects).toBeLessThanOrEqual(1 + 14 + 14) // bounded over 70 s: no 4×/s loop
+  }, 15_000)
+
+  it('killOwnChild() synchronously kills an own child and never an attached bridge', async () => {
+    const spawn = spawnSpy()
+    const own = createBridgeSupervisor(
+      { port: await freePort(), squarelDir: SQ },
+      realWsDeps({ spawnBridge: spawn.fn }),
+    )
+    await own.start()
+    expect(own.state().mode).toBe('own')
+    own.killOwnChild()
+    expect(spawn.kills).toBe(1)
+    expect(own.state().mode).toBe('down')
+    own.killOwnChild()
+    expect(spawn.kills).toBe(1)
+    await realDelay(100)
+    expect(spawn.calls).toHaveLength(1) // no respawn after the kill
+
+    const bridge = await startRealBridge()
+    const spawn2 = spawnSpy()
+    const att = createBridgeSupervisor(
+      { port: bridge.port, squarelDir: SQ },
+      realWsDeps({ spawnBridge: spawn2.fn }),
+    )
+    await att.start()
+    expect(att.state().mode).toBe('attached')
+    att.killOwnChild()
+    expect(spawn2.kills).toBe(0)
+    await realDelay(100)
+    expect(spawn2.calls).toHaveLength(0) // closing the socket did not trigger a takeover
+    await asepriteClient(bridge.port) // the other bridge still serves
+  })
+  it('own child rejecting our token → token-specific message', async () => {
+    const clock = fakeClock()
+    let n = 0
+    // first connect: nothing listens (→ spawn); afterwards our child answers the upgrade with 401
+    const connectWs: Deps['connectWs'] = () => {
+      const first = n++ === 0
+      const handlers: Record<string, ((...a: unknown[]) => void)[]> = {}
+      queueMicrotask(() => {
+        const err = first
+          ? Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+          : new Error('Unexpected server response: 401')
+        for (const cb of handlers.error ?? []) cb(err)
+      })
+      return {
+        on: (ev, cb) => {
+          handlers[ev] = [...(handlers[ev] ?? []), cb]
+        },
+        send() {},
+        close() {},
+        terminate() {},
+      }
+    }
+    const spawn = spawnSpy()
+    const sup = createBridgeSupervisor(
+      { port: 4321, token: 'old', squarelDir: SQ },
+      realWsDeps({
+        connectWs,
+        spawnBridge: spawn.fn,
+        now: clock.now,
+        setTimer: clock.setTimer,
+        clearTimer: clock.clearTimer,
+      }),
+    )
+    cleanups.push(() => sup.stop())
+    await sup.start()
+    await clock.advance(5_000)
+    expect(sup.state().mode).toBe('own')
+    expect(sup.state().message).toBe('Bridge trên cổng 4321 từ chối token')
+  })
 })

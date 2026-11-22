@@ -13,7 +13,8 @@
  *   │        SPAWN ◄──────────────────────────┘ (take over at once)
  *   │          │
  *   │          ▼
- *   │         OWN ── connect to own child (retry 250 ms), poll status / pollMs
+ *   │         OWN ── connect to own child (retry 250 ms; after 3 s every pollMs + message;
+ *   │          │       after 60 s unreachable: kill it → DOWN ──foreignRetryMs──► PROBE), poll status / pollMs
  *   │          │
  *   │   child exits: "already in use" → PROBE at once
  *   │                other exit        → DOWN ──pollMs──► PROBE
@@ -42,11 +43,17 @@ export interface BridgeSupervisor {
   state(): BridgeState
   onChange(cb: (s: BridgeState) => void): () => void
   sendTool(name: string, input: unknown): Promise<string>
+  /** Synchronous last-resort for process exit / crash paths: kills our own child (never an attached bridge) and stops. */
+  killOwnChild(): void
 }
 
 const PROBE_MS = 1500
 const TOOL_MS = 5000
 const OWN_CONNECT_RETRY_MS = 250
+/** Own child alive but unreachable: fast retries this long, then retry every pollMs with a message… */
+const OWN_GRACE_MS = 3000
+/** …and after this long kill it and go down (then the normal probe cycle resumes after foreignRetryMs). */
+const OWN_GIVE_UP_MS = 60_000
 const KILL_WAIT_MS = 3000
 /** Spawned children dying in a row before backing off to foreignRetryMs. */
 const MAX_SPAWN_FAILURES = 3
@@ -90,6 +97,8 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
   let child: BridgeChild | undefined
   let spawnFailures = 0
   let pollMisses = 0
+  /** Start (ms) of the current run of failed connects to our own child. */
+  let ownFailSince: number | undefined
   let startPromise: Promise<void> | undefined
   let firstSettled: (() => void) | undefined
 
@@ -175,6 +184,7 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
     const e = transition()
     const c = d.spawnBridge({ squarelDir, env: { BRIDGE_PORT: String(port) } })
     child = c
+    ownFailSince = undefined
     set('own', [])
     void c.exited.then(({ code, stderr }) => {
       if (child !== c) return // stop() already dealt with it
@@ -211,8 +221,29 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
       if (r.kind === 'ok') {
         spawnFailures = 0
         use(r.conn, r.status.clients, 'own', e)
-      } else {
+        return
+      }
+      const now = d.now().getTime()
+      ownFailSince ??= now
+      const failingFor = now - ownFailSince
+      if (failingFor < OWN_GRACE_MS) {
         schedule(OWN_CONNECT_RETRY_MS, () => connectOwn(e)) // child still starting
+      } else if (failingFor < OWN_GIVE_UP_MS) {
+        const message =
+          r.kind === 'foreign' && /\b401\b/.test(r.reason)
+            ? `Bridge trên cổng ${port} từ chối token`
+            : 'Bridge không phản hồi'
+        set('own', [], message)
+        schedule(pollMs, () => connectOwn(e))
+      } else {
+        // alive but unusable for a minute: stop it and fall back to the normal cycle
+        const c = child
+        child = undefined
+        c?.kill()
+        transition()
+        ownFailSince = undefined
+        set('down', [], 'Bridge không phản hồi, đã dừng; thử lại sau')
+        schedule(foreignRetryMs, probe)
       }
     })
   }
@@ -220,6 +251,7 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
   function use(c: BridgeConnection, clients: BridgeClientInfo[], mode: 'attached' | 'own', e: number) {
     conn = c
     pollMisses = 0
+    ownFailSince = undefined
     set(mode, clients)
     c.onClose(() => {
       if (conn !== c) return // we closed it ourselves during a transition
@@ -290,6 +322,17 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
     onChange(cb) {
       listeners.add(cb)
       return () => listeners.delete(cb)
+    },
+
+    killOwnChild() {
+      running = false
+      transition()
+      settledOnce()
+      startPromise = undefined
+      const c = child
+      child = undefined
+      c?.kill()
+      set('down', [])
     },
 
     sendTool(name, input) {
