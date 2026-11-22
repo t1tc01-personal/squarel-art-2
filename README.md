@@ -154,7 +154,7 @@ pnpm cli export --project test --preset print-png --options '{\"widthMm\":200}'
 ## Tài liệu
 
 - [Cài đặt từng bước](docs/setup.md) · [Kiến trúc](docs/architecture.md) · [Kế hoạch](docs/plans/2026-11-22-personal-tool-plan.md) · [Kế hoạch SaaS (để dành)](docs/plans/2026-11-22-saas-plan.md)
-- [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md)
+- [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md) · [Viết tích hợp](docs/integrations.md)
 
 ## Giấy phép
 

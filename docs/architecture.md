@@ -483,6 +483,8 @@ Các ngưỡng trên là giá trị khởi điểm, sẽ được tinh chỉnh b
 - **Giới hạn:** mỗi tool AI có hạn chót nội bộ 110 giây. Tới hạn thì trả về các biến thể đã xong và ghi chú phần còn thiếu.
 - **Cấm ghi ra stdout** (`console.log`), vì stdout đang dùng cho giao thức. Biome có rule chặn `console.log` trong `src/**`.
 
+**File phiên (cho launcher):** mỗi tiến trình MCP ghi `DATA_DIR/run/mcp-<pid>.json` gồm `pid`, `cwd`, `version`, `startedAt`, `updatedAt`, `lastTool?`, `lastToolAt?`, `bridge` (`own` | `shared` | `none`). Ghi lại mỗi 10 giây và sau mỗi lần gọi tool, xoá khi thoát. Launcher coi file là cũ sau 30 giây. Chi tiết: [integrations.md](integrations.md#file-phiên-mcp).
+
 `.mcp.json` ở gốc repo:
 ```json
 {
@@ -554,6 +556,7 @@ Gọi thẳng `node` thay vì `pnpm`/`npx` để tránh phải bọc `cmd /c` tr
 | bridge → extension | `rebased { versionId, doc }` | Đã gộp với một thay đổi mới hơn; extension áp lại doc này |
 | bridge → extension | `doc.updated { slug, versionId, source, label, doc }` | Claude, AI hoặc CLI vừa tạo version mới |
 | bridge → extension | `open.request { slug }` | `open_in_editor` yêu cầu mở project |
+| extension → bridge | `status` | Hỏi ai đang kết nối. Bridge trả `status { version, clients }`, mỗi client là `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`. Launcher dùng để biết Aseprite đã kết nối chưa |
 | extension → bridge | `tool { id, name, input }` | Menu Xuất file, Lịch sử… gọi lại tool. Bridge trả `tool_result { id, text, files }` |
 | hai chiều | `error { code, message }` | Báo lỗi |
 

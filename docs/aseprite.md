@@ -65,6 +65,14 @@ Aseprite không cho extension thêm menu riêng lên thanh menu, nên các mục
 - Layer nhóm và layer tham chiếu bị bỏ qua.
 - Xoá một frame ở giữa trong Aseprite có thể làm lệch id các frame phía sau. Thêm hoặc xoá frame ở cuối thì an toàn.
 
+### Mở không đồng bộ (`SQUAREL_NO_SYNC`)
+
+Đặt biến môi trường `SQUAREL_NO_SYNC=1` trước khi mở Aseprite thì extension **không tự kết nối**, kể cả khi bật tự kết nối trong Settings. Bạn vẫn kết nối thủ công được bằng *File → Squarel → Connect*. Launcher dùng biến này cho mục "Mở không đồng bộ".
+
+```powershell
+$env:SQUAREL_NO_SYNC = "1"; & "<đường dẫn>aseprite.exe"
+```
+
 ## Khi không cài extension: trao đổi qua file
 
 1. Đặt `ASEPRITE_PATH` trong `.env`.
@@ -82,6 +90,28 @@ pnpm aseprite:test
 ```
 
 Lệnh này chuyển `doc.json → .aseprite → doc.json` và yêu cầu kết quả giống hệt ban đầu. Test tự động trong `pnpm test` chạy extension trên **fengari** (máy ảo Lua trong Node) với API Aseprite giả lập. Lệnh này kiểm tra trên Aseprite thật.
+
+## Tiến độ cho launcher (`--json-progress`)
+
+`pnpm aseprite:build` nhận thêm cờ `--json-progress`. Cờ này in thêm các dòng `@@progress {json}` ra stdout, để launcher vẽ thanh tiến độ. Output thường vẫn in như cũ.
+
+```powershell
+pnpm aseprite:build -- --json-progress
+```
+
+Mỗi dòng có dạng:
+
+```
+@@progress {"step":5,"total":6,"label":"Build","percent":42}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `step` | Bước hiện tại, 1–6 |
+| `total` | Luôn là `6` |
+| `label` | Tên bước: Build tools, Aseprite source, Skia, Configure, Build, Check and configure |
+| `percent` | 0–100, chỉ có ở bước Build (lấy từ bộ đếm `[n/total]` của ninja, không bao giờ giảm) |
+| `message` | Ghi chú thêm, có thể không có |
 
 ## Bảo mật
 
