@@ -42,6 +42,8 @@ export interface PresenceItem {
   subtitle: string
   status: 'online' | 'busy' | 'away' | 'offline'
   icon: string
+  /** Defaults to 'name'. */
+  iconKind?: 'name' | 'data'
 }
 export interface PresenceGroup {
   id: 'claude' | 'tools' | 'services'

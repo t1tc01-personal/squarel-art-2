@@ -20,7 +20,7 @@ export interface WsLike {
 
 type FsApi = Pick<
   typeof import('node:fs/promises'),
-  'readFile' | 'writeFile' | 'readdir' | 'stat' | 'mkdir' | 'rm' | 'rename' | 'realpath'
+  'readFile' | 'writeFile' | 'readdir' | 'stat' | 'mkdir' | 'rm' | 'rename' | 'realpath' | 'open'
 >
 
 export interface Deps {
@@ -114,6 +114,18 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
       const prefix = `${norm(p).replace(/\/+$/, '')}/`
       if (!store.has(norm(p)) && ![...store.keys()].some((k) => k.startsWith(prefix))) throw enoent(p)
       return p
+    },
+    async open(p: string) {
+      const v = store.get(norm(p))
+      if (v === undefined) throw enoent(p)
+      const buf = Buffer.from(v)
+      return {
+        async read(target: Buffer, off: number, len: number, pos: number) {
+          const n = buf.copy(target, off, pos, Math.min(buf.length, pos + len))
+          return { bytesRead: n, buffer: target }
+        },
+        async close() {},
+      }
     },
     async mkdir() {
       return undefined
