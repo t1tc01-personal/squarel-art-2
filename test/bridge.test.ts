@@ -182,6 +182,57 @@ describe('bridge', () => {
     expect((await c.next('error')).message).toContain('unknown message type')
   })
 
+  it('status lists connected clients with what they have open', async () => {
+    const c = await connect() // hello client=aseprite
+    c.send({ type: 'open', slug: 'bridge' })
+    await c.next('doc')
+    const probe = new TestClient(bridge.port)
+    await probe.opened()
+    probe.send({ type: 'status' })
+    const s = await probe.next('status')
+    expect(s.version).toMatch(/^\d+\.\d+\.\d+$/)
+    const ase = s.clients.find((x) => x.name === 'aseprite')!
+    expect(ase.slug).toBe('bridge')
+    expect(Date.parse(ase.lastSeen)).toBeGreaterThan(0)
+    expect(Date.parse(ase.connectedAt)).toBeGreaterThan(0)
+    expect(s.clients.some((x) => x.name === 'unknown')).toBe(true) // the probe never said hello
+  })
+
+  it('hello records ext and app (legacy aseprite field still accepted)', async () => {
+    const a = new TestClient(bridge.port)
+    await a.opened()
+    a.send({ type: 'hello', client: 'aseprite', ext: '0.1.1', app: '1.3.18.6' })
+    await a.next('welcome')
+    const b = new TestClient(bridge.port)
+    await b.opened()
+    b.send({ type: 'hello', client: 'legacy', aseprite: '1.3.0' })
+    await b.next('welcome')
+    const probe = new TestClient(bridge.port)
+    await probe.opened()
+    probe.send({ type: 'status' })
+    const s = await probe.next('status')
+    const ase = s.clients.find((x) => x.name === 'aseprite')!
+    expect(ase.ext).toBe('0.1.1')
+    expect(ase.app).toBe('1.3.18.6')
+    expect(s.clients.find((x) => x.name === 'legacy')!.app).toBe('1.3.0')
+  })
+
+  it('ping refreshes lastSeen', async () => {
+    const c = await connect()
+    const probe = new TestClient(bridge.port)
+    await probe.opened()
+    const lastSeen = async () => {
+      probe.send({ type: 'status' })
+      const s = await probe.next('status')
+      return Date.parse(s.clients.find((x) => x.name === 'aseprite')!.lastSeen)
+    }
+    const before = await lastSeen()
+    await new Promise((r) => setTimeout(r, 20))
+    c.send({ type: 'ping' })
+    await c.next('pong')
+    expect(await lastSeen()).toBeGreaterThan(before)
+  })
+
   it('explains setup when no Aseprite is connected', async () => {
     const r = await runTool('open_in_editor', { project: 'bridge' }, ctx)
     expect(r.text).toContain('ASEPRITE_PATH')
