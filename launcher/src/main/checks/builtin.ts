@@ -151,7 +151,6 @@ export async function dataDirWritable(d: Deps, dataDir: string): Promise<Draft> 
   try {
     await d.fs.mkdir(dataDir, { recursive: true })
     await d.fs.writeFile(probe, 'ok')
-    await d.fs.rm(probe, { force: true })
     return { result: 'pass', detail: dataDir }
   } catch (e) {
     return {
@@ -159,11 +158,28 @@ export async function dataDirWritable(d: Deps, dataDir: string): Promise<Draft> 
       detail: `không ghi được: ${String((e as Error)?.message ?? e)}`,
       fix: OPEN_SETTINGS,
     }
+  } finally {
+    await d.fs.rm(probe, { force: true }).catch(() => {})
+  }
+}
+
+/** Nearest existing ancestor (or the path itself); DATA_DIR may not exist yet on a first run. */
+async function existingAncestor(d: Deps, p: string): Promise<string> {
+  let cur = p
+  for (;;) {
+    try {
+      await d.fs.stat(cur)
+      return cur
+    } catch {
+      const up = win32.dirname(cur)
+      if (up === cur) return cur
+      cur = up
+    }
   }
 }
 
 export async function diskSpace(d: Deps, dataDir: string): Promise<Draft> {
-  const { freeBytes } = await d.statfs(dataDir)
+  const { freeBytes } = await d.statfs(await existingAncestor(d, dataDir))
   const gb = freeBytes / 1024 ** 3
   const detail = `${gb >= 10 ? Math.round(gb) : gb.toFixed(1)} GB trống`
   return freeBytes < MIN_FREE_BYTES ? { result: 'warn', detail } : { result: 'pass', detail }

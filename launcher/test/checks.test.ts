@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,7 +7,7 @@ import { type CheckCtx, runChecks, smokeTestMcp } from '../src/main/checks/runne
 import { createDeps, type Fixtures } from '../src/main/deps'
 import { parseEnv } from '../src/main/env-store'
 import type { Registry } from '../src/main/registry/registry'
-import { regWithBuiltins, regWithManual } from './checks-fixtures'
+import { regRun, regWithBuiltins, regWithManual } from './checks-fixtures'
 
 const VERIFY = 'https://api.cloudflare.com/client/v4/user/tokens/verify'
 const SQ = 'D:/sq'
@@ -143,6 +143,69 @@ describe('health checks', () => {
   })
 })
 
+describe('machine and run checks', () => {
+  const GB = 1024 ** 3
+  it('data-dir-writable removes the probe on success and reports failure readably', async () => {
+    const d = deps()
+    const rs = await runChecks(noReg, ctx(), d)
+    expect(find(rs, 'data-dir-writable').result).toBe('pass')
+    await expect(d.fs.readFile('D:/data/.squarel-write-test', 'utf8')).rejects.toThrow()
+    const bad = deps()
+    bad.fs.writeFile = async () => {
+      throw new Error('EACCES: denied')
+    }
+    const f = find(await runChecks(noReg, ctx(), bad), 'data-dir-writable')
+    expect(f.result).toBe('fail')
+    expect(f.detail).toContain('EACCES')
+  })
+
+  it('disk-space warns under 2 GB, passes at 2 GB, and works when DATA_DIR is missing', async () => {
+    const at = (bytes: number) => runChecks(noReg, ctx(), deps({ freeBytes: bytes }))
+    expect(find(await at(2 * GB - 1), 'disk-space').result).toBe('warn')
+    expect(find(await at(2 * GB), 'disk-space').result).toBe('pass')
+    const d = deps({ freeBytes: 50 * GB })
+    d.fs.stat = (async (p: string) => {
+      if (!/^D:[/]?$/.test(String(p))) throw new Error('ENOENT')
+      return {}
+    }) as never
+    const asked: string[] = []
+    d.statfs = async (p) => {
+      asked.push(p)
+      if (!/^D:[/]?$/.test(p)) throw new Error('ENOENT statfs')
+      return { freeBytes: 50 * GB }
+    }
+    const rs = await runChecks(noReg, ctx({ dataDir: 'D:/data/new/sub' }), d)
+    expect(find(rs, 'disk-space').result).toBe('pass')
+    expect(asked).toHaveLength(1)
+  })
+
+  it('manifest run check: cwd by source, non-zero exit fails', async () => {
+    for (const [source, cwd] of [
+      ['squarel', SQ],
+      ['user', 'C:/user/demo'],
+    ] as const) {
+      const d = deps({ run: { 'do it': { code: 0 } } })
+      const seen: string[] = []
+      const run = d.run
+      d.run = async (spec) => {
+        if (spec.argv[0] === 'do') seen.push(spec.cwd)
+        return run(spec)
+      }
+      const rs = await runChecks(regRun(source), ctx({ selected: ['demo'], squarelDir: SQ }), d)
+      expect(find(rs, 'integration:demo:go').result).toBe('pass')
+      expect(seen).toEqual([cwd])
+    }
+    const failing = await runChecks(
+      regRun('squarel'),
+      ctx({ selected: ['demo'], squarelDir: SQ }),
+      deps({ run: { 'do it': { code: 3 } } }),
+    )
+    const f = find(failing, 'integration:demo:go')
+    expect(f.result).toBe('fail')
+    expect(f.detail).toContain('3')
+  })
+})
+
 describe('smokeTestMcp', () => {
   const dirs: string[] = []
   afterEach(() => {
@@ -156,4 +219,22 @@ describe('smokeTestMcp', () => {
     expect(r.ok).toBe(true)
     expect(r.tools).toBeGreaterThanOrEqual(40)
   }, 30_000)
+  it('times out on a server that never answers and kills the child', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'sq-hang-'))
+    dirs.push(root)
+    mkdirSync(join(root, 'src', 'mcp'), { recursive: true })
+    writeFileSync(
+      join(root, 'src', 'mcp', 'index.ts'),
+      `require('node:fs').writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid)); setInterval(() => {}, 1000)`,
+    )
+    const d = createDeps('real')
+    const t0 = Date.now()
+    const r = await smokeTestMcp(root, d, { dataDir: root, timeoutMs: 1500 })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBeTruthy()
+    expect(Date.now() - t0).toBeLessThan(10_000)
+    const pid = Number(readFileSync(join(root, 'pid'), 'utf8'))
+    for (let i = 0; i < 40 && d.isPidAlive(pid); i++) await new Promise((r) => setTimeout(r, 100))
+    expect(d.isPidAlive(pid)).toBe(false)
+  }, 20_000)
 })

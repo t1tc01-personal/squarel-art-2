@@ -17,7 +17,7 @@ const SMOKE_TIMEOUT_MS = 15_000
 export async function smokeTestMcp(
   squarelDir: string,
   d: Deps,
-  opts: { dataDir: string },
+  opts: { dataDir: string; timeoutMs?: number },
 ): Promise<{ ok: boolean; tools: number; ms: number; error?: string }> {
   const t0 = performance.now()
   const ms = () => Math.round(performance.now() - t0)
@@ -39,7 +39,10 @@ export async function smokeTestMcp(
     })()
     work.catch(() => {}) // a late rejection after the timeout must not be unhandled
     const timeout = new Promise<never>((_, rej) => {
-      timer = setTimeout(() => rej(new Error('quá 15 giây không phản hồi')), SMOKE_TIMEOUT_MS)
+      timer = setTimeout(
+        () => rej(new Error('quá thời gian chờ, server không phản hồi')),
+        opts.timeoutMs ?? SMOKE_TIMEOUT_MS,
+      )
     })
     const tools = await Promise.race([work, timeout])
     return { ok: true, tools, ms: ms() }

@@ -49,3 +49,13 @@ export const regWithBuiltins = () =>
       ],
     }),
   )
+
+export const regRun = (source: 'squarel' | 'user') => {
+  const r = reg(manifest({ checks: [{ id: 'go', label: 'Go', run: ['do', 'it'] }] }))
+  r.integrations[0] = {
+    ...(r.integrations[0] as (typeof r.integrations)[number]),
+    source,
+    dir: 'C:/user/demo',
+  }
+  return r
+}
