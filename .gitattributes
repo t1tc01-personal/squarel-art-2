@@ -1,0 +1,6 @@
+# Keep LF everywhere (Biome checks LF; Lua/TS/JSON/Markdown all behave the same on every machine)
+* text=auto eol=lf
+*.png binary
+*.gz binary
+*.aseprite binary
+*.aseprite-extension binary
