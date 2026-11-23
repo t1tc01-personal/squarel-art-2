@@ -17,6 +17,8 @@ export interface Ctx {
   launcherVersion: string
   isDev: boolean
   env: EnvDoc
+  /** A launcher update electron-updater finished downloading (installable now). */
+  launcherUpdateReady?: string
 }
 
 export interface InstallSpec {

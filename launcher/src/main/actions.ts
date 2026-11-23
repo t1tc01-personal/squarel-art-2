@@ -3,7 +3,7 @@
  * launcher's own code or from the loaded manifest of a selected integration, never from the
  * ActionRef itself (its `label` / `needsConsent` are display-only and ignored here).
  *
- * Supported: settings/fix/open-settings, squarel/fix/register-mcp, squarel/fix/copy-skills,
+ * Supported: launcher/update/install (only after the update downloaded), settings/fix/open-settings, squarel/fix/register-mcp, squarel/fix/copy-skills,
  * squarel/update/update, squarel/install/clone, squarel/install/deps,
  * <core>/(install|terminal)/winget (visible terminal), claude-code/terminal/terminal (visible
  * PowerShell), <core|winget>/terminal/download (official page in the browser),
@@ -40,7 +40,8 @@ import {
 import { latestGitTag } from './versions'
 
 export type Emit = (e: TaskEvent) => void
-export type ActionBody = (taskId: string, emit: Emit) => Promise<void>
+/** `signal` aborts the task (quit during a build): running commands are killed with their tree. */
+export type ActionBody = (taskId: string, emit: Emit, signal?: AbortSignal) => Promise<void>
 
 export interface ActionCtx {
   d: Deps
@@ -67,6 +68,17 @@ export interface ActionCtx {
   openExternal(url: string): Promise<void>
   /** Persists launcher state set by main itself (e.g. the cloned Squarel folder). */
   setState(patch: Partial<LauncherState>): Promise<void>
+  /**
+   * Stops the launcher's bridge supervisor while Squarel's code or dependencies change (an own
+   * bridge is stopped, an attached one only disconnected); `resume()` starts it again.
+   */
+  pauseBridge?(): Promise<{ wasOwn: boolean; resume(): void }>
+  /** Live Claude Code sessions (MCP presence): they keep running the old Squarel code. */
+  mcpSessions?(): Promise<number>
+  /** Version electron-updater finished downloading, if any. */
+  launcherUpdateReady?: string
+  /** Graceful quit (tasks, bridge) followed by electron-updater's quitAndInstall. */
+  installLauncherUpdate?(): void
 }
 
 /** Never wait for credentials: a clone must fail instead of hanging. */
@@ -89,6 +101,34 @@ export type Resolved =
 
 const msg = (e: unknown) => maskCredentials(String((e as Error)?.message ?? e))
 
+/** Runs `fn` with the launcher's bridge paused (B11/T10: never run a bridge from a moving checkout). */
+async function withBridgePaused<T>(
+  ctx: ActionCtx,
+  taskId: string,
+  emit: Emit,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const paused = ctx.pauseBridge ? await ctx.pauseBridge() : undefined
+  if (paused?.wasOwn)
+    emit({ taskId, kind: 'line', text: 'Đã tạm dừng bridge của launcher; sẽ chạy lại sau khi xong.' })
+  try {
+    return await fn()
+  } finally {
+    paused?.resume()
+  }
+}
+
+/** Warns that running Claude Code sessions keep the old Squarel code (and may hold the bridge). */
+async function warnSessions(ctx: ActionCtx, taskId: string, emit: Emit): Promise<void> {
+  const n = (await ctx.mcpSessions?.().catch(() => 0)) ?? 0
+  if (n > 0)
+    emit({
+      taskId,
+      kind: 'line',
+      text: `Có ${n} phiên Claude Code đang chạy Squarel (có thể đang giữ bridge). Các phiên này vẫn dùng mã cũ cho tới khi khởi động lại.`,
+    })
+}
+
 /** Squarel update task (also used by `updates:apply`). */
 export function squarelUpdate(ctx: ActionCtx): Resolved {
   const dir = ctx.state.squarelDir
@@ -96,19 +136,31 @@ export function squarelUpdate(ctx: ActionCtx): Resolved {
   return {
     key: 'squarel:update',
     squarelDir: true,
-    body: async (taskId, emit) => {
-      // TODO(T15): stop the launcher's own bridge before moving the Squarel checkout, restart after.
+    busyText: 'Squarel đang cập nhật…',
+    body: async (taskId, emit, signal) => {
       let plan: Awaited<ReturnType<typeof planSquarelUpdate>>
       try {
         plan = await planSquarelUpdate(dir, ctx.launcherVersion, ctx.d, { isDev: ctx.isDev })
       } catch (e) {
         return emit({ taskId, kind: 'error', text: msg(e) })
       }
-      await applySquarelUpdate(
-        plan,
-        { squarelDir: dir, reg: ctx.reg, selected: ctx.state.selected, onEvent: emit, taskId },
-        ctx.d,
-      )
+      const apply = () =>
+        applySquarelUpdate(
+          plan,
+          {
+            squarelDir: dir,
+            reg: ctx.reg,
+            selected: ctx.state.selected,
+            onEvent: emit,
+            taskId,
+            ...(signal ? { signal } : {}),
+          },
+          ctx.d,
+        )
+      // Only a plan that moves the checkout needs the bridge out of the way.
+      if (plan.kind !== 'tag' && plan.kind !== 'branch') return apply()
+      await warnSessions(ctx, taskId, emit)
+      await withBridgePaused(ctx, taskId, emit, apply)
     },
   }
 }
@@ -142,6 +194,7 @@ async function runManifestCommand(
   vars: Record<string, string>,
   what: string,
   requiresClosed?: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const why = await closedBlocker(requiresClosed, ctx.d)
   if (why) return emit({ taskId, kind: 'error', text: `${why} rồi thử lại.` })
@@ -157,6 +210,8 @@ async function runManifestCommand(
     manifestCwd(i, ctx.state.squarelDir ?? ''),
     withProgress(emit),
     ctx.d,
+    undefined,
+    signal,
   )
   if (code === 0) emit({ taskId, kind: 'done', code: 0, text: `${what}: xong` })
   else
@@ -297,7 +352,8 @@ function cloneSquarel(ctx: ActionCtx): Resolved {
   return {
     key: 'squarel:clone',
     squarelDir: true,
-    body: async (taskId, emit) => {
+    busyText: 'Đang tải Squarel…',
+    body: async (taskId, emit, signal) => {
       let argv: string[]
       try {
         argv = cloneArgv(ctx.launcherVersion, target)
@@ -315,7 +371,16 @@ function cloneSquarel(ctx: ActionCtx): Resolved {
         if (e.kind === 'line' && /Remote branch .* not found/i.test(e.text ?? '')) missingTag = true
         emit(e)
       }
-      const code = await runStep(taskId, argv, parent, watch, ctx.d, GIT_ENV, AbortSignal.timeout(CLONE_MS))
+      const timeout = AbortSignal.timeout(CLONE_MS)
+      const code = await runStep(
+        taskId,
+        argv,
+        parent,
+        watch,
+        ctx.d,
+        GIT_ENV,
+        signal ? AbortSignal.any([timeout, signal]) : timeout,
+      )
       if (code !== 0) {
         await cleanup()
         return emit({
@@ -348,6 +413,20 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
 
   const coreInstall = resolveCoreInstall(ref, ctx)
   if (coreInstall) return coreInstall
+
+  if (cid === 'launcher') {
+    if (kind !== 'update' || id !== 'install') return unsupported
+    const ready = ctx.launcherUpdateReady
+    const install = ctx.installLauncherUpdate
+    if (!ready || !install) return { error: 'Bản cập nhật launcher chưa tải xong' }
+    return {
+      key: 'launcher:install',
+      body: async (taskId, emit) => {
+        emit({ taskId, kind: 'done', code: 0, text: `Khởi động lại để cài launcher v${ready}…` })
+        install()
+      },
+    }
+  }
 
   if (cid === 'settings') {
     if (kind === 'fix' && id === 'open-settings')
@@ -383,8 +462,11 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
       return {
         key: 'squarel:deps',
         squarelDir: true,
-        body: async (taskId, emit) => {
-          const code = await runStep(taskId, ['pnpm', 'install'], dir, emit, ctx.d)
+        busyText: 'Đang cài thư viện Squarel…',
+        body: async (taskId, emit, signal) => {
+          const code = await withBridgePaused(ctx, taskId, emit, () =>
+            runStep(taskId, ['pnpm', 'install'], dir, emit, ctx.d, undefined, signal),
+          )
           emit(
             code === 0
               ? { taskId, kind: 'done', code: 0, text: 'Đã cài thư viện' }
@@ -420,7 +502,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     return {
       key: `${cid}:extension`,
       squarelDir: i.source === 'squarel',
-      body: (taskId, emit) =>
+      body: (taskId, emit, signal) =>
         runManifestCommand(
           taskId,
           emit,
@@ -430,6 +512,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
           { toolsDir: ctx.toolsDir(cid) },
           `Cài extension ${m.name}`,
           task.requiresClosed,
+          signal,
         ),
     }
   }
@@ -443,14 +526,16 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
       key: `${cid}:update`,
       squarelDir: i.source === 'squarel',
       busyText: `${m.name} đang cập nhật…`,
-      body: async (taskId, emit) => {
+      body: async (taskId, emit, signal) => {
         const latest = await latestGitTag(repo, ctx.d)
         if (!latest.ok)
           return emit({ taskId, kind: 'error', text: `Không lấy được phiên bản mới: ${latest.message}` })
+        // latestGitTag strips the "v"; `{version}` is a release ref (e.g. aseprite:build --ref v1.3.19).
         const r = await applyToolUpdate(
           i,
-          latest.version,
+          `v${latest.version}`,
           {
+            ...(signal ? { signal } : {}),
             squarelDir: ctx.state.squarelDir ?? '',
             toolsDir: ctx.toolsDir(cid),
             selected: ctx.state.selected,
@@ -486,8 +571,18 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
       key: `${cid}:install`,
       squarelDir: i.source === 'squarel',
       busyText: `${m.name} đang ${run.some((a) => /build/i.test(a)) ? 'build' : 'cài'}…`,
-      body: (taskId, emit) =>
-        runManifestCommand(taskId, emit, ctx, i, run, { toolsDir: ctx.toolsDir(cid) }, `Cài ${m.name}`),
+      body: (taskId, emit, signal) =>
+        runManifestCommand(
+          taskId,
+          emit,
+          ctx,
+          i,
+          run,
+          { toolsDir: ctx.toolsDir(cid) },
+          `Cài ${m.name}`,
+          undefined,
+          signal,
+        ),
     }
   }
 

@@ -27,7 +27,7 @@ import {
   type SetupInfo,
   type UpdatesInfo,
 } from '../shared/ipc'
-import type { CheckResult, PresenceGroup, TaskEvent } from '../shared/model'
+import type { ActionRef, CheckResult, PresenceGroup, TaskEvent } from '../shared/model'
 import { type ActionCtx, type Resolved, resolveAction, squarelUpdate } from './actions'
 import type { BridgeState } from './bridge/types'
 import { type CheckCtx, runChecks } from './checks/runner'
@@ -85,9 +85,14 @@ export interface IpcContext {
   }
   /** shell.showItemInFolder; called only with a checked, real path. */
   showItemInFolder(path: string): void
-  /** Title bar buttons. `close(true)` keeps the app running (tray; minimized until T15), `close(false)` quits. */
+  /** Title bar buttons. `close(true)` hides the window to the tray, `close(false)` quits (graceful bridge stop). */
   window: { minimize(): void; close(toTray: boolean): void }
-  launcherUpdater: { check(): Promise<Latest> }
+  /** `ready()`: version electron-updater finished downloading (installable), if any. */
+  launcherUpdater: { check(): Promise<Latest>; ready?(): string | undefined }
+  /** Graceful quit (tasks, bridge) then quitAndInstall; offered only once `ready()` has a version. */
+  installLauncherUpdate?(): void
+  /** Pauses the bridge supervisor while Squarel's code moves (see ActionCtx.pauseBridge). */
+  pauseBridge?(): Promise<{ wasOwn: boolean; resume(): void }>
   emit<E extends EventName>(event: E, payload: EventPayload<E>): void
   /** Called after a successful env:set (e.g. BRIDGE_PORT → restart the supervisor). */
   onEnvChanged?(key: EnvKey): void
@@ -119,6 +124,14 @@ export interface IpcHandlers {
   presence(): Promise<PresenceGroup[]>
   /** Resolves once no task started by action:run / updates:apply is running. */
   idle(): Promise<void>
+  /** Starts an action from main itself (tray menu), like action:run. */
+  runAction(ref: ActionRef): Promise<string>
+  /** Labels of the running tasks (quit confirmation). */
+  runningTasks(): string[]
+  /** Aborts every running task (process trees are killed) and waits, at most `waitMs`, for them to end. */
+  abortTasks(waitMs?: number): Promise<void>
+  /** Selected, compatible integrations with their manifest `default` launch action (tray menu). */
+  trayIntegrations(): Promise<{ name: string; ref: ActionRef }[]>
 }
 
 const UNC = /^[\\/]{2}/
@@ -280,6 +293,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       bridge: ctx.bridge(),
       selected: s.selected,
       ...(ctx.smoke ? { smoke: ctx.smoke } : {}),
+      // N2: the MCP smoke test starts Squarel from its folder; not while an update/build changes it.
+      ...(squarelBusy ? { squarelBusy: squarelBusyText || 'Đang có thao tác trên thư mục Squarel' } : {}),
     }
   }
 
@@ -390,6 +405,18 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     return checksInFlight
   }
 
+  /** Claude Code sessions that are not offline. */
+  function liveSessions(groups: PresenceGroup[]): number {
+    return groups.find((g) => g.id === 'claude')?.items.filter((i) => i.status !== 'offline').length ?? 0
+  }
+
+  /** Downloaded launcher update (and how to install it), when there is one. */
+  function launcherReady(): Pick<ActionCtx, 'launcherUpdateReady' | 'installLauncherUpdate'> {
+    const ready = ctx.launcherUpdater.ready?.()
+    if (!ready || !ctx.installLauncherUpdate) return {}
+    return { launcherUpdateReady: ready, installLauncherUpdate: ctx.installLauncherUpdate }
+  }
+
   async function presence(): Promise<PresenceGroup[]> {
     const s = await getState()
     const env = await readEnv(s)
@@ -414,7 +441,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   }
 
   // ---- tasks --------------------------------------------------------------------------------
-  const running = new Map<string, Promise<void>>()
+  const running = new Map<string, { done: Promise<void>; label: string; abort: AbortController }>()
   /** One task at a time may run in / change the Squarel folder. */
   let squarelBusy = false
   /** What holds the Squarel folder now (message for refused actions). */
@@ -445,9 +472,10 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       if (e.kind === 'done' || e.kind === 'error') finished = true
       push('task:event', { ...e, taskId, ...(e.text !== undefined ? { text: redact(e.text) } : {}) })
     }
+    const abort = new AbortController()
     const p = (async () => {
       try {
-        await body(taskId, emit)
+        await body(taskId, emit, abort.signal)
         if (!finished) emit({ taskId, kind: 'done', code: 0 })
       } catch (e) {
         emit({ taskId, kind: 'error', text: errMsg(e) })
@@ -460,8 +488,12 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         push('components:changed', null)
       }
     })()
-    running.set(key, p)
+    running.set(key, { done: p, label: resolved.busyText || taskLabel(key), abort })
     return taskId
+  }
+  /** Quit-dialog label of a task without busyText, e.g. "Thao tác squarel:register-mcp". */
+  function taskLabel(key: string): string {
+    return `Thao tác ${key}`
   }
   async function actionCtx(): Promise<{ actx: ActionCtx; secrets: string[] }> {
     const s = await getState()
@@ -490,6 +522,9 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         setState: async (patch) => {
           await updateState((st) => ({ ...st, ...patch }))
         },
+        ...(ctx.pauseBridge ? { pauseBridge: ctx.pauseBridge } : {}),
+        mcpSessions: async () => liveSessions(await presence()),
+        ...launcherReady(),
       },
       secrets: secretValues(env),
     }
@@ -637,10 +672,12 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       const s = await getState()
       const env = await readEnv(s)
       const recent = await newestProjectSlug(s, env)
+      const ready = launcherReady().launcherUpdateReady
       return viewComponents(await registry(s), s, env, d, {
         launcherVersion: ctx.launcherVersion,
         isDev: ctx.isDev,
         ...(recent ? { recentProject: recent } : {}),
+        ...(ready ? { launcherUpdateReady: ready } : {}),
       })
     },
     'checks:run': () => runChecksOnce(),
@@ -670,8 +707,14 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     },
     'updates:check': () => checkUpdates(),
     'updates:apply': async () => {
-      // TODO(T15): launcher self-update (quitAndInstall) and stopping the own bridge belong to the quit wiring.
+      // One flow (spec §6): a downloaded launcher update installs first (graceful quit, restart);
+      // the restarted launcher then moves Squarel to its own tag.
       const { actx, secrets } = await actionCtx()
+      if (actx.launcherUpdateReady)
+        return startTask(
+          resolveAction({ componentId: 'launcher', kind: 'update', id: 'install', label: '' }, actx),
+          secrets,
+        )
       return startTask(squarelUpdate(actx), secrets)
     },
     'dialog:pickFolder': async () => remember(await ctx.dialogs.pickFolder()),
@@ -798,7 +841,36 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     checkUpdates,
     presence,
     async idle() {
-      while (running.size) await Promise.all([...running.values()])
+      while (running.size) await Promise.all([...running.values()].map((t) => t.done))
+    },
+    async runAction(ref) {
+      const { actx, secrets } = await actionCtx()
+      return startTask(resolveAction(ref, actx), secrets)
+    },
+    runningTasks: () => [...running.values()].map((t) => t.label),
+    async abortTasks(waitMs = 5000) {
+      const tasks = [...running.values()]
+      for (const t of tasks) t.abort.abort()
+      let timer: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([
+        Promise.all(tasks.map((t) => t.done)),
+        new Promise<void>((r) => {
+          timer = setTimeout(r, waitMs)
+        }),
+      ])
+      clearTimeout(timer)
+    },
+    async trayIntegrations() {
+      const s = await getState()
+      const reg = await registry(s)
+      return reg.integrations.flatMap((i) => {
+        const m = i.manifest
+        const a = m.launch.find((x) => x.default)
+        if (!a || i.incompatible || !s.selected.includes(m.id)) return []
+        return [
+          { name: m.name, ref: { componentId: m.id, kind: 'launch' as const, id: a.id, label: m.name } },
+        ]
+      })
     },
   }
 }

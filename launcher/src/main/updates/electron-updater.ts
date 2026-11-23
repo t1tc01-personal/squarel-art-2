@@ -21,5 +21,8 @@ export function createElectronUpdaterAdapter(): UpdaterAdapter {
     quitAndInstall() {
       autoUpdater.quitAndInstall()
     },
+    onDownloaded(cb) {
+      autoUpdater.on('update-downloaded', (info) => cb(info.version))
+    },
   }
 }

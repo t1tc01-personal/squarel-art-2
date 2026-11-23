@@ -19,6 +19,8 @@ export interface CheckCtx {
   selected: string[]
   /** Test seam: replaces the real MCP stdio smoke test. */
   smoke?: (squarelDir: string, d: Deps) => Promise<{ ok: boolean; tools: number; ms: number; error?: string }>
+  /** Set while an update / build holds the Squarel folder: the MCP smoke test is skipped (N2). */
+  squarelBusy?: string
 }
 
 export type Draft = Omit<CheckResult, 'id' | 'group' | 'label' | 'description'> &
@@ -82,6 +84,7 @@ export async function mcpStarts(
   smoke: NonNullable<CheckCtx['smoke']>,
 ): Promise<Draft> {
   if (!ctx.squarelDir) return { result: 'fail', detail: 'chưa chọn thư mục Squarel' }
+  if (ctx.squarelBusy) return { result: 'warn', detail: `bỏ qua: ${ctx.squarelBusy}` }
   const r = await smoke(ctx.squarelDir, d)
   return r.ok
     ? { result: 'pass', detail: `${r.tools} tool · ${r.ms} ms` }

@@ -15,6 +15,8 @@ export interface UpdateCtx {
   selected: string[]
   onEvent: (e: TaskEvent) => void
   taskId?: string
+  /** Aborting kills the running command with its process tree. */
+  signal?: AbortSignal
 }
 
 const IMAGE_NAME = /^[\w.-]+\.exe$/i
@@ -102,7 +104,15 @@ export async function applyToolUpdate(
   } catch (e) {
     return { blocked: `Lệnh cập nhật không hợp lệ: ${String((e as Error)?.message ?? e)}` }
   }
-  const code = await runStep(taskId, argv, manifestCwd(i, ctx.squarelDir), ctx.onEvent, d)
+  const code = await runStep(
+    taskId,
+    argv,
+    manifestCwd(i, ctx.squarelDir),
+    ctx.onEvent,
+    d,
+    undefined,
+    ctx.signal,
+  )
   if (code === 0) ctx.onEvent({ taskId, kind: 'done', code: 0, text: `Đã cập nhật ${m.name}` })
   else
     ctx.onEvent({

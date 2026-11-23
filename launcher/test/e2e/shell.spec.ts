@@ -125,14 +125,13 @@ test('custom title bar buttons minimize/close', async () => {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.restore())
     await expect.poll(async () => (await win())?.minimized).toBe(false)
 
-    // closeToTray (fixture: on) → the app keeps running; until the tray exists (T15) the window
-    // minimizes instead of hiding, so it can always be brought back.
+    // closeToTray (fixture: on) → the window hides to the tray, the app keeps running.
     await page.getByRole('button', { name: 'Đóng' }).click()
-    await expect.poll(async () => (await win())?.minimized).toBe(true)
+    await expect.poll(async () => (await win())?.visible).toBe(false)
     expect(app.windows()).toHaveLength(1)
 
     // closeToTray off → closing quits the app.
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.restore())
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())
     await page.evaluate(() => (window as any).squarel.setState({ closeToTray: false }))
     const quit = app.waitForEvent('close')
     await page.getByRole('button', { name: 'Đóng' }).click()

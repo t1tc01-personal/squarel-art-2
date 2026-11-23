@@ -10,10 +10,14 @@ import { createDeps, type Deps } from './deps'
 import { parseEnv, readVar } from './env-store'
 import { FAKE_FIXTURE, type FakeWorld, loadFakeWorld } from './fake-mode'
 import { createIpcHandlers, type IpcHandlers } from './ipc-handlers'
+import { createQuitController } from './lifecycle'
 import { pruneLauncherLogs } from './logs'
+import { type OrphanDeps, recordOwnBridge, recoverOrphanBridge, windowsProcInfo } from './orphan'
 import { appPaths } from './paths'
 import { createScheduler } from './scheduler'
 import { type LauncherState, loadState, saveState } from './state'
+import { createTray, type LauncherTray } from './tray'
+import type { TrayAction } from './tray-menu'
 import { createElectronUpdaterAdapter } from './updates/electron-updater'
 import { createLauncherUpdater } from './updates/launcher'
 
@@ -39,11 +43,33 @@ const TEST_MODE = !app.isPackaged && process.env.SQUAREL_LAUNCHER_TEST === '1'
 if (TEST_MODE && process.env.APPDATA) app.setPath('userData', join(process.env.APPDATA, 'electron-user-data'))
 
 /**
+ * One launcher per profile. Electron scopes the lock to userData, so a test run (userData in its
+ * temp APPDATA, set just above) never collides with a launcher the developer has open.
+ */
+const PRIMARY = app.requestSingleInstanceLock()
+if (!PRIMARY) app.quit()
+
+/** Started at Windows login (`--hidden`): stay in the tray, no window until asked. */
+const START_HIDDEN = process.argv.includes('--hidden')
+
+/**
  * Fake mode (e2e of the UI): main runs on createDeps('fake') from test/<fixture>. Honoured only in
  * test mode (isolated profile, unpackaged build) and only for a `fixtures/<name>` value.
  */
 const FAKE_NAME = process.env.SQUAREL_LAUNCHER_FAKE ?? ''
 const FAKE_MODE = TEST_MODE && FAKE_FIXTURE.test(FAKE_NAME)
+
+/**
+ * Test mode only (e2e of the tray / quit path): run the real bridge supervisor on this port
+ * instead of none. Never with a fake world; ignored in a packaged build like all of test mode.
+ */
+const TEST_BRIDGE_PORT = (() => {
+  const v = process.env.SQUAREL_LAUNCHER_TEST_BRIDGE_PORT ?? ''
+  const n = Number(v)
+  return TEST_MODE && !FAKE_MODE && /^\d{1,5}$/.test(v) && n >= 1024 && n <= 65535 ? n : undefined
+})()
+/** Whether this run supervises a bridge at all. */
+const BRIDGE_ENABLED = !TEST_MODE || TEST_BRIDGE_PORT !== undefined
 
 /** True only for the app's own page: the dev server URL or the packaged index.html. */
 export function isAppUrl(url: string): boolean {
@@ -71,9 +97,26 @@ interface TestSink {
   folders: string[]
   external: string[]
   clipboard: string[]
+  /** Quit confirmations that would have been asked (answered "stop and quit"). */
+  quitPrompts: string[][]
+  bridgeMode(): string
+  trayItems(): Promise<string[]>
+  /** Clicks a tray entry on the next tick (so the call returns before e.g. Thoát ends the app). */
+  trayClick(label: string): boolean
 }
 const testSink: TestSink | undefined = TEST_MODE
-  ? { launched: [], bridgeTools: [], opened: [], folders: [], external: [], clipboard: [] }
+  ? {
+      launched: [],
+      bridgeTools: [],
+      opened: [],
+      folders: [],
+      external: [],
+      clipboard: [],
+      quitPrompts: [],
+      bridgeMode: () => 'down',
+      trayItems: async () => [],
+      trayClick: () => false,
+    }
   : undefined
 if (testSink) (globalThis as { __squarelTest?: TestSink }).__squarelTest = testSink
 
@@ -86,8 +129,19 @@ function licensePath(): string {
 }
 
 let mainWindow: BrowserWindow | undefined
+let tray: LauncherTray | undefined
+/** closeToTray of the current state (kept in sync by startServices). */
+let closeToTray = true
 
-function createWindow(): BrowserWindow {
+/** Brings the launcher window up (tray, second instance), creating it when it was closed. */
+function showWindow(): void {
+  const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow(true)
+  if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) win.show()
+  win.focus()
+}
+
+function createWindow(show: boolean): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -116,7 +170,16 @@ function createWindow(): BrowserWindow {
   }
   win.webContents.on('will-navigate', block)
   win.webContents.on('will-redirect', block)
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    if (show) win.show()
+  })
+  // Alt+F4 / taskbar close behave like the title bar's close button.
+  win.on('close', (event) => {
+    if (quit.quitting) return
+    event.preventDefault()
+    if (closeToTray) win.hide()
+    else app.quit()
+  })
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = undefined
   })
@@ -137,11 +200,61 @@ function send<E extends EventName>(event: E, payload: EventPayload<E>): void {
 
 let stopBackground: (() => void) | undefined
 
-/** Stops the scheduler and presence polling (for the quit path, T15). The bridge is separate. */
+/** Stops the scheduler and presence polling (quit path). The bridge is separate. */
 export function stopBackgroundWork(): void {
   stopBackground?.()
   stopBackground = undefined
 }
+
+/** What the quit path needs from the running services (set by startServices). */
+let services:
+  | {
+      handlers: IpcHandlers
+      bridge(): BridgeState
+      stopBridge(): Promise<void>
+      killOwnChild(): void
+      onTrayAction(action: TrayAction): void
+    }
+  | undefined
+
+/** Autostart at Windows login (opt-in, packaged builds only). */
+function applyAutostart(on: boolean): void {
+  if (!app.isPackaged) return
+  try {
+    app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] })
+  } catch (e) {
+    console.warn('[launcher] autostart failed:', (e as Error)?.name ?? e)
+  }
+}
+
+/** Quit sequencing (lifecycle.ts): tasks → background work → graceful bridge stop → quit. */
+const quit = createQuitController({
+  runningTasks: () => services?.handlers.runningTasks() ?? [],
+  async confirmStopTasks(labels) {
+    if (testSink) {
+      testSink.quitPrompts.push(labels)
+      return true
+    }
+    showWindow()
+    const opts = {
+      type: 'warning' as const,
+      buttons: ['Dừng và thoát', 'Huỷ'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Squarel Art Launcher',
+      message: 'Đang có thao tác chạy',
+      detail: `${labels.join('\n')}\n\nThoát bây giờ sẽ dừng các thao tác này.`,
+    }
+    const r = mainWindow ? await dialog.showMessageBox(mainWindow, opts) : await dialog.showMessageBox(opts)
+    return r.response === 0
+  },
+  abortTasks: async () => services?.handlers.abortTasks(),
+  stopBackgroundWork,
+  stopBridge: async () => services?.stopBridge(),
+  killOwnChild: () => services?.killOwnChild(),
+  quit: () => app.quit(),
+  log: (m) => console.warn(`[launcher] ${m}`),
+})
 
 /** Services behind the IPC channels: state, bridge supervisor, scheduler, presence polling. */
 async function startServices(): Promise<IpcHandlers> {
@@ -177,7 +290,10 @@ async function startServices(): Promise<IpcHandlers> {
 
   let state: LauncherState = await loadState(paths.stateFile)
   if (fake) state = { ...state, ...fake.state }
+  closeToTray = state.closeToTray
+  applyAutostart(state.autostart)
   const readPort = async (): Promise<number> => {
+    if (TEST_BRIDGE_PORT !== undefined) return TEST_BRIDGE_PORT
     if (!state.squarelDir) return DEFAULT_BRIDGE_PORT
     try {
       const doc = parseEnv(String(await d.fs.readFile(join(state.squarelDir, '.env'), 'utf8')))
@@ -188,7 +304,6 @@ async function startServices(): Promise<IpcHandlers> {
     }
   }
 
-  // TODO(T15): quit wiring (before-quit → await sup.stop(); exit → sup.killOwnChild()) and orphan recovery.
   let sup: BridgeSupervisor | undefined
   let supPort = DEFAULT_BRIDGE_PORT
   let unsubscribeBridge: (() => void) | undefined
@@ -227,29 +342,88 @@ async function startServices(): Promise<IpcHandlers> {
     }
   }
 
+  // Orphan recovery (B11): the pid of the bridge we spawn is kept next to state.json until it exits.
+  const ownerFile = join(dirname(paths.stateFile), 'bridge-owner.json')
+  const owner: OrphanDeps = {
+    read: async () => {
+      try {
+        return String(await d.fs.readFile(ownerFile, 'utf8'))
+      } catch {
+        return undefined
+      }
+    },
+    write: async (text) => {
+      await d.fs.mkdir(dirname(ownerFile), { recursive: true })
+      await d.fs.writeFile(ownerFile, text)
+    },
+    remove: () => d.fs.rm(ownerFile, { force: true }),
+    isPidAlive: (pid) => d.isPidAlive(pid),
+    procInfo: (pid) => windowsProcInfo(pid, d),
+    kill: async (pid) => {
+      try {
+        process.kill(pid)
+      } catch {}
+      for (let i = 0; i < 30 && d.isPidAlive(pid); i++) await new Promise((r) => setTimeout(r, 100))
+    },
+    log,
+  }
+  /** The supervisor's deps: every own bridge it spawns is recorded. */
+  const supDeps: Deps = {
+    ...d,
+    spawnBridge: (o) => {
+      const child = d.spawnBridge(o)
+      void recordOwnBridge(owner, child, Number(o.env?.BRIDGE_PORT) || supPort, d.now())
+      return child
+    },
+  }
+
+  /** Paused while a Squarel update/install moves the code; stopped for good on quit. */
+  let bridgePauses = 0
+  let bridgeStopped = false
   let bridgeChain: Promise<void> = Promise.resolve()
+  const chainBridge = (step: () => Promise<void>) => {
+    bridgeChain = bridgeChain
+      .then(step)
+      .catch((e) => log(`bridge restart failed: ${(e as Error)?.name ?? 'Error'}`))
+    return bridgeChain
+  }
+  const stopSupervisor = async () => {
+    unsubscribeBridge?.()
+    unsubscribeBridge = undefined
+    await sup?.stop()
+    sup = undefined
+  }
   const restartBridge = () => {
-    if (TEST_MODE) return
-    bridgeChain = bridgeChain.then(async () => {
-      unsubscribeBridge?.()
-      await sup?.stop()
-      sup = undefined
+    if (!BRIDGE_ENABLED || fake) return
+    void chainBridge(async () => {
+      await stopSupervisor()
+      if (bridgeStopped || bridgePauses > 0) return
       supPort = await readPort()
       if (!state.squarelDir) return
-      sup = createBridgeSupervisor({ port: supPort, squarelDir: state.squarelDir }, d)
+      sup = createBridgeSupervisor({ port: supPort, squarelDir: state.squarelDir }, supDeps)
       unsubscribeBridge = sup.onChange(() => void pushPresence())
       await sup.start()
     })
-    bridgeChain = bridgeChain.catch((e) => log(`bridge restart failed: ${(e as Error)?.name ?? 'Error'}`))
   }
+  if (BRIDGE_ENABLED && !fake)
+    void chainBridge(async () => {
+      const outcome = await recoverOrphanBridge(owner)
+      if (outcome !== 'none') log(`bridge record from an earlier run: ${outcome}`)
+    })
 
-  const updater =
+  // electron-updater downloads in the background; the install action appears once it is done.
+  const realUpdater =
     app.isPackaged && !TEST_MODE
-      ? createLauncherUpdater(createElectronUpdaterAdapter())
-      : {
-          check: async () =>
-            ({ ok: false, reason: 'not-found', message: 'Bản chạy từ mã nguồn không tự cập nhật' }) as const,
-        }
+      ? createLauncherUpdater(createElectronUpdaterAdapter(), (v) => {
+          log(`launcher update ${v} downloaded`)
+          send('components:changed', null)
+        })
+      : undefined
+  const updater = realUpdater ?? {
+    check: async () =>
+      ({ ok: false, reason: 'not-found', message: 'Bản chạy từ mã nguồn không tự cập nhật' }) as const,
+    ready: () => undefined,
+  }
 
   handlers = createIpcHandlers({
     d,
@@ -262,8 +436,11 @@ async function startServices(): Promise<IpcHandlers> {
       load: async () => state,
       save: async (s) => {
         const dirChanged = s.squarelDir !== state.squarelDir
+        const autostartChanged = s.autostart !== state.autostart
         await saveState(paths.stateFile, s)
         state = s
+        closeToTray = s.closeToTray
+        if (autostartChanged) applyAutostart(s.autostart)
         if (dirChanged) restartBridge()
       },
     },
@@ -287,10 +464,41 @@ async function startServices(): Promise<IpcHandlers> {
     showItemInFolder: (p) => shell.showItemInFolder(p),
     window: {
       minimize: () => mainWindow?.minimize(),
-      // TODO(T15): hide instead of minimize once the tray icon exists to bring the window back.
-      close: (toTray) => (toTray ? mainWindow?.minimize() : app.quit()),
+      close: (toTray) => (toTray ? mainWindow?.hide() : app.quit()),
     },
     launcherUpdater: updater,
+    ...(realUpdater
+      ? {
+          // Same graceful stop as Thoát (tasks, bridge), then electron-updater installs and restarts.
+          installLauncherUpdate: () =>
+            setTimeout(
+              () =>
+                void quit.shutdown(() => {
+                  if (!realUpdater.install()) app.quit()
+                }),
+              0,
+            ),
+        }
+      : {}),
+    pauseBridge: async () => {
+      if (!BRIDGE_ENABLED || fake) return { wasOwn: false, resume: () => {} }
+      bridgePauses++
+      let wasOwn = false
+      await chainBridge(async () => {
+        wasOwn = sup?.state().mode === 'own'
+        await stopSupervisor()
+      })
+      let resumed = false
+      return {
+        wasOwn,
+        resume: () => {
+          if (resumed) return
+          resumed = true
+          bridgePauses--
+          restartBridge()
+        },
+      }
+    },
     emit: send,
     onEnvChanged: (key) => {
       if (key === 'BRIDGE_PORT') restartBridge()
@@ -365,23 +573,78 @@ async function startServices(): Promise<IpcHandlers> {
     scheduler.stop()
     clearInterval(presenceTimer)
   }
+
+  const h = handlers
+  services = {
+    handlers: h,
+    bridge,
+    async stopBridge() {
+      bridgeStopped = true
+      await chainBridge(stopSupervisor)
+    },
+    killOwnChild: () => sup?.killOwnChild(),
+    onTrayAction(action) {
+      if (action.kind === 'show') return showWindow()
+      if (action.kind === 'quit') return app.quit()
+      h.runAction(action.ref).catch((e) => {
+        const text = String((e as Error)?.message ?? e).slice(0, 200)
+        log(`tray action failed: ${(e as Error)?.name ?? 'Error'}`)
+        tray?.notify('Squarel Art Launcher', text)
+      })
+    },
+  }
+  if (testSink) testSink.bridgeMode = () => bridge().mode
   return handlers
 }
 
-app.whenReady().then(async () => {
-  // Handlers first, so the page never calls a channel that is not registered yet.
+/** The tray model: selected integrations (default launch action) and the bridge mode. */
+function startTray(): void {
+  const s = services
+  if (!s) return
   try {
-    await startServices()
+    tray = createTray({
+      model: async () => ({
+        integrations: await s.handlers.trayIntegrations().catch(() => []),
+        bridge: s.bridge(),
+      }),
+      onAction: (a) => s.onTrayAction(a),
+      log: (m) => console.warn(`[launcher] ${m}`),
+    })
   } catch (e) {
-    console.error('[launcher] services failed to start:', (e as Error)?.message ?? e)
+    console.error('[launcher] tray failed:', (e as Error)?.message ?? e)
+    return
   }
-  createWindow()
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
+  if (testSink) {
+    const t = tray
+    testSink.trayItems = async () =>
+      (await t.items()).map((i) => (i.type === 'separator' ? '' : i.label)).filter(Boolean)
+    testSink.trayClick = (label) => {
+      setTimeout(() => void t.click(label), 0)
+      return true
+    }
+  }
+}
 
-app.on('window-all-closed', () => {
-  // TODO(T15): closeToTray / supervisor.stop() before quitting.
-  app.quit()
-})
+if (PRIMARY) {
+  app.on('second-instance', () => {
+    if (app.isReady()) showWindow()
+  })
+  app.on('before-quit', (event) => quit.beforeQuit(event))
+  app.on('will-quit', () => tray?.destroy())
+  process.on('exit', () => quit.exit())
+  // The tray keeps the app alive without a window; quitting goes through before-quit only.
+  app.on('window-all-closed', () => {})
+
+  app.whenReady().then(async () => {
+    // Handlers first, so the page never calls a channel that is not registered yet.
+    try {
+      await startServices()
+    } catch (e) {
+      console.error('[launcher] services failed to start:', (e as Error)?.message ?? e)
+    }
+    startTray()
+    // Without a tray icon there would be no way back to a hidden window.
+    createWindow(!START_HIDDEN || !tray)
+    app.on('activate', () => showWindow())
+  })
+}

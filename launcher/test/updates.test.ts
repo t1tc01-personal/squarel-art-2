@@ -390,15 +390,33 @@ describe('createLauncherUpdater', () => {
     expect(await u.check()).toMatchObject({ ok: false, reason: 'offline' })
   })
 
-  it('reports the latest version and installs through the adapter', async () => {
+  it('reports the latest version and installs through the adapter only once it is downloaded', async () => {
     let installed = 0
-    const u = createLauncherUpdater({
-      checkForUpdates: async () => ({ version: 'v0.3.0' }),
-      quitAndInstall: () => void installed++,
-    })
+    let downloaded: ((version: string) => void) | undefined
+    const readyCalls: string[] = []
+    const u = createLauncherUpdater(
+      {
+        checkForUpdates: async () => ({ version: 'v0.3.0' }),
+        quitAndInstall: () => void installed++,
+        onDownloaded: (cb) => {
+          downloaded = cb
+        },
+      },
+      (v) => void readyCalls.push(v),
+    )
     expect(await u.check()).toEqual({ ok: true, version: '0.3.0' })
-    u.install()
+    expect(u.ready()).toBeUndefined()
+    expect(u.install()).toBe(false)
+    expect(installed).toBe(0)
+    downloaded?.('v0.3.0')
+    expect(u.ready()).toBe('0.3.0')
+    expect(u.install()).toBe(true)
     expect(installed).toBe(1)
+    // A malformed version from the feed never becomes installable.
+    downloaded?.('--evil')
+    downloaded?.('0.3.0')
+    expect(u.ready()).toBe('0.3.0')
+    expect(readyCalls).toEqual(['0.3.0'])
   })
 
   it('no update info (e.g. unpacked dev build) is not-found; error text is cut to one short line', async () => {

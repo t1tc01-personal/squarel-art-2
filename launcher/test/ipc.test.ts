@@ -21,7 +21,7 @@ const APP: SenderInfo = { url: APP_URL, fromAppWindow: true }
 const CF_TOKEN = 'cf-secret-token-0123456789'
 const RD_KEY = 'rd-secret-key-abcdefgh'
 
-function setup(fx: Fixtures = {}) {
+function setup(fx: Fixtures = {}, over: Partial<IpcContext> = {}) {
   const files: Record<string, string> = {
     [join(SQ, 'package.json')]: '{"name":"squarel-art"}',
     [join(SQ, '.env')]:
@@ -96,6 +96,7 @@ function setup(fx: Fixtures = {}) {
     },
     openFolder: async (p) => void folders.push(p),
     openExternal: async () => {},
+    ...over,
   }
   return {
     h: createIpcHandlers(ctx),
@@ -625,5 +626,101 @@ describe('redactText', () => {
       'ws://127.0.0.1:4321/bridge?token=••••&x=1',
     )
     expect(redactText('short abc', ['abc'])).toBe('short abc') // < 4 characters are never matched
+  })
+})
+
+describe('tasks and the quit path (Task 15)', () => {
+  /** Holds `pnpm install` (squarel:deps, a Squarel-folder task) until aborted. */
+  function holdInstall(d: ReturnType<typeof setup>['d']) {
+    const seen: { signal?: AbortSignal } = {}
+    const run = d.run
+    d.run = async (spec) => {
+      if (spec.argv.join(' ') === 'pnpm install') {
+        seen.signal = spec.signal
+        await new Promise<void>((r) => {
+          if (spec.signal?.aborted) return r()
+          spec.signal?.addEventListener('abort', () => r(), { once: true })
+        })
+        return { code: -1 }
+      }
+      return run(spec)
+    }
+    return seen
+  }
+
+  it('checks:run skips the MCP smoke test while a Squarel-folder task runs (N2)', async () => {
+    let smokes = 0
+    const { h, d } = setup(
+      {},
+      {
+        smoke: async () => {
+          smokes++
+          return { ok: true, tools: 3, ms: 5 }
+        },
+      },
+    )
+    holdInstall(d)
+    await h.handle('action:run', APP, { componentId: 'squarel', kind: 'install', id: 'deps', label: 'x' })
+    const busy = (await h.runChecks()).find((r) => r.id === 'mcp-starts')
+    expect(busy).toMatchObject({ result: 'warn' })
+    expect(busy?.detail).toMatch(/bỏ qua/)
+    expect(smokes).toBe(0)
+    await h.abortTasks()
+    const free = (await h.runChecks()).find((r) => r.id === 'mcp-starts')
+    expect(free).toMatchObject({ result: 'pass' })
+    expect(smokes).toBe(1)
+  })
+
+  it('runningTasks lists running tasks; abortTasks aborts their signal and waits for them', async () => {
+    const { h, d, events } = setup()
+    const seen = holdInstall(d)
+    expect(h.runningTasks()).toEqual([])
+    await h.handle('action:run', APP, { componentId: 'squarel', kind: 'install', id: 'deps', label: 'x' })
+    expect(h.runningTasks()).toEqual(['Đang cài thư viện Squarel…'])
+    while (!seen.signal) await new Promise((r) => setTimeout(r, 1))
+    await h.abortTasks()
+    expect(seen.signal.aborted).toBe(true)
+    expect(h.runningTasks()).toEqual([])
+    expect(events.some((e) => (e.payload as { kind?: string })?.kind === 'error')).toBe(true)
+  })
+
+  it('trayIntegrations lists selected integrations with their default launch action', async () => {
+    const ase = join(SQ, 'integrations', 'aseprite')
+    const { h } = setup({
+      files: {
+        [join(ase, 'integration.json')]: readFileSync(
+          resolve(import.meta.dirname, '..', '..', 'integrations', 'aseprite', 'integration.json'),
+          'utf8',
+        ),
+      },
+    })
+    expect(await h.trayIntegrations()).toEqual([])
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    expect(await h.trayIntegrations()).toEqual([
+      { name: 'Aseprite', ref: { componentId: 'aseprite', kind: 'launch', id: 'open', label: 'Aseprite' } },
+    ])
+  })
+
+  it('a downloaded launcher update adds the install action; updates:apply installs it first', async () => {
+    let ready: string | undefined
+    let installs = 0
+    const { h } = setup(
+      {},
+      {
+        launcherUpdater: { check: async () => ({ ok: true, version: '0.3.0' }), ready: () => ready },
+        installLauncherUpdate: () => void installs++,
+      },
+    )
+    type View = { id: string; actions: { id: string }[]; latest?: string }
+    const launcherRow = async () =>
+      ((await h.handle('components:list', APP, undefined)) as View[]).find((c) => c.id === 'launcher')
+    expect((await launcherRow())?.actions).toEqual([])
+    ready = '0.3.0'
+    const row = await launcherRow()
+    expect(row?.actions.map((a) => a.id)).toEqual(['install'])
+    expect(row?.latest).toBe('0.3.0')
+    await h.handle('updates:apply', APP, undefined)
+    await h.idle()
+    expect(installs).toBe(1)
   })
 })

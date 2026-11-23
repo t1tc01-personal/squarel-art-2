@@ -145,6 +145,8 @@ export async function applySquarelUpdate(
     selected: string[]
     onEvent: (e: TaskEvent) => void
     taskId?: string
+    /** Aborting kills the running step with its process tree. */
+    signal?: AbortSignal
   },
   d: Deps,
 ): Promise<void> {
@@ -194,7 +196,7 @@ export async function applySquarelUpdate(
   const retryHint = ` Mã nguồn đã ở ${where}; bấm Cập nhật lần nữa để hoàn tất cài đặt.`
   for (const [n, argv] of [...gitSteps, ['pnpm', 'install']].entries()) {
     const env = argv[0] === 'git' ? GIT_ENV : undefined
-    const code = await runStep(taskId, argv, ctx.squarelDir, emit, d, env)
+    const code = await runStep(taskId, argv, ctx.squarelDir, emit, d, env, ctx.signal)
     if (code !== 0) {
       const moved = n >= gitSteps.length
       return fail(`${showArgv(argv)} thất bại (mã thoát ${code}).${moved ? retryHint : ''}`, code)
@@ -234,7 +236,7 @@ export async function applySquarelUpdate(
       progress()
       continue
     }
-    const code = await runStep(taskId, argv, manifestCwd(i, ctx.squarelDir), emit, d)
+    const code = await runStep(taskId, argv, manifestCwd(i, ctx.squarelDir), emit, d, undefined, ctx.signal)
     if (code !== 0)
       return fail(
         `Cài lại extension ${i.manifest.name} thất bại (mã thoát ${code}).${closeHint(task.requiresClosed)}${retryHint}`,

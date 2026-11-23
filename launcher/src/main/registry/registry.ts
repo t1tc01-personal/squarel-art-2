@@ -261,6 +261,14 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
   // Squarel moves to the launcher's own tag (updates:apply / squarel:update); offered only when newer.
   if (c.id === 'squarel' && lv.level === 'warn')
     actions.push({ componentId: 'squarel', kind: 'update', id: 'update', label: 'Cập nhật' })
+  // The launcher's own update is offered only once electron-updater downloaded it.
+  if (c.id === 'launcher' && ctx.launcherUpdateReady)
+    actions.push({
+      componentId: 'launcher',
+      kind: 'update',
+      id: 'install',
+      label: 'Khởi động lại để cập nhật',
+    })
   if (!det.installed && c.install?.winget) {
     actions.push({
       componentId: c.id,
@@ -293,6 +301,9 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
     ...(det.version ? { version: det.version } : {}),
     ...latestFields(latest),
     ...lv,
+    ...(c.id === 'launcher' && ctx.launcherUpdateReady
+      ? { latest: ctx.launcherUpdateReady, level: 'warn' as const, levelLabel: 'Đã tải bản mới' }
+      : {}),
     actions,
   }
 }
@@ -407,13 +418,14 @@ export async function viewComponents(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
-  ctx: Pick<Ctx, 'launcherVersion' | 'isDev'> & { recentProject?: string },
+  ctx: Pick<Ctx, 'launcherVersion' | 'isDev' | 'launcherUpdateReady'> & { recentProject?: string },
 ): Promise<ComponentView[]> {
   const full: Ctx = {
     squarelDir: state.squarelDir,
     launcherVersion: ctx.launcherVersion,
     isDev: ctx.isDev,
     env: envDoc,
+    ...(ctx.launcherUpdateReady ? { launcherUpdateReady: ctx.launcherUpdateReady } : {}),
   }
   const core = Promise.all(reg.core.map((c) => viewCore(c, full, d)))
   const ints = Promise.all(
