@@ -29,7 +29,7 @@ export interface WsLike {
 
 type FsApi = Pick<
   typeof import('node:fs/promises'),
-  'readFile' | 'writeFile' | 'readdir' | 'stat' | 'mkdir' | 'rm' | 'rename' | 'realpath' | 'open'
+  'readFile' | 'writeFile' | 'readdir' | 'stat' | 'lstat' | 'mkdir' | 'rm' | 'rename' | 'realpath' | 'open'
 >
 
 export interface Deps {
@@ -65,6 +65,8 @@ export interface Fixtures {
   fetch?: Record<string, { status: number; headers?: Record<string, string>; body?: string }>
   /** realpath results by path (symlink / 8.3 simulation); other existing files resolve to themselves. */
   realpaths?: Record<string, string>
+  /** File symbolic links, link path → target path (the target may be missing: a dangling link). */
+  links?: Record<string, string>
   /** Initial in-memory files, by path. */
   files?: Record<string, string>
   now?: Date
@@ -107,24 +109,36 @@ function realSpawnBridge(opts: { squarelDir: string; env?: Record<string, string
   return { pid: child.pid, exited, kill: () => void child.kill() }
 }
 
-function fakeFs(files: Record<string, string>, realpaths: Record<string, string> = {}): FsApi {
+function fakeFs(
+  files: Record<string, string>,
+  realpaths: Record<string, string> = {},
+  fileLinks: Record<string, string> = {},
+): FsApi {
   const norm = (s: string) => String(s).replace(/\\/g, '/')
   const store = new Map(Object.entries(files).map(([k, v]) => [norm(k), v]))
+  /** File symlinks: link path → target path (as given). Reads and writes go to the target. */
+  const links = new Map(Object.entries(fileLinks).map(([k, v]) => [norm(k), v]))
+  const follow = (p: string) => (links.has(norm(p)) ? norm(links.get(norm(p)) as string) : norm(p))
+  /** Folders made with mkdir; a folder also exists while any file lives below it. */
+  const dirs = new Set<string>()
+  const trim = (p: string) => norm(p).replace(/\/+$/, '')
+  const isDir = (p: string) => dirs.has(trim(p)) || [...store.keys()].some((k) => k.startsWith(`${trim(p)}/`))
   const enoent = (p: string) =>
     Object.assign(new Error(`ENOENT: ${p}`), { code: 'ENOENT' }) as NodeJS.ErrnoException
   const fs = {
     async readFile(p: string) {
-      const v = store.get(norm(p))
+      const v = store.get(follow(p))
       if (v === undefined) throw enoent(p)
       return v
     },
     async writeFile(p: string, data: string) {
-      store.set(norm(p), String(data))
+      store.set(follow(p), String(data))
     },
     async readdir(p: string, opts?: { withFileTypes?: boolean }) {
       const prefix = `${norm(p).replace(/\/+$/, '')}/`
       const keys = [...store.keys()].filter((k) => k.startsWith(prefix))
-      const names = [...new Set(keys.map((k) => k.slice(prefix.length).split('/')[0] as string))]
+      const all = [...keys, ...[...links.keys()].filter((k) => k.startsWith(prefix))]
+      const names = [...new Set(all.map((k) => k.slice(prefix.length).split('/')[0] as string))]
       if (!opts?.withFileTypes) return names
       return names.map((name) => {
         const dir = keys.some((k) => k.startsWith(`${prefix}${name}/`))
@@ -132,15 +146,29 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
       })
     },
     async stat(p: string) {
-      const v = store.get(norm(p))
-      if (v === undefined) throw enoent(p)
+      const v = store.get(follow(p))
+      if (v === undefined) {
+        if (isDir(p)) return { isFile: () => false, isDirectory: () => true, size: 0 }
+        throw enoent(p)
+      }
       return { isFile: () => true, isDirectory: () => false, size: v.length }
+    },
+    async lstat(p: string) {
+      if (links.has(norm(p)))
+        return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true, size: 0 }
+      return { ...(await fs.stat(p)), isSymbolicLink: () => false }
     },
     async realpath(p: string) {
       const mapped = Object.entries(realpaths).find(([k]) => norm(k) === norm(p))?.[1]
       if (mapped !== undefined) return mapped
+      const target = links.get(norm(p))
+      if (target !== undefined) {
+        if (!store.has(norm(target))) throw enoent(p)
+        return target
+      }
       const prefix = `${norm(p).replace(/\/+$/, '')}/`
-      if (!store.has(norm(p)) && ![...store.keys()].some((k) => k.startsWith(prefix))) throw enoent(p)
+      if (!store.has(norm(p)) && !dirs.has(trim(p)) && ![...store.keys()].some((k) => k.startsWith(prefix)))
+        throw enoent(p)
       return p
     },
     async open(p: string) {
@@ -155,18 +183,22 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
         async close() {},
       }
     },
-    async mkdir() {
+    async mkdir(p: string) {
+      dirs.add(trim(p))
       return undefined
     },
     async rm(p: string) {
       const prefix = `${norm(p).replace(/\/+$/, '')}/`
       store.delete(norm(p))
+      links.delete(norm(p))
       for (const k of [...store.keys()]) if (k.startsWith(prefix)) store.delete(k)
+      for (const k of [...dirs]) if (k === trim(p) || k.startsWith(prefix)) dirs.delete(k)
     },
     async rename(a: string, b: string) {
       const v = store.get(norm(a))
       if (v !== undefined) {
         store.delete(norm(a))
+        links.delete(norm(b)) // like a real rename: a link at `b` is replaced by the file
         store.set(norm(b), v)
         return
       }
@@ -186,7 +218,7 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
 
 function createFake(fx: Fixtures): Deps {
   const alive = new Set(fx.alivePids ?? [])
-  const fs = fakeFs(fx.files ?? {}, fx.realpaths)
+  const fs = fakeFs(fx.files ?? {}, fx.realpaths, fx.links)
   return {
     async run(spec) {
       const hit = fx.run?.[spec.argv.join(' ')]

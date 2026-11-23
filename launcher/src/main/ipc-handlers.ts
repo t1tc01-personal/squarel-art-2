@@ -52,6 +52,19 @@ import type { LauncherState } from './state'
 import { planSquarelUpdate } from './updates/squarel'
 import { maskCredentials, showArgv } from './updates/tools'
 import type { Latest } from './versions'
+import {
+  createWorkspace,
+  getWorkspace,
+  inspectFolder,
+  listWorkspaces,
+  openClaude,
+  removeWorkspace,
+  unassignedArts,
+  updateWorkspace,
+  type WorkspaceCtx,
+  WorkspaceError,
+  workspaceFolder,
+} from './workspaces'
 
 // Compile-time: shared/ipc.ts mirrors main/state.ts.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
@@ -668,6 +681,32 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     return top
   }
 
+  // ---- Dự án (workspaces) ------------------------------------------------------------------
+  async function wsCtx(): Promise<WorkspaceCtx> {
+    const s = await getState()
+    return {
+      d,
+      dataDir: dataDir(s, await readEnv(s)),
+      chosen: (p) => [...picked].some((k) => samePath(k, p)),
+    }
+  }
+  /** One write at a time (unique ids, index files); WorkspaceError messages reach the user. */
+  let wsChain: Promise<unknown> = Promise.resolve()
+  function ws<T>(fn: (c: WorkspaceCtx) => Promise<T>, write = false): Promise<T> {
+    const run = async () => {
+      try {
+        return await fn(await wsCtx())
+      } catch (e) {
+        if (e instanceof WorkspaceError) throw new IpcError(e.message)
+        throw e
+      }
+    }
+    if (!write) return run()
+    const next = wsChain.then(run)
+    wsChain = next.catch(() => {})
+    return next
+  }
+
   // ---- channel table ------------------------------------------------------------------------
   type Impl = { [C in Channel]: (input: z.infer<(typeof CHANNELS)[C]['input']>) => Promise<unknown> }
   const impl: Impl = {
@@ -783,6 +822,18 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       if (!r) throw new IpcError('Không có kiểm tra này')
       return r
     },
+    'workspaces:list': () => ws((c) => listWorkspaces(c)),
+    'workspaces:get': ({ id }) => ws((c) => getWorkspace(c, id)),
+    'workspaces:inspectFolder': ({ folder }) => ws((c) => inspectFolder(c, folder)),
+    'workspaces:create': (input) => ws((c) => createWorkspace(c, input), true),
+    'workspaces:update': ({ id, patch }) => ws((c) => updateWorkspace(c, id, patch), true),
+    'workspaces:remove': ({ id }) => ws((c) => removeWorkspace(c, id), true),
+    'workspaces:openClaude': ({ id }) => ws((c) => openClaude(c, id)),
+    'workspaces:openFolder': ({ id }) =>
+      ws(async (c) => {
+        await ctx.openFolder(await workspaceFolder(c, id))
+      }),
+    'workspaces:unassigned': () => ws((c) => unassignedArts(c)),
     'window:minimize': async () => {
       ctx.window.minimize()
       return undefined
@@ -800,8 +851,14 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
    * the most recent pick dialog, or the value already stored.
    */
   let lastPicked: string | undefined
+  /** Every path picked in this session (workspace folders and repos; a few dozen at most). */
+  const picked: string[] = []
   function remember(p: string | null): string | null {
     lastPicked = p ?? lastPicked
+    if (p) {
+      picked.push(p)
+      if (picked.length > 100) picked.shift()
+    }
     return p
   }
   const samePath = (a: string, b: string) =>

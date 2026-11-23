@@ -34,7 +34,7 @@ function RailItem({
 }
 
 /**
- * Left icon rail: logo, home, library, ─, the selected integrations (manifest icon), ➕,
+ * Left icon rail: logo, home, projects (Dự án), library, ─, the selected integrations (manifest icon), ➕,
  * (space), system, settings.
  */
 export function AppRail({ components, selected }: { components: ComponentView[]; selected: string[] }) {
@@ -53,6 +53,7 @@ export function AppRail({ components, selected }: { components: ComponentView[];
       </div>
       <ul className="rail-list">
         {item('home', 'Trang chủ', 'home', <Icon name="home" size={20} />)}
+        {item('projects', 'Dự án', 'projects', <Icon name="folder" size={20} />)}
         {item('library', 'Thư viện tích hợp', 'library', <Icon name="grid" size={20} />)}
         <li className="rail-divider" aria-hidden="true" />
         {integrations.map((c) =>

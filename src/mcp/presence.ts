@@ -16,6 +16,8 @@ export interface McpPresence {
   lastTool?: string
   lastToolAt?: string
   bridge: 'own' | 'shared' | 'none'
+  /** Workspace ("Dự án") detected at startup, if any. */
+  workspace?: { id: string; name: string }
 }
 
 /**
@@ -39,6 +41,7 @@ export function startPresence(opts: {
   dataDir: string
   version: string
   bridge: McpPresence['bridge']
+  workspace?: { id: string; name: string }
   intervalMs?: number
   now?: () => Date
   pid?: number
@@ -53,6 +56,7 @@ export function startPresence(opts: {
     startedAt: now().toISOString(),
     updatedAt: now().toISOString(),
     bridge: opts.bridge,
+    ...(opts.workspace ? { workspace: { id: opts.workspace.id, name: opts.workspace.name } } : {}),
   }
   let stopped = false
   let chain: Promise<void> = Promise.resolve()

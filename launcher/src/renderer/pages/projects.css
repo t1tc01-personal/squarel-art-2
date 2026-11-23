@@ -1,0 +1,499 @@
+/* Dự án pages (spec 2026-11-24 §5.2, Figma "App v2 / Dự án"): only the existing tokens. */
+
+/* ---- list ------------------------------------------------------------------------------- */
+
+.ws-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-16);
+}
+.ws-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 164px;
+}
+.ws-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ws-thumbs {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.ws-thumbs-sm {
+  gap: 6px;
+  margin-top: auto;
+}
+.ws-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+}
+.ws-thumb img {
+  width: 75%;
+  height: 75%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.ws-thumb.is-error {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+.ws-name {
+  margin: 0;
+  font: 600 15px / 22px var(--font-ui);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-name-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  color: var(--text-muted);
+}
+.ws-folder .icon {
+  flex: none;
+}
+.ws-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+.ws-meta,
+.ws-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.ws-live {
+  color: var(--accent-primary);
+}
+.ws-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--status-error);
+}
+.ws-card.is-broken {
+  border-color: var(--status-error-soft);
+}
+.ws-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.ws-open {
+  flex: 1;
+  justify-content: center;
+}
+.ws-dashed {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: transparent;
+}
+.ws-new-slot {
+  display: flex;
+}
+.ws-new {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--text-primary);
+}
+.ws-new:hover {
+  background: var(--bg-surface);
+}
+.ws-new-icon {
+  color: var(--accent-primary);
+  margin-bottom: 4px;
+}
+.ws-new-title {
+  font-weight: 500;
+}
+.ws-tip {
+  border-color: transparent;
+  background: var(--accent-primary-soft);
+}
+.ws-tip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font: 500 13px / 20px var(--font-ui);
+}
+.ws-tip-title .icon {
+  color: var(--accent-primary);
+}
+.ws-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 28px;
+}
+.ws-empty .ws-desc {
+  max-width: 560px;
+  margin-bottom: 8px;
+}
+.ws-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+  color: var(--accent-primary);
+}
+
+/* ---- form (Dự án mới, Cài đặt) ----------------------------------------------------------- */
+
+.ws-textarea {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+  color: var(--text-primary);
+  font: 400 13px / 20px var(--font-ui);
+  outline: none;
+  user-select: text;
+}
+.ws-textarea::placeholder,
+.field-input::placeholder {
+  color: var(--text-muted);
+}
+.ws-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.ws-fieldset legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.ws-chips .chip {
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.ws-chips .chip:has(:focus-visible) {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+.ws-chips .chip:hover {
+  color: var(--text-primary);
+}
+.ws-chips .chip.is-active {
+  background: var(--accent-primary-soft);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.ws-repos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ws-repo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+  min-width: 0;
+}
+.ws-sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ws-session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ws-session-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  color: var(--accent-primary);
+}
+.ws-repo-icon {
+  flex: none;
+  color: var(--text-secondary);
+}
+.ws-repo-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.ws-repo-label {
+  flex: none;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--text-secondary);
+}
+.ws-repo-label.is-ok {
+  color: var(--status-ok);
+}
+.ws-repo-label.is-warn {
+  color: var(--status-warn);
+}
+.ws-repo-remove {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+.ws-none {
+  margin: 0;
+}
+.ws-add-repo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ws-writes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ws-write {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.ws-write-what {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+.ws-write-what.is-keep {
+  color: var(--text-muted);
+}
+.ws-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--accent-primary-soft);
+  font-size: 12px;
+  line-height: 16px;
+}
+.ws-notice .icon {
+  flex: none;
+  margin-top: 0;
+  color: var(--accent-primary);
+}
+.ws-notice.is-error {
+  background: var(--status-error-soft);
+}
+.ws-notice.is-error .icon {
+  color: var(--status-error);
+}
+.ws-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ws-footer-spacer {
+  flex: 1;
+}
+.ws-footer-error {
+  font-size: 12px;
+  color: var(--status-error);
+}
+.ws-save-row {
+  margin-top: 0;
+}
+.ws-danger {
+  border-color: var(--status-error-soft);
+}
+
+/* ---- detail ----------------------------------------------------------------------------- */
+
+.ws-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ws-back {
+  align-self: flex-start;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.ws-back:hover {
+  color: var(--text-primary);
+}
+.ws-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ws-title-row .page-title {
+  padding-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-spec {
+  flex: none;
+}
+/* The header sits at the top of the page: the Mở Claude menu opens downwards here. */
+.page-project .launch-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
+  left: auto;
+  right: 0;
+}
+.page-project .page-head {
+  align-items: center;
+}
+.page-project .subtabs {
+  align-self: flex-start;
+}
+.ws-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--space-16);
+  align-items: start;
+}
+.ws-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.ws-section-title {
+  margin: 0;
+  font: 600 15px / 22px var(--font-ui);
+}
+.ws-art-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.ws-art {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  min-width: 0;
+}
+.ws-art-thumb {
+  display: grid;
+  place-items: center;
+  height: 76px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+}
+.ws-art-thumb .ws-thumb {
+  background: transparent;
+}
+.ws-art-thumb .ws-thumb img {
+  width: 100%;
+  height: 100%;
+}
+.ws-art-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-arts-empty {
+  padding: 20px;
+}
+.ws-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+.ws-side .settings-card {
+  gap: 10px;
+}
+.ws-big {
+  margin: 0;
+  font-weight: 500;
+}
+.ws-excerpt {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-line;
+}
+.ws-excerpt.is-empty {
+  color: var(--text-muted);
+}
+.ws-card-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: -16px;
+}
+.ws-side p {
+  margin: 0;
+}
+/* Narrow side column: the repo label goes under the path. */
+.ws-side .ws-repo {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.ws-side .ws-repo-label {
+  flex-basis: 100%;
+  padding-left: 28px;
+}

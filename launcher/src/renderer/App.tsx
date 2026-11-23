@@ -9,6 +9,9 @@ import { NavProvider, useNav } from './nav'
 import { Home } from './pages/Home'
 import { Integration } from './pages/Integration'
 import { Library } from './pages/Library'
+import { ProjectDetail } from './pages/ProjectDetail'
+import { ProjectNew } from './pages/ProjectNew'
+import { Projects } from './pages/Projects'
 import { Settings } from './pages/Settings'
 import { System } from './pages/System'
 import { Wizard } from './setup/Wizard'
@@ -16,8 +19,11 @@ import { Wizard } from './setup/Wizard'
 function CurrentPage() {
   const { page } = useNav()
   if (page === 'home') return <Home />
+  if (page === 'projects') return <Projects />
+  if (page === 'project-new') return <ProjectNew />
   if (page === 'library') return <Library />
   if (page === 'settings') return <Settings />
+  if ('project' in page) return <ProjectDetail key={page.project} id={page.project} tab={page.tab} />
   if ('integration' in page) return <Integration id={page.integration} tab={page.tab} />
   return <System tab={page.system} />
 }

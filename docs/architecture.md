@@ -129,8 +129,11 @@ DATA_DIR/
   inbox/                              thả ảnh chụp / ảnh tham chiếu vào đây
   logs/mcp.log  logs/bridge.log
   usage.jsonl                         mỗi lần gọi provider ảnh 1 dòng
+  run/mcp-<pid>.json                  file phiên của từng tiến trình MCP (mục 8)
+  workspaces/<id>.json                chỉ mục dự án: { schema: 1, id, name, folder, createdAt } (mục 3.5)
   projects/<slug>/
-    project.json                      { slug, name, purpose, createdAt, head: "v000042" }
+    project.json                      { slug, name, purpose, createdAt, updatedAt, head: "v000042", workspace?: "<id>" }
+    thumb.png                         ảnh nhỏ frame 0 (cạnh dài ≤ 128), ghi lại sau mỗi lần tạo/commit
     versions/index.jsonl              mỗi version 1 dòng: { id, parent, ts, source, label, bytes }
     versions/v000042.json.gz          { id, parent, ts, source, label, doc: PixelDoc }
     proposals/<pid>/meta.json         xem mục 3.3
@@ -145,6 +148,7 @@ DATA_DIR/
 
 - **`slug`:** khớp `^[a-z0-9][a-z0-9-]{0,63}$`. Mọi đường dẫn được resolve và kiểm tra vẫn nằm trong `DATA_DIR`, để chặn path traversal.
 - **`source`** của version là một trong: `claude` | `editor` | `ai` | `cli` | `import`. Extension Aseprite dùng giá trị này để đặt tên transaction (ví dụ "Claude: …") và hiện thông báo.
+- **`workspace`** trong `project.json` của art: id dự án chứa art. Không có trường này là art **Chưa phân loại**.
 - **`usage.jsonl`**, mỗi dòng: `{ ts, provider, model, op, units, unitKind: 'neuron'|'credit'|'none', usd, project, proposal, ok }`.
 
 ### 3.3 Proposal (đề xuất do AI tạo)
@@ -178,6 +182,26 @@ Tool phía Claude không giữ bản doc cũ: **luôn đọc head ngay trước 
 
 ---
 
+### 3.5 Dự án (workspace)
+
+Trong code, "project" là **một art** (một canvas). Cấp gom nhiều art cho cùng một mục đích (game, bộ sticker, bản in) tên là **workspace**; giao diện gọi là "Dự án". Thiết kế đầy đủ: [superpowers/specs/2026-11-24-workspaces-design.md](superpowers/specs/2026-11-24-workspaces-design.md).
+
+```
+<thư mục dự án>/
+  AGENTS.md                 khối <!-- squarel:begin … squarel:end --> do launcher quản lý (brief)
+  CLAUDE.md                 có dòng "@AGENTS.md"
+  .squarel/project.json     { schema: 1, id, name, description?, brief?, defaults?: { purpose?, width?, height?, palette? }, repos?, exportDir? }
+  .squarel/arts.md          danh mục art, Squarel tự sinh
+```
+
+- **Nguồn sự thật** là `.squarel/project.json` (launcher ghi, Squarel chỉ đọc; trường lạ được giữ nguyên). Module: `src/store/workspace.ts` (đọc cấu hình, dò thư mục, chỉ mục, danh mục).
+- **Đọc dễ dãi:** file có thể bị sửa tay, nên chỉ bắt buộc `id` hợp lệ và `name` không rỗng (cắt còn 80 ký tự); thiếu `schema` thì coi là 1. Trường nào sai (`defaults.width: 0`, bảng màu lạ, `description` không phải chuỗi...) thì bỏ riêng trường đó và ghi log cảnh báo, không bỏ cả dự án. Tên bảng màu so không phân biệt hoa thường, bỏ qua `-` và `_` (`PICO-8` → `pico8`).
+- **Nhận dự án:** lúc MCP khởi động, dò ngược từ `CLAUDE_PROJECT_DIR` (không có thì `process.cwd()`) lên tối đa 32 cấp tới khi gặp `.squarel/project.json`. File hỏng (không đọc được, thiếu `id`/`name`) thì ghi log cảnh báo và coi như không có dự án. Việc nhận dự án không cần `DATA_DIR/workspaces/<id>.json`.
+- **Chỉ mục `DATA_DIR/workspaces/<id>.json`** do launcher quản lý (tạo khi thêm, xóa khi gỡ dự án). Squarel không bao giờ tạo mục thiếu, để dự án đã gỡ vẫn bị gỡ. Squarel chỉ sửa mục có sẵn khi thư mục mà mục đó trỏ tới không còn `.squarel/project.json` cùng `id` (thư mục đã bị chuyển); mục còn sống không bao giờ bị chuyển sang bản sao. CLI và `pnpm bridge` không dò dự án.
+- **Mặc định:** `project_create` lấy `width`, `height`, `purpose`, `palette` từ `defaults` khi bỏ trống; không có dự án mà thiếu kích thước thì báo `INVALID`. Art mới (kể cả `photo_to_pixel` tạo project mới) gắn `workspace`. Mỗi lần gọi tool, file cấu hình được đọc lại nên sửa trong launcher có hiệu lực ngay.
+- **Danh mục `.squarel/arts.md`:** sinh lại sau mỗi commit (kể cả từ bridge ở tiến trình khác, vì hook nằm trong `Store`), sau `workspace_add_art`, sau `export` và lúc MCP khởi động (chạy nền, không chờ trước khi kết nối, để thư viện lớn không làm chậm khởi động; phần hướng dẫn cho Claude chỉ đọc `project.json` của từng art). Ghi tạm + rename; lỗi chỉ ghi log, không làm hỏng commit.
+- **Xuất file:** art thuộc dự án có `exportDir` thì `export` chép thêm các file vào `<thư mục>/<exportDir>` (tự tạo thư mục). Quy tắc chung với launcher: `exportDir` phải là đường dẫn tương đối tới thư mục con nằm hẳn bên trong thư mục dự án; rỗng, `.`, đường dẫn tuyệt đối, `..` hoặc `../x` đều bị từ chối (thư mục tên `..assets` thì được). `exportDir` sai không làm hỏng lệnh `export`: file vẫn ghi vào `exports/`, bước chép bị bỏ qua và kết quả có dòng cảnh báo nêu lý do.
+
 ## 4. Các interface chính
 
 ### 4.1 Tool dùng chung (`src/tools/types.ts`)
@@ -195,7 +219,7 @@ interface ToolDef<I extends z.ZodTypeAny = z.ZodTypeAny> {
 interface ToolContext {
   store: Store
   providers: ProviderRouter
-  session: { activeProject?: string }            // mỗi tiến trình MCP giữ một bản riêng
+  session: { activeProject?: string; workspace?: Workspace }  // mỗi tiến trình MCP giữ một bản riêng; workspace dò lúc khởi động
   config: Config
   log: Logger                                    // không bao giờ ghi ra stdout
   signal: AbortSignal
@@ -222,7 +246,9 @@ class ToolError extends Error {
 ```ts
 interface Store {
   listProjects(): Promise<ProjectSummary[]>
-  createProject(p: { name: string; width: number; height: number; purpose: Purpose; palette?: string[] }): Promise<ProjectSummary>
+  createProject(p: { name: string; doc: PixelDoc; source: Source; workspace?: string }): Promise<ProjectSummary>
+  setWorkspace(slug: string, id: string | null): Promise<string | undefined>   // có khoá; trả về dự án cũ
+  onCommit(fn: (e: { slug; versionId; doc }) => unknown): () => void          // hook sau commit
   readHead(slug: string): Promise<{ versionId: string; doc: PixelDoc }>
   commit(slug: string, c: { baseVersion: string; doc: PixelDoc; source: Source; label: string }): Promise<string>  // trả về versionId mới
   history(slug: string, limit?: number): Promise<VersionInfo[]>
@@ -234,6 +260,8 @@ interface Store {
 ```
 
 Có thêm hàm tiện ích `withHead(slug, source, label, fn: (doc) => PixelDoc)`. Hàm này gói cả chuỗi đọc head → áp `fn` → commit → tự thử lại khi `CONFLICT`. **Mọi tool sửa ảnh đều dùng hàm này.**
+
+Sau mỗi commit (`commit`, `withHead`, `restore`/`undo`, cả lần tạo project), ngoài khoá, `Store` chạy các hook: ghi `thumb.png` và sinh lại `.squarel/arts.md` của dự án chứa art. Hook mặc định bật ở mọi tiến trình dùng store (`new Store(dir, { hooks: false })` để tắt). Lỗi trong hook chỉ ghi log (`store.log`), không bao giờ làm hỏng commit.
 
 ### 4.3 Provider ảnh (`src/providers`)
 
@@ -316,8 +344,10 @@ Mọi tool đều có tham số tuỳ chọn `project`. Cột "Ghi" cho biết t
 
 | Tool | Input chính | Ghi | $ | Trả về |
 |---|---|---|---|---|
-| `project_list` | — | | | danh sách project |
-| `project_create` | name, width, height, purpose, palette? | ✓ | | info + ảnh canvas trống |
+| `project_list` | all? | | | danh sách art; có dự án thì chỉ art của dự án, `all: true` liệt kê tất cả kèm dự án của từng art |
+| `project_create` | name, width?, height?, purpose?, palette? (bỏ trống thì lấy mặc định của dự án) | ✓ | | info + ảnh canvas trống |
+| `workspace_info` | — | | | dự án hiện tại: tên, thư mục, mô tả, brief, mặc định, repo, exportDir, art; không có thì hướng dẫn tạo bằng launcher |
+| `workspace_add_art` | project? | | | chuyển art (kể cả Chưa phân loại) vào dự án hiện tại |
 | `project_open` | slug | | | đặt làm project đang mở + ảnh preview |
 | `project_info` | — | | | kích thước, palette, layers, frames, head |
 | `canvas_view` | scale?, layer?, frame?, grid?, coords? | | | **ảnh** (có lưới và toạ độ nếu bật) |
@@ -341,7 +371,7 @@ Mọi tool đều có tham số tuỳ chọn `project`. Cột "Ghi" cho biết t
 | `restore_version` | id | ✓ | | ảnh |
 | `open_in_editor` | project? | | | Mở hoặc chuyển tới project trong Aseprite (qua bridge, hoặc qua CLI nếu extension chưa kết nối) |
 | `export_presets` | purpose? | | | danh sách preset + options |
-| `export` | preset, options | | | đường dẫn file + ảnh xem trước nhỏ |
+| `export` | preset, options | | | đường dẫn file + ảnh xem trước nhỏ; chép thêm vào `exportDir` của dự án nếu có |
 | `usage_today` | — | | | $ hôm nay / tháng này, neuron Cloudflare còn lại |
 
 **Giao thức xác nhận chi phí** (bắt buộc với `quality:'high'`):
@@ -468,9 +498,10 @@ Các ngưỡng trên là giá trị khởi điểm, sẽ được tinh chỉnh b
 - **Khởi động:** `src/mcp/index.ts`
   1. Nạp `.env` từ thư mục gốc repo. Đường dẫn resolve qua `import.meta.url`, không phụ thuộc thư mục hiện hành (cwd).
   2. Khởi tạo `store`, `providers`, logger. Logger ghi bằng pino ra stderr và `DATA_DIR/logs/mcp.log`.
-  3. `new McpServer({ name: 'squarel', version })`.
-  4. Gọi `registerTool` cho từng `ToolDef`.
-  5. `connect(new StdioServerTransport())`.
+  3. Dò dự án (mục 3.5), đặt `session.workspace`, sinh lại `.squarel/arts.md`.
+  4. `new McpServer({ name: 'squarel', version }, { instructions })`. Có dự án thì `instructions` thêm một đoạn: tên, thư mục, mặc định, số art và tối đa 5 art mới nhất, brief ở `AGENTS.md`, danh mục ở `.squarel/arts.md`, `project_list` chỉ hiện art của dự án (`all: true` để xem hết).
+  5. Gọi `registerTool` cho từng `ToolDef`.
+  6. `connect(new StdioServerTransport())`.
 - **Chuyển kết quả sang MCP:**
   - `ToolResult.text` thành content `text`.
   - Mỗi ảnh thành content `{ type: 'image', data: base64, mimeType: 'image/png' }`.
@@ -483,7 +514,7 @@ Các ngưỡng trên là giá trị khởi điểm, sẽ được tinh chỉnh b
 - **Giới hạn:** mỗi tool AI có hạn chót nội bộ 110 giây. Tới hạn thì trả về các biến thể đã xong và ghi chú phần còn thiếu.
 - **Cấm ghi ra stdout** (`console.log`), vì stdout đang dùng cho giao thức. Biome có rule chặn `console.log` trong `src/**`.
 
-**File phiên (cho launcher):** mỗi tiến trình MCP ghi `DATA_DIR/run/mcp-<pid>.json` gồm `pid`, `cwd`, `version`, `startedAt`, `updatedAt`, `lastTool?`, `lastToolAt?`, `bridge` (`own` | `shared` | `none`). Ghi lại mỗi 10 giây và sau mỗi lần gọi tool, xoá khi thoát. Launcher coi file là cũ sau 30 giây. Chi tiết: [integrations.md](integrations.md#file-phiên-mcp).
+**File phiên (cho launcher):** mỗi tiến trình MCP ghi `DATA_DIR/run/mcp-<pid>.json` gồm `pid`, `cwd`, `version`, `startedAt`, `updatedAt`, `lastTool?`, `lastToolAt?`, `bridge` (`own` | `shared` | `none`), `workspace?: { id, name }` (dự án dò được lúc khởi động). Ghi lại mỗi 10 giây và sau mỗi lần gọi tool, xoá khi thoát. Launcher coi file là cũ sau 30 giây. Chi tiết: [integrations.md](integrations.md#file-phiên-mcp).
 
 `.mcp.json` ở gốc repo:
 ```json

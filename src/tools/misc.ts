@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { copyFile, mkdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import sharp from 'sharp'
 import { z } from 'zod'
@@ -10,8 +10,9 @@ import { pasteIndexed } from '../core/ops.ts'
 import { decodePng, encodePng } from '../core/png.ts'
 import { renderRGBA } from '../core/preview.ts'
 import { MAX_SIDE, PURPOSES, type Purpose } from '../shared/types.ts'
+import { loadWorkspaceById, resolveExportDir, type Workspace, writeCatalog } from '../store/workspace.ts'
 import { SQUAREL_VERSION } from '../version.ts'
-import { mutate, preview, previewArg, projectArg, projectSlug } from './common.ts'
+import { currentWorkspace, mutate, preview, previewArg, projectArg, projectSlug } from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'])
@@ -94,7 +95,7 @@ export const exportTools = [
     name: 'export',
     title: 'Export files',
     description:
-      'Write production-ready files to the project exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. Returns absolute file paths.',
+      'Write production-ready files to the project exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. When the art belongs to a workspace with an export folder, the files are also copied there. Returns absolute file paths.',
     input: z.object({
       project: projectArg,
       preset: z.string().describe(`One of: ${PRESETS.map((p) => p.id).join(', ')}`),
@@ -116,6 +117,20 @@ export const exportTools = [
       const parsed = preset.options.safeParse(i.options ?? {})
       if (!parsed.success)
         throw new ToolError('INVALID', `bad options for ${preset.id}: ${parsed.error.message}`)
+      const artWs = (await ctx.store.info(slug)).workspace
+      let ws: Workspace | undefined
+      if (artWs) {
+        const session = await currentWorkspace(ctx)
+        ws = session?.id === artWs ? session : await loadWorkspaceById(ctx.store.dataDir, artWs)
+      }
+      // A bad export folder never fails the export: files still go to exports/, the copy is skipped.
+      let copyDir: string | undefined
+      let copySkipped: string | undefined
+      try {
+        copyDir = ws ? resolveExportDir(ws) : undefined
+      } catch (e: any) {
+        copySkipped = `Warning: not copied to the project export folder: ${e.message}. Fix the export folder of project "${ws?.name}" in the launcher.`
+      }
       const { versionId, doc } = await ctx.store.readHead(slug)
       const files = await preset.run(doc, parsed.data, i.name ?? slug, { appVersion: SQUAREL_VERSION })
       const paths: string[] = []
@@ -129,16 +144,26 @@ export const exportTools = [
         paths.push(await ctx.store.writeExport(slug, f.name, bytes))
         if (f.note) notes.push(f.note)
       }
+      const copies: string[] = []
+      if (copyDir) {
+        await mkdir(copyDir, { recursive: true })
+        for (const p of paths) {
+          const dest = join(copyDir, basename(p))
+          await copyFile(p, dest)
+          copies.push(dest)
+        }
+      }
+      if (ws) await writeCatalog(ctx.store, ws, ctx.log)
       let images: { png: Uint8Array; alt: string }[] | undefined
       if (firstImage) {
         const img = decodePng(firstImage)
         images = [{ png: encodePng(renderRGBA(img, { maxSide: 192 })), alt: 'export preview' }]
       }
       return {
-        text: `Exported ${preset.id} from ${versionId}:\n${paths.map((p) => `- ${p}`).join('\n')}${notes.length ? `\n${notes.join('\n')}` : ''}`,
+        text: `Exported ${preset.id} from ${versionId}:\n${paths.map((p) => `- ${p}`).join('\n')}${copies.length ? `\nAlso copied to ${copyDir}:\n${copies.map((p) => `- ${p}`).join('\n')}` : ''}${notes.length ? `\n${notes.join('\n')}` : ''}${copySkipped ? `\n${copySkipped}` : ''}`,
         files: paths,
         images,
-        data: { files: paths },
+        data: { files: paths, copies, ...(copySkipped ? { copySkipped } : {}) },
       }
     },
   }),
@@ -162,7 +187,10 @@ export const importTools = [
       remove_background: z.boolean().default(false),
       as_new_project: z.boolean().default(true),
       name: z.string().max(80).optional(),
-      purpose: z.enum(PURPOSES as ['game', 'print', 'digital', 'craft']).default('digital'),
+      purpose: z
+        .enum(PURPOSES as ['game', 'print', 'digital', 'craft'])
+        .optional()
+        .describe('Purpose of a new project (default: the workspace default, else digital)'),
       project: projectArg.describe('Target project when as_new_project is false'),
       preview: previewArg,
     }),
@@ -208,10 +236,11 @@ export const importTools = [
       )
       const img = { width: r.width, height: r.height, palette: r.palette, pixels: r.pixels }
       if (i.as_new_project) {
+        const ws = await currentWorkspace(ctx)
         const doc = createDoc({
           width: w,
           height: h,
-          purpose: i.purpose as Purpose,
+          purpose: (i.purpose ?? ws?.config.defaults?.purpose ?? 'digital') as Purpose,
           palette: [],
           title: i.name,
         })
@@ -222,6 +251,7 @@ export const importTools = [
           name: i.name ?? basename(file, extname(file)),
           doc,
           source: ctx.source,
+          workspace: ws?.id,
         })
         ctx.session.activeProject = info2.slug
         ctx.onCommit?.(info2.slug, info2.head)

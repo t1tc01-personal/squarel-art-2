@@ -17,14 +17,15 @@ export interface CreateContextOptions {
 
 export async function createToolContext(o: CreateContextOptions = {}): Promise<ToolContext> {
   const config = loadConfig(o.config)
-  const store = new Store(config.dataDir)
+  const log = o.log ?? createLogger(o.logName ?? 'squarel', config.dataDir)
+  const store = new Store(config.dataDir, { log })
   await store.init()
   const router = new ProviderRouter(config, store, o.providers ?? defaultProviders(config, o.fetchImpl))
   return {
     store,
     router,
     config,
-    log: o.log ?? createLogger(o.logName ?? 'squarel', config.dataDir),
+    log,
     session: {},
     source: o.source ?? 'claude',
     editor: o.editor,

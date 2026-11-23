@@ -5,6 +5,8 @@ description: Start a new pixel-art piece with Squarel — asks for purpose and s
 
 Follow the `pixel-art` skill.
 
+If a workspace is active (server instructions, or `workspace_info`), read its brief and defaults first. Purpose, size and palette usually come from there: `project_create` fills them in when you leave them out, so only ask for what neither the brief, the defaults nor the user's words settle (often just the subject).
+
 1. Work out from the user's words (ask only for what is missing, one question at a time):
    - **purpose**: game, print, digital or craft;
    - **subject**;

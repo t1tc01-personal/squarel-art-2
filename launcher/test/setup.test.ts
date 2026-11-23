@@ -181,6 +181,7 @@ describe('terminal commands', () => {
       CMD,
       '/d',
       '/k',
+      'call',
       WINGET,
       'install',
       '--id',

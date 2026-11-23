@@ -7,6 +7,10 @@ description: Use when the user wants to create, edit, convert or export pixel ar
 
 You drive the `squarel` MCP tools. Talk to the user in their language (often Vietnamese); tool prompts to image models work best in English.
 
+## Workspace ("Dự án")
+
+If the server instructions name an **active workspace** (or `workspace_info` returns one), the user is working on that project: follow its brief (in `AGENTS.md`, also in `workspace_info`) and its defaults for new art. Don't ask again for what the brief or defaults already decide. `project_list` shows only this workspace's art (`all: true` for everything); `workspace_add_art` moves an older art in. The catalog of its art is `.squarel/arts.md`.
+
 ## Workflow
 
 1. **Find or make the project.** `project_list` → `project_open`, or `project_create` with a size that fits the purpose (table below). All later tools use the active project.

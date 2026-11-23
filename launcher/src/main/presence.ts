@@ -19,11 +19,31 @@ function baseName(p: string): string {
   return parts[parts.length - 1] ?? p
 }
 
+/** `workspace: {id, name}` that Squarel writes when the session belongs to a workspace. */
+function sessionWorkspace(w: unknown): { id: string; name: string } | undefined {
+  if (!w || typeof w !== 'object') return undefined
+  const { id, name } = w as { id?: unknown; name?: unknown }
+  if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return undefined
+  if (typeof name !== 'string' || !name.trim()) return undefined
+  return { id, name: name.trim().slice(0, 80) }
+}
+
 function ms(s: unknown): number {
   return typeof s === 'string' ? Date.parse(s) : Number.NaN
 }
 
-async function sessions(dataDir: string, d: Deps): Promise<PresenceItem[]> {
+/** A live Claude Code session of Squarel's MCP server (DATA_DIR/run/mcp-<pid>.json). */
+export interface LiveSession {
+  pid: number
+  cwd: string
+  /** The workspace Squarel found for the session, if any. */
+  workspace?: { id: string; name: string }
+  /** Tool called in the last 15 s. */
+  busyWith?: string
+}
+
+/** Fresh session files whose pid is alive, sorted by pid. */
+export async function liveSessions(dataDir: string, d: Deps): Promise<LiveSession[]> {
   const dir = join(dataDir, 'run')
   let names: string[]
   try {
@@ -32,7 +52,7 @@ async function sessions(dataDir: string, d: Deps): Promise<PresenceItem[]> {
     return []
   }
   const now = d.now().getTime()
-  const out: { pid: number; item: PresenceItem }[] = []
+  const out: LiveSession[] = []
   for (const name of names.filter((n) => RUN_FILE.test(n)).sort()) {
     let j: Record<string, unknown>
     try {
@@ -54,18 +74,30 @@ async function sessions(dataDir: string, d: Deps): Promise<PresenceItem[]> {
       Number.isFinite(lastAt) &&
       now - lastAt <= BUSY_MS &&
       lastAt - now <= FUTURE_SKEW_MS
+    const workspace = sessionWorkspace(j.workspace)
     out.push({
       pid,
-      item: {
-        id: `claude-${pid}`,
-        title: `Phiên · ${baseName(j.cwd)}`,
-        subtitle: busy ? `Đang gọi ${j.lastTool as string}` : 'Rảnh',
-        status: busy ? 'busy' : 'online',
-        icon: 'bolt',
-      },
+      cwd: j.cwd,
+      ...(workspace ? { workspace } : {}),
+      ...(busy ? { busyWith: j.lastTool as string } : {}),
     })
   }
-  return out.sort((a, b) => a.pid - b.pid).map((x) => x.item)
+  return out.sort((a, b) => a.pid - b.pid)
+}
+
+/** "Đang gọi <tool>" while a tool ran in the last 15 s, else "Rảnh". */
+export function sessionSubtitle(s: LiveSession): string {
+  return s.busyWith ? `Đang gọi ${s.busyWith}` : 'Rảnh'
+}
+
+async function sessions(dataDir: string, d: Deps): Promise<PresenceItem[]> {
+  return (await liveSessions(dataDir, d)).map((s) => ({
+    id: `claude-${s.pid}`,
+    title: `Phiên · ${s.workspace?.name ?? baseName(s.cwd)}`,
+    subtitle: sessionSubtitle(s),
+    status: s.busyWith ? 'busy' : 'online',
+    icon: 'bolt',
+  }))
 }
 
 /** Sum of today's (UTC) Cloudflare neurons from the last 2 MB of usage.jsonl. */

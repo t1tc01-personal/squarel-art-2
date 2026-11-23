@@ -223,6 +223,7 @@ Mỗi tiến trình MCP ghi `DATA_DIR/run/mcp-<pid>.json` để launcher biết 
 | `startedAt`, `updatedAt` | Thời điểm (ISO 8601) |
 | `lastTool`, `lastToolAt` | Tool vừa gọi gần nhất (có sau lần gọi đầu tiên) |
 | `bridge` | `own` (tiến trình này giữ bridge), `shared` (bridge của tiến trình khác), `none` (`SQUAREL_NO_BRIDGE=1`) |
+| `workspace` | `{ id, name }` của dự án mà phiên nhận ra từ thư mục (`.squarel/project.json`). Không có khi phiên không thuộc dự án nào. Launcher dùng `name` để hiện "Phiên · <tên dự án>" |
 
 - Ghi lại mỗi 10 giây và sau mỗi lần gọi tool. Xoá khi thoát.
 - Chỉ đọc file khớp `^mcp-\d+\.json$`. Ghi nguyên tử có thể để lại file `.tmp` sau khi tiến trình chết đột ngột.

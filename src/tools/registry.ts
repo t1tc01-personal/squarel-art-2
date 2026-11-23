@@ -8,9 +8,11 @@ import { editorTools, exportTools, historyTools, importTools } from './misc.ts'
 import { opsTools } from './ops.ts'
 import { projectTools } from './project.ts'
 import { type ToolContext, type ToolDef, ToolError, type ToolResult } from './types.ts'
+import { workspaceTools } from './workspace.ts'
 
 export const ALL_TOOLS: ToolDef<any>[] = [
   ...projectTools,
+  ...workspaceTools,
   ...drawTools,
   ...opsTools,
   ...importTools,

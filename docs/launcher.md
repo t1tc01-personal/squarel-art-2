@@ -48,6 +48,22 @@ Claude Code: nếu chưa có, launcher mở bộ cài chính thức trong cửa 
 
 **Khay hệ thống:** bấm trái mở launcher. Bấm phải có menu mở nhanh công cụ và **Thoát**. "Thoát" chỉ dừng bridge mà chính launcher đang giữ.
 
+## Dự án
+
+Dự án gom nhiều art cho cùng một mục đích (game, bộ sticker, bản in) và gắn với một thư mục. Mở Claude Code trong thư mục đó (hoặc thư mục con) thì Squarel tự nhận dự án: brief, mặc định cho art mới, danh sách art. Thiết kế đầy đủ: [`superpowers/specs/2026-11-24-workspaces-design.md`](superpowers/specs/2026-11-24-workspaces-design.md).
+
+| Việc | Launcher làm gì |
+|---|---|
+| Tạo dự án | Chọn thư mục bằng nút **Chọn…** (hoặc gõ tên thư mục mới ngay trong thư mục vừa chọn). Thư mục chưa có thì tạo. Ghi `.squarel/project.json`, thêm khối `<!-- squarel:begin -->` … `<!-- squarel:end -->` vào `AGENTS.md` và dòng `@AGENTS.md` vào `CLAUDE.md`. Nội dung có sẵn trong hai file này giữ nguyên |
+| Thư mục đã là dự án | Đã có `.squarel/project.json` thì launcher chỉ đăng ký lại dự án đó, không ghi gì vào thư mục |
+| Sửa brief, mặc định, repo | Ghi lại `project.json` (giữ các trường launcher không biết) và thay khối trong `AGENTS.md`. Sửa tay bên trong khối sẽ bị thay ở lần lưu sau |
+| Repo gắn kèm | Đường dẫn tương đối nằm trong thư mục dự án, hoặc thư mục có sẵn ở ngoài (chọn bằng hộp thoại). Tối đa 20 |
+| Thư mục nhận file xuất | Đường dẫn tương đối, phải nằm trong thư mục dự án. Squarel chép thêm file xuất vào đây |
+| **Mở Claude** | Mở cửa sổ lệnh nhìn thấy được, chạy `claude.exe` (tìm trên PATH) trong thư mục dự án, thêm `--add-dir` cho mỗi repo ở ngoài. Đường dẫn có chữ tiếng Việt được, có ký tự đặc biệt của cmd (`& \| < > ^ % ! " ' ( ) ;`) thì bị từ chối |
+| Gỡ khỏi launcher | Chỉ xoá `DATA_DIR\workspaces\<id>.json`. Thư mục, các file trong đó và art vẫn còn |
+
+Art không thuộc dự án nào nằm ở mục **Chưa phân loại**. Panel **Kết nối** ghi "Phiên · tên dự án" cho phiên Claude Code đang ở trong một dự án.
+
 ## Cài đặt
 
 | Mục | Ghi vào | Ghi chú |
@@ -72,6 +88,8 @@ Nút **Mở file .env** mở thư mục chứa `.env` để bạn sửa bằng t
 | `%LOCALAPPDATA%\SquarelArt\tools\<id>` | Source và bản build công cụ, ví dụ Aseprite |
 | `.env` trong thư mục Squarel | Cấu hình Squarel. Đây vẫn là nguồn sự thật duy nhất |
 | `DATA_DIR` | Project, version, log của Squarel |
+| `DATA_DIR\workspaces\` | Chỉ mục các dự án launcher biết (tên, thư mục) |
+| `<thư mục dự án>\.squarel\` | Cấu hình dự án (`project.json`) và danh mục art (`arts.md`, Squarel tự sinh) |
 
 Gỡ launcher (Settings → Apps) **không** xoá các thư mục trên. Muốn xoá sạch thì xoá tay.
 

@@ -178,10 +178,20 @@ const SAFE_ITEM = /^[A-Za-z0-9 _.:\\/+=-]+$/
  * The window stays until the user closes it, so they see every prompt and the result.
  */
 export function terminalArgv(d: Deps, inner: string[], allowPipe = false): string[] {
+  return terminalArgvWith(d, inner, (a) => SAFE_ITEM.test(a) || (allowPipe && a === CLAUDE_INSTALL_COMMAND))
+}
+
+/**
+ * Like SAFE_ITEM, but letters and digits of any script (a Vietnamese folder name): still none of
+ * cmd's special characters (`& | < > ^ % ! " ' ( ) ;` …), so the re-parse by cmd cannot split it.
+ */
+export const SAFE_PATH_ITEM = /^[\p{L}\p{M}\p{N} _.:\\/+=-]+$/u
+
+/** terminalArgv with the caller's rule for which inner items are safe. */
+export function terminalArgvWith(d: Deps, inner: string[], isSafe: (a: string) => boolean): string[] {
   if (inner.length === 0) throw new Error('Lệnh rỗng')
   for (const a of inner) {
-    const ok = SAFE_ITEM.test(a) || (allowPipe && a === CLAUDE_INSTALL_COMMAND)
-    if (!ok) throw new Error(`Tham số không an toàn cho cửa sổ lệnh: ${JSON.stringify(a)}`)
+    if (!isSafe(a)) throw new Error(`Tham số không an toàn cho cửa sổ lệnh: ${JSON.stringify(a)}`)
   }
   return [system32(d, 'cmd.exe'), '/d', '/c', 'start', TERMINAL_TITLE, ...inner]
 }
@@ -201,7 +211,8 @@ export function wingetTerminalArgv(d: Deps, spec: InstallSpec, wingetExe: string
     throw new Error('Đường dẫn winget không hợp lệ')
   const winget = [wingetExe, 'install', '--id', spec.winget, '-e']
   if (spec.override) winget.push('--override', spec.override)
-  return terminalArgv(d, [system32(d, 'cmd.exe'), '/d', '/k', ...winget])
+  // `call` keeps cmd from stripping the outer quotes when the exe path and --override both have spaces.
+  return terminalArgv(d, [system32(d, 'cmd.exe'), '/d', '/k', 'call', ...winget])
 }
 
 /** The official Claude Code installer in a PowerShell window that stays open. */

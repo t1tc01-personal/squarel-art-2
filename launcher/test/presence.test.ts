@@ -101,6 +101,16 @@ describe('connections presence', () => {
     ])
   })
 
+  it('names the session after its workspace when Squarel found one, else after the cwd folder', async () => {
+    const files = {
+      [`${DATA}/run/mcp-1.json`]: runFile(1, { workspace: { id: 'game-dungeon', name: 'Game dungeon' } }),
+      [`${DATA}/run/mcp-2.json`]: runFile(2, { workspace: { id: 'BAD ID', name: 'x' } }),
+      [`${DATA}/run/mcp-3.json`]: runFile(3, { workspace: { id: 'empty', name: '  ' } }),
+    }
+    const items = (await run(files, { alive: [1, 2, 3] }))[0]?.items ?? []
+    expect(items.map((i) => i.title)).toEqual(['Phiên · Game dungeon', 'Phiên · my-game', 'Phiên · my-game'])
+  })
+
   it('maps bridge clients to integrations by bridge.client; unknown clients are not shown', async () => {
     const clients = [
       { name: 'aseprite', slug: 'hero', app: '1.3.18', connectedAt: iso(9), lastSeen: iso(1) },

@@ -11,8 +11,12 @@ import {
 
 export type IntegrationTab = 'overview' | 'updates' | 'health' | 'settings'
 export type SystemTab = 'components' | 'health' | 'logs'
+export type ProjectTab = 'overview' | 'brief' | 'settings'
 export type Page =
   | 'home'
+  | 'projects'
+  | 'project-new'
+  | { project: string; tab: ProjectTab }
   | 'library'
   | { integration: string; tab: IntegrationTab }
   | { system: SystemTab }
@@ -38,9 +42,14 @@ export function useNav(): Nav {
   return nav
 }
 
-/** Which rail item a page belongs to: 'home' | 'library' | 'system' | 'settings' | `int:<id>`. */
+/**
+ * Which rail item a page belongs to: 'home' | 'projects' | 'library' | 'system' | 'settings' |
+ * `int:<id>`.
+ */
 export function railKey(p: Page): string {
+  if (p === 'project-new') return 'projects'
   if (typeof p === 'string') return p
+  if ('project' in p) return 'projects'
   if ('integration' in p) return `int:${p.integration}`
   return 'system'
 }

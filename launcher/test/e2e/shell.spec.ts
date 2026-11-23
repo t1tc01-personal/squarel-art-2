@@ -7,15 +7,16 @@ const FAKE = 'fixtures/basic'
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Điều hướng chính' })
 const panel = (page: Page) => page.getByRole('complementary', { name: 'Kết nối', exact: true })
 
-test('rail shows home, library, Aseprite (from manifest), add, system, settings', async () => {
+test('rail shows home, projects, library, Aseprite (from manifest), add, system, settings', async () => {
   const { app, close } = await launchIsolated({ fake: FAKE })
   try {
     const page = await app.firstWindow()
     const buttons = rail(page).getByRole('button')
-    await expect(buttons).toHaveCount(6)
+    await expect(buttons).toHaveCount(7)
     const labels = await buttons.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
     expect(labels).toEqual([
       'Trang chủ',
+      'Dự án',
       'Thư viện tích hợp',
       'Aseprite',
       'Thêm tích hợp',

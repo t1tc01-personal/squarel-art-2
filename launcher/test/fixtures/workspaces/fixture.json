@@ -1,0 +1,158 @@
+{
+  "now": "2026-01-01T12:00:00.000Z",
+  "state": {
+    "setupStep": "done",
+    "selected": [
+      "aseprite"
+    ],
+    "closeToTray": true
+  },
+  "env": {
+    "DATA_DIR": "{root}\\data",
+    "ASEPRITE_PATH": "{root}\\tools\\aseprite\\Aseprite.exe",
+    "BRIDGE_PORT": "4321"
+  },
+  "files": {
+    "{root}/squarel/package.json": {
+      "name": "squarel-art",
+      "version": "0.3.0"
+    },
+    "{root}/squarel/node_modules/.modules.yaml": "layoutVersion: 5",
+    "{root}/tools/aseprite/Aseprite.exe": "",
+    "{root}/bin/claude.exe": "",
+    "{root}/work/parent/readme.txt": "a folder the e2e create test picks",
+    "{root}/shared/assets/readme.txt": "a repo outside the workspace",
+    "{root}/data/workspaces/game-dungeon.json": {
+      "schema": 1,
+      "id": "game-dungeon",
+      "name": "Game dungeon",
+      "folder": "{root}\\work\\game-dungeon",
+      "createdAt": "2025-12-01T09:00:00.000Z"
+    },
+    "{root}/data/workspaces/old-stickers.json": {
+      "schema": 1,
+      "id": "old-stickers",
+      "name": "Sticker cũ",
+      "folder": "{root}\\work\\gone",
+      "createdAt": "2025-11-01T09:00:00.000Z"
+    },
+    "{root}/work/game-dungeon/.squarel/project.json": {
+      "schema": 1,
+      "id": "game-dungeon",
+      "name": "Game dungeon",
+      "description": "Game roguelike 2D, hầm ngục tối.",
+      "brief": "Sprite 32×32, viền đen 1px, palette pico8.",
+      "defaults": {
+        "purpose": "game",
+        "width": 32,
+        "height": 32,
+        "palette": "pico8"
+      },
+      "repos": [
+        "game-client",
+        "{root}\\shared\\assets"
+      ],
+      "exportDir": "game-client/assets/sprites"
+    },
+    "{root}/work/game-dungeon/AGENTS.md": "# Quy ước nhóm\n",
+    "{root}/work/game-dungeon/CLAUDE.md": "@AGENTS.md\n",
+    "{root}/data/projects/slime/project.json": {
+      "slug": "slime",
+      "name": "Slime xanh",
+      "purpose": "game",
+      "createdAt": "2025-12-02T09:00:00.000Z",
+      "updatedAt": "2025-12-20T09:00:00.000Z",
+      "head": "v000003",
+      "workspace": "game-dungeon"
+    },
+    "{root}/data/projects/kiem-sat/project.json": {
+      "slug": "kiem-sat",
+      "name": "Kiếm sắt",
+      "purpose": "game",
+      "createdAt": "2025-12-03T09:00:00.000Z",
+      "updatedAt": "2025-12-10T09:00:00.000Z",
+      "head": "v000001",
+      "workspace": "game-dungeon"
+    },
+    "{root}/data/projects/hiep-si/project.json": {
+      "slug": "hiep-si",
+      "name": "Hiệp sĩ dungeon",
+      "purpose": "game",
+      "updatedAt": "2025-12-31T10:00:00.000Z",
+      "head": "v000014"
+    },
+    "{root}/data/run/mcp-4101.json": {
+      "pid": 4101,
+      "cwd": "{root}\\work\\game-dungeon\\game-client",
+      "updatedAt": "2026-01-01T11:59:58.000Z",
+      "workspace": {
+        "id": "game-dungeon",
+        "name": "Game dungeon"
+      }
+    }
+  },
+  "copy": {
+    "{root}/squarel/integrations/aseprite/integration.json": "../../../../integrations/aseprite/integration.json",
+    "{root}/squarel/integrations/aseprite/icon.png": "../../../../integrations/aseprite/icon.png",
+    "{root}/squarel/integrations/aseprite/squarel/package.json": "../../../../integrations/aseprite/squarel/package.json",
+    "{root}/squarel/integrations/catalog.json": "../../../../integrations/catalog.json",
+    "{root}/data/projects/slime/thumb.png": "../demo-tool/icon.png"
+  },
+  "run": {
+    "{root}\\tools\\aseprite\\Aseprite.exe -b --version": {
+      "code": 0,
+      "lines": [
+        "Aseprite 1.3.18.6-x64"
+      ]
+    },
+    "node --version": {
+      "code": 0,
+      "lines": [
+        "v24.19.0"
+      ]
+    },
+    "git --version": {
+      "code": 0,
+      "lines": [
+        "git version 2.55.0.windows.1"
+      ]
+    },
+    "pnpm -v": {
+      "code": 0,
+      "lines": [
+        "10.20.0"
+      ]
+    },
+    "claude --version": {
+      "code": 0,
+      "lines": [
+        "2.1.330 (Claude Code)"
+      ]
+    },
+    "git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git": {
+      "code": 0,
+      "lines": [
+        "0000000000000000000000000000000000000000\trefs/tags/v0.3.0",
+        "1111111111111111111111111111111111111111\trefs/tags/v0.3.1"
+      ]
+    },
+    "git ls-remote --tags --refs https://github.com/aseprite/aseprite.git": {
+      "code": 0,
+      "lines": [
+        "2222222222222222222222222222222222222222\trefs/tags/v1.3.19"
+      ]
+    }
+  },
+  "which": {
+    "claude": "{root}\\bin\\claude.exe"
+  },
+  "alivePids": [
+    4101
+  ],
+  "bridge": {
+    "mode": "down",
+    "port": 4321,
+    "since": "2026-01-01T11:00:00.000Z",
+    "clients": []
+  }
+}

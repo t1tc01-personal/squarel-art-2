@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { encodePng } from '../core/png.ts'
 import { renderDoc } from '../core/preview.ts'
 import type { PixelDoc } from '../shared/types.ts'
+import { readWorkspace, type Workspace } from '../store/workspace.ts'
 import { type ToolContext, ToolError, type ToolImage, type ToolResult } from './types.ts'
 
 export const projectArg = z
@@ -35,6 +36,25 @@ export async function projectSlug(ctx: ToolContext, project?: string): Promise<s
   if (!(await ctx.store.hasProject(slug)))
     throw new ToolError('NOT_FOUND', `project "${slug}" not found (see project_list)`)
   return slug
+}
+
+/**
+ * The session's workspace, re-read from its `.squarel/project.json` so launcher edits apply without a
+ * restart. Falls back to the copy detected at startup when the file is momentarily unreadable.
+ */
+export async function currentWorkspace(ctx: ToolContext): Promise<Workspace | undefined> {
+  const ws = ctx.session.workspace
+  if (!ws) return undefined
+  try {
+    const fresh = await readWorkspace(ws.folder)
+    if (fresh.id === ws.id) {
+      ctx.session.workspace = fresh
+      return fresh
+    }
+  } catch (e) {
+    ctx.log.warn('workspace re-read failed; using the startup copy', { error: String(e) })
+  }
+  return ws
 }
 
 export function preview(

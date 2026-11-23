@@ -4,6 +4,7 @@ import type { Logger } from '../log.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import type { Source } from '../shared/types.ts'
 import type { Store } from '../store/store.ts'
+import type { Workspace } from '../store/workspace.ts'
 
 export type ErrorCode =
   | 'NOT_FOUND'
@@ -47,7 +48,11 @@ export interface ToolContext {
   router: ProviderRouter
   config: Config
   log: Logger
-  session: { activeProject?: string }
+  session: {
+    activeProject?: string
+    /** Workspace ("Dự án") detected at MCP startup; CLI and the standalone bridge have none. */
+    workspace?: Workspace
+  }
   /** Who is making changes: recorded on every version. */
   source: Source
   signal?: AbortSignal

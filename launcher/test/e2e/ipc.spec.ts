@@ -49,6 +49,15 @@ test('window.squarel exposes only the typed API and main validates calls', async
         'setEnv',
         'setState',
         'setupInfo',
+        'listWorkspaces',
+        'getWorkspace',
+        'inspectWorkspaceFolder',
+        'createWorkspace',
+        'updateWorkspace',
+        'removeWorkspace',
+        'openWorkspaceClaude',
+        'openWorkspaceFolder',
+        'unassignedArts',
       ].sort(),
     )
     expect(r.schema).toBe(1)

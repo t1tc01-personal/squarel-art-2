@@ -4,7 +4,17 @@ import { encodePng } from '../core/png.ts'
 import { paletteSwatches, renderDoc } from '../core/preview.ts'
 import { PALETTES } from '../shared/palettes.ts'
 import { MAX_SIDE, PURPOSES } from '../shared/types.ts'
-import { frameArg, layerArg, preview, previewArg, projectArg, projectSlug } from './common.ts'
+import type { ProjectInfo } from '../store/store.ts'
+import { describeDefaults } from '../store/workspace.ts'
+import {
+  currentWorkspace,
+  frameArg,
+  layerArg,
+  preview,
+  previewArg,
+  projectArg,
+  projectSlug,
+} from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const SIZE_HINT =
@@ -14,53 +24,98 @@ export const projectTools = [
   defineTool({
     name: 'project_list',
     title: 'List projects',
-    description: 'List pixel-art projects (most recently changed first).',
-    input: z.object({}),
+    description:
+      'List pixel-art projects (arts), most recently changed first. When a workspace is active, only its arts are listed unless all is true.',
+    input: z.object({
+      all: z
+        .boolean()
+        .optional()
+        .describe('List every art with the workspace it belongs to (default: only the active workspace)'),
+    }),
     annotations: { readOnly: true },
-    async handler(ctx) {
-      const list = await ctx.store.listProjects()
-      if (!list.length) return { text: 'No projects yet. Create one with project_create.', data: [] }
-      return {
-        text: list
-          .map(
-            (p) =>
-              `${p.slug === ctx.session.activeProject ? '* ' : '- '}${p.slug} — "${p.name}" (${p.purpose}, head ${p.head}, updated ${p.updatedAt})`,
-          )
-          .join('\n'),
-        data: list,
+    async handler(ctx, i) {
+      const ws = ctx.session.workspace
+      const every = await ctx.store.listProjects()
+      const list = ws && !i.all ? every.filter((p) => p.workspace === ws.id) : every
+      const line = (p: ProjectInfo) =>
+        `${p.slug === ctx.session.activeProject ? '* ' : '- '}${p.slug} — "${p.name}" (${p.purpose}, head ${p.head}, updated ${p.updatedAt})${i.all ? ` [${p.workspace ? `workspace ${p.workspace}` : 'unassigned'}]` : ''}`
+      if (ws && !i.all) {
+        const others = every.length - list.length
+        const more = others
+          ? `\n(${others} other art${others === 1 ? '' : 's'} outside this project: project_list with all: true)`
+          : ''
+        if (!list.length)
+          return {
+            text: `No art in project "${ws.name}" yet. Create one with project_create.${more}`,
+            data: [],
+          }
+        return { text: `Project "${ws.name}":\n${list.map(line).join('\n')}${more}`, data: list }
       }
+      if (!list.length) return { text: 'No projects yet. Create one with project_create.', data: [] }
+      return { text: list.map(line).join('\n'), data: list }
     },
   }),
   defineTool({
     name: 'project_create',
     title: 'Create project',
-    description: `Create a new pixel-art canvas and make it the active project. ${SIZE_HINT} Palette presets: ${Object.keys(PALETTES).join(', ')}.`,
+    description: `Create a new pixel-art canvas and make it the active project. Width, height, purpose and palette default to the active workspace's defaults, and the new art joins that workspace. ${SIZE_HINT} Palette presets: ${Object.keys(PALETTES).join(', ')}.`,
     input: z.object({
       name: z.string().min(1).max(80),
-      width: z.number().int().min(1).max(MAX_SIDE),
-      height: z.number().int().min(1).max(MAX_SIDE),
-      purpose: z.enum(PURPOSES as ['game', 'print', 'digital', 'craft']).default('game'),
+      width: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_SIDE)
+        .optional()
+        .describe('Required unless the workspace has a default'),
+      height: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_SIDE)
+        .optional()
+        .describe('Required unless the workspace has a default'),
+      purpose: z
+        .enum(PURPOSES as ['game', 'print', 'digital', 'craft'])
+        .optional()
+        .describe('Default: the workspace default, else game'),
       palette: z
         .union([z.string(), z.array(z.string())])
         .optional()
-        .describe('Preset name or list of "#rrggbb" colors (default pico8)'),
+        .describe('Preset name or list of "#rrggbb" colors (default: the workspace default, else pico8)'),
       max_colors: z.number().int().min(2).max(255).optional().describe('Keep the palette at most this big'),
       preview: previewArg,
     }),
     async handler(ctx, i) {
+      const ws = await currentWorkspace(ctx)
+      const d = ws?.config.defaults
+      const width = i.width ?? d?.width
+      const height = i.height ?? d?.height
+      if (!width || !height)
+        throw new ToolError(
+          'INVALID',
+          ws
+            ? `width and height are required: workspace "${ws.name}" has no default size (defaults: ${describeDefaults(d)})`
+            : 'width and height are required (no workspace with a default size is active)',
+        )
       const doc = createDoc({
-        width: i.width,
-        height: i.height,
-        purpose: i.purpose,
-        palette: i.palette,
+        width,
+        height,
+        purpose: i.purpose ?? d?.purpose ?? 'game',
+        palette: i.palette ?? d?.palette,
         title: i.name,
       })
       if (i.max_colors) doc.meta.maxColors = i.max_colors
-      const info = await ctx.store.createProject({ name: i.name, doc, source: ctx.source })
+      const info = await ctx.store.createProject({
+        name: i.name,
+        doc,
+        source: ctx.source,
+        workspace: ws?.id,
+      })
       ctx.session.activeProject = info.slug
       ctx.onCommit?.(info.slug, info.head)
       return {
-        text: `Created "${info.name}" as project "${info.slug}" (now active).\n${docSummary(doc)}`,
+        text: `Created "${info.name}" as project "${info.slug}" (now active${ws ? `, in workspace "${ws.name}"` : ''}).\n${docSummary(doc)}`,
         images: preview(ctx, doc, i.preview),
         data: info,
       }

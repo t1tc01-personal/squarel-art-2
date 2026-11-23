@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- **Dự án (workspaces):** a project groups many arts and is tied to a folder. Open Claude Code in that folder, or in any subfolder, and Squarel recognises the project on its own.
+  - The folder holds `AGENTS.md`, which carries the project's brief for every coding agent. It also holds `CLAUDE.md` with an `@AGENTS.md` import, `.squarel/project.json` (defaults, repos, export folder) and `.squarel/arts.md`, an art catalog Squarel keeps up to date.
+  - Squarel's MCP server describes the project in its instructions.
+  - `project_list` shows only the project's art; pass `all: true` to see everything.
+  - `project_create` fills in the project's purpose, size and palette.
+  - New tools `workspace_info` and `workspace_add_art`.
+  - `export` also copies files into the project's export folder.
+  - Each art gets a `thumb.png`.
+- Launcher:
+  - A new **Dự án** page with a project list and an Unassigned card (Chưa phân loại).
+  - A **Dự án mới** form: folder, description, brief for AI, defaults, attached repos, export folder, and a preview of the files to be written.
+  - A project page with Overview, Brief and Settings tabs (Tổng quan, Brief, Cài đặt).
+  - **Mở Claude** opens a terminal in the project folder and adds outside repos with `--add-dir`.
+  - Sessions in the connections panel show the project name.
+  - The launcher never overwrites the user's own text in `AGENTS.md` or `CLAUDE.md`. Removing a project from the launcher keeps its files and art.
+
 ### Fixed
 
 - Launcher: Health now checks that the `pixel-*` skills (`/pixel-new`, `/pixel-export`, …) are in `~/.claude/skills` and match the Squarel folder. When they are missing or outdated, a button copies them. Before, a setup that never reached step 4 left Claude Code without the skills, and no check reported it.

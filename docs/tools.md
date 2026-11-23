@@ -2,25 +2,29 @@
 
 > File này được sinh bởi `pnpm docs:tools` từ schema zod trong `src/tools`. Đừng sửa tay.
 
-Tổng cộng **41 tool**. Mọi tool đều nhận `project` (slug, mặc định là project đang mở) nếu có liên quan.
+Tổng cộng **43 tool**. Mọi tool đều nhận `project` (slug, mặc định là project đang mở) nếu có liên quan.
 
 ## `project_list` — List projects
 
-List pixel-art projects (most recently changed first).
+List pixel-art projects (arts), most recently changed first. When a workspace is active, only its arts are listed unless all is true.
+
+| Tham số | Kiểu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `all` | boolean |  | List every art with the workspace it belongs to (default: only the active workspace) |
 
 _chỉ đọc_
 
 ## `project_create` — Create project
 
-Create a new pixel-art canvas and make it the active project. Typical sizes: game sprites 16/32/64, print 64–128, avatars/emoji 32–128, bead patterns 29/58 (pegboard multiples). Palette presets: pico8, sweetie16, db16, gameboy, grayscale4, bw.
+Create a new pixel-art canvas and make it the active project. Width, height, purpose and palette default to the active workspace's defaults, and the new art joins that workspace. Typical sizes: game sprites 16/32/64, print 64–128, avatars/emoji 32–128, bead patterns 29/58 (pegboard multiples). Palette presets: pico8, sweetie16, db16, gameboy, grayscale4, bw.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
 | `name` | string | ✓ |  |
-| `width` | integer | ✓ |  |
-| `height` | integer | ✓ |  |
-| `purpose` | "game" \| "print" \| "digital" \| "craft" |  |  (mặc định `"game"`) |
-| `palette` | string \| string[] |  | Preset name or list of "#rrggbb" colors (default pico8) |
+| `width` | integer |  | Required unless the workspace has a default |
+| `height` | integer |  | Required unless the workspace has a default |
+| `purpose` | "game" \| "print" \| "digital" \| "craft" |  | Default: the workspace default, else game |
+| `palette` | string \| string[] |  | Preset name or list of "#rrggbb" colors (default: the workspace default, else pico8) |
 | `max_colors` | integer |  | Keep the palette at most this big |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -69,6 +73,20 @@ Show palette colors with their indices (index 0 is transparent and not shown).
 | `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
 
 _chỉ đọc_
+
+## `workspace_info` — Workspace info
+
+The active workspace ("Dự án": a folder grouping arts for one game, sticker set or print): name, folder, description, brief, defaults for new art, repos, export folder and its arts.
+
+_chỉ đọc_
+
+## `workspace_add_art` — Add art to workspace
+
+Move an art (project), including an unassigned one, into the active workspace. Its previous workspace loses it.
+
+| Tham số | Kiểu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
 
 ## `draw_pixels` — Draw pixels
 
@@ -318,7 +336,7 @@ Convert a local image (photo, drawing, screenshot) into pixel art without AI: re
 | `remove_background` | boolean |  |  (mặc định `false`) |
 | `as_new_project` | boolean |  |  (mặc định `true`) |
 | `name` | string |  |  |
-| `purpose` | "game" \| "print" \| "digital" \| "craft" |  |  (mặc định `"digital"`) |
+| `purpose` | "game" \| "print" \| "digital" \| "craft" |  | Purpose of a new project (default: the workspace default, else digital) |
 | `project` | string |  | Target project when as_new_project is false |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -451,7 +469,7 @@ _chỉ đọc_
 
 ## `export` — Export files
 
-Write production-ready files to the project exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. Returns absolute file paths.
+Write production-ready files to the project exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. When the art belongs to a workspace with an export folder, the files are also copied there. Returns absolute file paths.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|

@@ -109,6 +109,8 @@ interface TestSink {
   trayItems(): Promise<string[]>
   /** Clicks a tray entry on the next tick (so the call returns before e.g. Thoát ends the app). */
   trayClick(label: string): boolean
+  /** Fake mode: a file of the in-memory fs (what main wrote), null when it does not exist. */
+  readFile(path: string): Promise<string | null>
 }
 const testSink: TestSink | undefined = TEST_MODE
   ? {
@@ -122,6 +124,7 @@ const testSink: TestSink | undefined = TEST_MODE
       bridgeMode: () => 'down',
       trayItems: async () => [],
       trayClick: () => false,
+      readFile: async () => null,
     }
   : undefined
 if (testSink) (globalThis as { __squarelTest?: TestSink }).__squarelTest = testSink
@@ -286,11 +289,19 @@ async function startServices(): Promise<IpcHandlers> {
     console.warn(`[launcher] ${m}`)
     writeLog('warn', m)
   }
-  if (fake && testSink)
+  if (fake && testSink) {
     d.spawnDetached = async (spec) => {
       testSink.launched.push(spec)
       return { pid: 1 }
     }
+    testSink.readFile = async (p) => {
+      try {
+        return String(await d.fs.readFile(p, 'utf8'))
+      } catch {
+        return null
+      }
+    }
+  }
   writeLog(
     'info',
     `Squarel Art Launcher ${app.getVersion()} khởi động · Electron ${process.versions.electron}`,

@@ -302,6 +302,120 @@ export const setupInfoSchema = z.object({
 })
 export type SetupInfo = z.infer<typeof setupInfoSchema>
 
+// ---- Dự án (workspace, spec 2026-11-24 §3) ------------------------------------------------------
+
+export const WORKSPACE_PURPOSES = ['game', 'print', 'digital', 'craft'] as const
+/** Squarel palette presets a workspace may default to (no palette = free choice). */
+export const WORKSPACE_PALETTES = ['pico8', 'sweetie16', 'db16', 'gameboy', 'grayscale4', 'bw'] as const
+export const WORKSPACE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/
+const workspaceId = z.string().regex(WORKSPACE_ID)
+const noNul = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .refine((s) => !s.includes('\0'))
+const oneLine = (min: number, max: number) =>
+  z
+    .string()
+    .min(min)
+    .max(max)
+    .refine((s) => !CONTROL.test(s))
+const side = z.number().int().min(1).max(256)
+
+export const workspaceDefaultsSchema = z.strictObject({
+  purpose: z.enum(WORKSPACE_PURPOSES).optional(),
+  width: side.optional(),
+  height: side.optional(),
+  palette: z.enum(WORKSPACE_PALETTES).optional(),
+})
+export type WorkspaceDefaults = z.infer<typeof workspaceDefaultsSchema>
+
+/** What the "Dự án mới" form sends. Paths are checked again in main (absolute, no UNC, …). */
+export const workspaceCreateSchema = z.strictObject({
+  name: oneLine(1, 80).refine((s) => s.trim() !== ''),
+  folder: oneLine(1, 1000),
+  description: noNul(2000).optional(),
+  brief: noNul(8000).optional(),
+  defaults: workspaceDefaultsSchema.optional(),
+  repos: z.array(oneLine(1, 1000)).max(20).optional(),
+  exportDir: oneLine(1, 500).optional(),
+})
+export type WorkspaceCreate = z.infer<typeof workspaceCreateSchema>
+
+/** Fields Brief / Cài đặt may change; `exportDir: null` removes it. */
+export const workspacePatchSchema = z.strictObject({
+  name: oneLine(1, 80)
+    .refine((s) => s.trim() !== '')
+    .optional(),
+  description: noNul(2000).optional(),
+  brief: noNul(8000).optional(),
+  defaults: workspaceDefaultsSchema.optional(),
+  repos: z.array(oneLine(1, 1000)).max(20).optional(),
+  exportDir: oneLine(1, 500).nullable().optional(),
+})
+export type WorkspacePatch = z.infer<typeof workspacePatchSchema>
+
+/** One art (a Squarel "project"); `thumb` is a data:image/png URL of DATA_DIR/projects/<slug>/thumb.png. */
+export const artViewSchema = z.object({
+  slug: str(64),
+  name: str(300),
+  purpose: str(20).optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  frames: z.number().int().positive().optional(),
+  head: str(40),
+  updatedAt: str(40),
+  thumb: str(100_000).optional(),
+})
+export type ArtView = z.infer<typeof artViewSchema>
+
+/** `missing`: the folder (or its .squarel/project.json) is gone; `broken`: project.json is unreadable. */
+const workspaceStatus = z.enum(['ok', 'missing', 'broken'])
+
+export const workspaceSummarySchema = z.object({
+  id: str(64),
+  name: str(300),
+  folder: str(1000),
+  status: workspaceStatus,
+  purpose: z.enum(WORKSPACE_PURPOSES).optional(),
+  description: str(2000),
+  artCount: z.number().int().min(0),
+  /** Newest art updatedAt, else when the workspace was registered; null when unknown. */
+  updatedAt: str(40).nullable(),
+  /** Up to 3 newest arts (with thumbs) for the card. */
+  recent: z.array(artViewSchema).max(3),
+  /** Live Claude Code sessions whose Squarel found this workspace. */
+  sessions: z.number().int().min(0),
+})
+export type WorkspaceSummary = z.infer<typeof workspaceSummarySchema>
+
+export const workspaceDetailSchema = workspaceSummarySchema.omit({ recent: true }).extend({
+  brief: str(8000),
+  defaults: workspaceDefaultsSchema,
+  /** `outside`: not inside the workspace folder (opened with --add-dir); `exists` checked now. */
+  repos: z.array(z.object({ path: str(1000), outside: z.boolean(), exists: z.boolean() })).max(20),
+  exportDir: str(500).nullable(),
+  createdAt: str(40).nullable(),
+  /** Every art of the workspace, newest first. */
+  arts: z.array(artViewSchema).max(2000),
+  /** One row per live session (`sessions` is their count): where it runs and what it does now. */
+  sessionList: z.array(z.object({ title: str(300), busy: z.boolean(), subtitle: str(300) })).max(200),
+})
+export type WorkspaceDetail = z.infer<typeof workspaceDetailSchema>
+
+/** What creating a workspace in this folder would do (the form's "Launcher sẽ ghi" list). */
+export const workspaceFolderInfoSchema = z.object({
+  folderExists: z.boolean(),
+  /** The folder already holds a workspace: creating registers it as is (nothing is written). */
+  existing: z.object({ id: str(64), name: str(300) }).nullable(),
+  files: z.object({
+    project: z.enum(['create', 'keep']),
+    agents: z.enum(['create', 'update', 'keep']),
+    claude: z.enum(['create', 'update', 'keep']),
+  }),
+})
+export type WorkspaceFolderInfo = z.infer<typeof workspaceFolderInfoSchema>
+
 const none = z.undefined()
 const taskId = str(200)
 
@@ -336,6 +450,27 @@ export const CHANNELS = {
   /** `refresh` re-reads PATH first (after a tool was installed in another window). */
   'setup:info': { input: z.strictObject({ refresh: z.boolean() }), output: setupInfoSchema },
   'checks:runOne': { input: z.strictObject({ id: z.enum(SETUP_CHECKS) }), output: checkResultSchema },
+  /** Dự án (workspaces): the renderer refetches after create / update / remove (no push event). */
+  'workspaces:list': { input: none, output: z.array(workspaceSummarySchema).max(500) },
+  'workspaces:get': { input: z.strictObject({ id: workspaceId }), output: workspaceDetailSchema },
+  /** The folder must come from the pick dialog (or be a new folder right inside a picked one). */
+  'workspaces:inspectFolder': {
+    input: z.strictObject({ folder: oneLine(1, 1000) }),
+    output: workspaceFolderInfoSchema,
+  },
+  /** Returns the existing workspace unchanged when the folder already has .squarel/project.json. */
+  'workspaces:create': { input: workspaceCreateSchema, output: workspaceDetailSchema },
+  'workspaces:update': {
+    input: z.strictObject({ id: workspaceId, patch: workspacePatchSchema }),
+    output: workspaceDetailSchema,
+  },
+  /** Deletes only DATA_DIR/workspaces/<id>.json; the folder, its files and the arts stay. */
+  'workspaces:remove': { input: z.strictObject({ id: workspaceId }), output: none },
+  /** Visible terminal running claude.exe in the folder, --add-dir for each repo outside it. */
+  'workspaces:openClaude': { input: z.strictObject({ id: workspaceId }), output: none },
+  'workspaces:openFolder': { input: z.strictObject({ id: workspaceId }), output: none },
+  /** Arts without a workspace ("Chưa phân loại"), newest first. */
+  'workspaces:unassigned': { input: none, output: z.array(artViewSchema).max(2000) },
   'window:minimize': { input: none, output: none },
   /** Hides the window when state.closeToTray, otherwise quits the app. */
   'window:close': { input: none, output: none },
@@ -381,6 +516,15 @@ export interface SquarelApi {
   catalog(): Promise<CatalogEntryView[]>
   setupInfo(input: { refresh: boolean }): Promise<SetupInfo>
   runCheck(input: { id: SetupCheckId }): Promise<CheckResult>
+  listWorkspaces(): Promise<WorkspaceSummary[]>
+  getWorkspace(input: { id: string }): Promise<WorkspaceDetail>
+  inspectWorkspaceFolder(input: { folder: string }): Promise<WorkspaceFolderInfo>
+  createWorkspace(input: WorkspaceCreate): Promise<WorkspaceDetail>
+  updateWorkspace(input: { id: string; patch: WorkspacePatch }): Promise<WorkspaceDetail>
+  removeWorkspace(input: { id: string }): Promise<void>
+  openWorkspaceClaude(input: { id: string }): Promise<void>
+  openWorkspaceFolder(input: { id: string }): Promise<void>
+  unassignedArts(): Promise<ArtView[]>
   minimizeWindow(): Promise<void>
   closeWindow(): Promise<void>
   onPresenceChanged(cb: (groups: PresenceGroup[]) => void): Unsubscribe

@@ -2,9 +2,12 @@ import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promise
 import { basename, join, resolve, sep } from 'node:path'
 import { gunzipSync, gzipSync } from 'fflate'
 import { deserializeDoc, serializeDoc } from '../core/codec.ts'
-import { validateDoc } from '../core/doc.ts'
+import { composeFrame, validateDoc } from '../core/doc.ts'
+import { encodePng } from '../core/png.ts'
+import type { Logger } from '../log.ts'
 import type { PixelDoc, PixelDocJSON, Purpose, Source } from '../shared/types.ts'
 import { exists, readJson, withLock, writeAtomic } from './fsutil.ts'
+import { refreshCatalog } from './workspace.ts'
 
 export interface ProjectInfo {
   slug: string
@@ -13,6 +16,36 @@ export interface ProjectInfo {
   createdAt: string
   updatedAt: string
   head: string
+  /** Id of the workspace ("Dự án") this art belongs to; absent = unassigned. */
+  workspace?: string
+}
+
+/** Called after every commit (any Store method that appends a version), outside the project lock. */
+export type CommitListener = (e: { slug: string; versionId: string; doc: PixelDoc }) => unknown
+
+export const THUMB_MAX_SIDE = 128
+
+/** Frame 0 as an RGBA PNG whose longest side is at most 128 (nearest-neighbor, integer upscale when small). */
+export function renderThumb(doc: PixelDoc, maxSide = THUMB_MAX_SIDE): Uint8Array {
+  const src = composeFrame(doc, doc.frames[0].id)
+  const long = Math.max(doc.width, doc.height)
+  const k = long <= maxSide ? Math.floor(maxSide / long) : maxSide / long
+  const w = Math.max(1, Math.min(maxSide, Math.round(doc.width * k)))
+  const h = Math.max(1, Math.min(maxSide, Math.round(doc.height * k)))
+  const data = new Uint8ClampedArray(w * h * 4)
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(doc.height - 1, Math.floor((y * doc.height) / h))
+    for (let x = 0; x < w; x++) {
+      const sx = Math.min(doc.width - 1, Math.floor((x * doc.width) / w))
+      const si = (sy * doc.width + sx) * 4
+      const oi = (y * w + x) * 4
+      data[oi] = src[si]
+      data[oi + 1] = src[si + 1]
+      data[oi + 2] = src[si + 2]
+      data[oi + 3] = src[si + 3]
+    }
+  }
+  return encodePng({ data, width: w, height: h })
 }
 
 export interface VersionInfo {
@@ -50,8 +83,45 @@ export function slugify(name: string): string {
 
 export class Store {
   readonly dataDir: string
-  constructor(dataDir: string) {
+  /** Where thumb/catalog failures are reported (they never fail a commit). */
+  log?: Logger
+  private readonly commitListeners: CommitListener[] = []
+
+  /**
+   * `hooks: false` skips the built-in post-commit work (thumb.png and the workspace art catalog).
+   */
+  constructor(dataDir: string, o: { hooks?: boolean; log?: Logger } = {}) {
     this.dataDir = resolve(dataDir)
+    this.log = o.log
+    if (o.hooks !== false) {
+      this.onCommit(({ slug, doc }) => this.writeThumb(slug, doc))
+      this.onCommit(async ({ slug }) => refreshCatalog(this, (await this.info(slug)).workspace, this.log))
+    }
+  }
+
+  /** Register a post-commit listener; returns a function that removes it. */
+  onCommit(fn: CommitListener): () => void {
+    this.commitListeners.push(fn)
+    return () => {
+      const i = this.commitListeners.indexOf(fn)
+      if (i >= 0) this.commitListeners.splice(i, 1)
+    }
+  }
+
+  private async afterCommit(slug: string, versionId: string, doc: PixelDoc): Promise<void> {
+    for (const fn of [...this.commitListeners])
+      try {
+        await fn({ slug, versionId, doc })
+      } catch (e) {
+        this.log?.warn('post-commit hook failed', { slug, versionId, error: String(e) })
+      }
+  }
+
+  /** DATA_DIR/projects/<slug>/thumb.png (frame 0, longest side ≤ 128). */
+  async writeThumb(slug: string, doc: PixelDoc): Promise<string> {
+    const p = this.projectPath(slug, 'thumb.png')
+    await writeAtomic(p, renderThumb(doc))
+    return p
   }
 
   get projectsDir(): string {
@@ -108,6 +178,8 @@ export class Store {
     doc: PixelDoc
     source: Source
     slug?: string
+    /** Workspace id the new art belongs to. */
+    workspace?: string
   }): Promise<ProjectInfo> {
     await this.init()
     validateDoc(o.doc)
@@ -124,6 +196,7 @@ export class Store {
       createdAt: now,
       updatedAt: now,
       head: '',
+      ...(o.workspace ? { workspace: o.workspace } : {}),
     }
     await writeAtomic(join(dir, 'project.json'), JSON.stringify(info, null, 2))
     const head = await this.commit(slug, {
@@ -155,7 +228,26 @@ export class Store {
     c: { baseVersion: string; doc: PixelDoc; source: Source; label: string; contentOf?: string },
   ): Promise<string> {
     validateDoc(c.doc)
-    return withLock(this.projectPath(slug, '.lock'), () => this.commitLocked(slug, c))
+    const id = await withLock(this.projectPath(slug, '.lock'), () => this.commitLocked(slug, c))
+    await this.afterCommit(slug, id, c.doc)
+    return id
+  }
+
+  /**
+   * Move an art into a workspace (or out of any with null). Regenerates the catalogs of the
+   * old and new workspace. Returns the previous workspace id.
+   */
+  async setWorkspace(slug: string, id: string | null): Promise<string | undefined> {
+    const prev = await withLock(this.projectPath(slug, '.lock'), async () => {
+      const info = await this.info(slug)
+      const { workspace: old, ...rest } = info
+      const next: ProjectInfo = id ? { ...rest, workspace: id } : rest
+      await writeAtomic(this.projectPath(slug, 'project.json'), JSON.stringify(next, null, 2))
+      return old
+    })
+    if (prev && prev !== id) await refreshCatalog(this, prev, this.log)
+    if (id) await refreshCatalog(this, id, this.log)
+    return prev
   }
 
   /** Commit body; caller must hold the project lock. */
@@ -211,13 +303,15 @@ export class Store {
     label: string,
     fn: (doc: PixelDoc, versionId: string) => T | Promise<T>,
   ): Promise<{ versionId: string; doc: PixelDoc; result: T }> {
-    return withLock(this.projectPath(slug, '.lock'), async () => {
+    const r = await withLock(this.projectPath(slug, '.lock'), async () => {
       const { versionId, doc } = await this.readHead(slug)
       const result = await fn(doc, versionId)
       validateDoc(doc)
       const id = await this.commitLocked(slug, { baseVersion: versionId, doc, source, label })
       return { versionId: id, doc, result }
     })
+    await this.afterCommit(slug, r.versionId, r.doc)
+    return r
   }
 
   async readIndex(slug: string): Promise<VersionInfo[]> {
@@ -241,7 +335,7 @@ export class Store {
     label?: string,
   ): Promise<{ versionId: string; doc: PixelDoc }> {
     const doc = await this.readVersion(slug, id)
-    return withLock(this.projectPath(slug, '.lock'), async () => {
+    const r = await withLock(this.projectPath(slug, '.lock'), async () => {
       const info = await this.info(slug)
       const versionId = await this.commitLocked(slug, {
         baseVersion: info.head,
@@ -252,6 +346,8 @@ export class Store {
       })
       return { versionId, doc }
     })
+    await this.afterCommit(slug, r.versionId, r.doc)
+    return r
   }
 
   /** Step back one version from what is currently shown (repeated undo keeps walking back). */
