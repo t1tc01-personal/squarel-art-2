@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-24
+
 ### Added
 
 - Project README in English, Vietnamese, Japanese, Simplified Chinese and Korean.
@@ -53,6 +55,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/t1tc01-personal/squarel-art-2/releases/tag/v0.2.0
 [0.1.0]: https://github.com/t1tc01-personal/squarel-art-2/commits/main

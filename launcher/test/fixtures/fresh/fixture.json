@@ -13,11 +13,11 @@
     "node --version": { "code": 0, "lines": ["v24.19.0"] },
     "pnpm -v": { "code": 0, "lines": ["10.20.0"] },
     "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
-    "git clone --branch v0.2.0 --depth 1 -- https://github.com/t1tc01-personal/squarel-art-2.git {install}": {
+    "git clone --branch v0.3.0 --depth 1 -- https://github.com/t1tc01-personal/squarel-art-2.git {install}": {
       "code": 0,
-      "lines": ["Cloning into 'app'...", "Note: switching to 'v0.2.0'."],
+      "lines": ["Cloning into 'app'...", "Note: switching to 'v0.3.0'."],
       "files": {
-        "{install}/package.json": { "name": "squarel-art", "version": "0.2.0" },
+        "{install}/package.json": { "name": "squarel-art", "version": "0.3.0" },
         "{install}/src/mcp/index.ts": "",
         "{install}/.claude/skills/pixel-new/SKILL.md": "# pixel-new",
         "{install}/.claude/skills/pixel-export/SKILL.md": "# pixel-export"

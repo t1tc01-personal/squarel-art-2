@@ -9,7 +9,7 @@
     "CLOUDFLARE_API_TOKEN": "fixture-placeholder-not-a-token"
   },
   "files": {
-    "{root}/squarel/package.json": { "name": "squarel-art", "version": "0.2.0" },
+    "{root}/squarel/package.json": { "name": "squarel-art", "version": "0.3.0" },
     "{root}/squarel/node_modules/.modules.yaml": "layoutVersion: 5",
     "{root}/tools/aseprite/Aseprite.exe": "",
     "{root}/tools/demo/DemoTool.exe": "",
@@ -58,7 +58,7 @@
     "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
     "git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git": {
       "code": 0,
-      "lines": ["0000000000000000000000000000000000000000\trefs/tags/v0.2.0", "1111111111111111111111111111111111111111\trefs/tags/v0.2.1"]
+      "lines": ["0000000000000000000000000000000000000000\trefs/tags/v0.3.0", "1111111111111111111111111111111111111111\trefs/tags/v0.3.1"]
     },
     "git ls-remote --tags --refs https://github.com/aseprite/aseprite.git": {
       "code": 0,
