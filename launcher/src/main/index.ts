@@ -10,6 +10,7 @@ import { createDeps, type Deps } from './deps'
 import { parseEnv, readVar } from './env-store'
 import { FAKE_FIXTURE, type FakeWorld, loadFakeWorld } from './fake-mode'
 import { createIpcHandlers, type IpcHandlers } from './ipc-handlers'
+import { pruneLauncherLogs } from './logs'
 import { appPaths } from './paths'
 import { createScheduler } from './scheduler'
 import { type LauncherState, loadState, saveState } from './state'
@@ -172,6 +173,7 @@ async function startServices(): Promise<IpcHandlers> {
     'info',
     `Squarel Art Launcher ${app.getVersion()} khởi động · Electron ${process.versions.electron}`,
   )
+  if (!fake) void pruneLauncherLogs(logsDir, d)
 
   let state: LauncherState = await loadState(paths.stateFile)
   if (fake) state = { ...state, ...fake.state }

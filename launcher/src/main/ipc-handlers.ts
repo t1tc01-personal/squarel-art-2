@@ -353,7 +353,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     const s = await getState()
     const env = await readEnv(s)
     const p = paths()
-    const recent = (await recentProjects())[0]?.slug
+    const recent = await newestProjectSlug(s, env)
     return {
       actx: {
         d,
@@ -413,6 +413,22 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   }
 
   // ---- projects:recent ----------------------------------------------------------------------
+  /** Slug of the most recently updated project: project.json `updatedAt` only, no version files. */
+  async function newestProjectSlug(s: LauncherState, env: EnvDoc): Promise<string | undefined> {
+    const projects = join(dataDir(s, env), 'projects')
+    let best: { slug: string; at: string } | undefined
+    for (const slug of await projectSlugs(s, env)) {
+      try {
+        const file = join(projects, slug, 'project.json')
+        if ((await d.fs.stat(file)).size > 64 * 1024) continue
+        const raw = JSON.parse(String(await d.fs.readFile(file, 'utf8')).replace(/^﻿/, ''))
+        if (typeof raw?.updatedAt !== 'string' || typeof raw?.head !== 'string') continue
+        if (!best || raw.updatedAt > best.at) best = { slug, at: raw.updatedAt }
+      } catch {}
+    }
+    return best?.slug
+  }
+
   /** Project folders of DATA_DIR that have a project.json. */
   async function projectSlugs(s: LauncherState, env: EnvDoc): Promise<string[]> {
     const projects = join(dataDir(s, env), 'projects')
@@ -492,7 +508,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'components:list': async () => {
       const s = await getState()
       const env = await readEnv(s)
-      const recent = (await recentProjects())[0]?.slug
+      const recent = await newestProjectSlug(s, env)
       return viewComponents(await registry(s), s, env, d, {
         launcherVersion: ctx.launcherVersion,
         isDev: ctx.isDev,
