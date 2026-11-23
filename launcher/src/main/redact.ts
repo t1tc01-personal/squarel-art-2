@@ -10,11 +10,12 @@ import { maskCredentials } from './updates/tools'
 export const SECRET_KEY = /token|key|secret|authorization|password/i
 
 const MASK = '••••'
+/** Everything after the separator (to end of line / closing quote) is the credential; a known scheme word is kept. */
 const AUTH_HEADER =
-  /\b(authorization)("?\s*[:=]\s*"?)(?:(Basic|Bearer|Digest|Token|Negotiate|NTLM|ApiKey)\s+)?([^\s"',;&]+)/gi
+  /\b(authorization)("?\s*[:=]\s*"?)(?:(Basic|Bearer|Digest|Token|Negotiate|NTLM|ApiKey)\s+)?([^"\r\n]+)/gi
 const BEARER = /\b(Bearer)\s+[A-Za-z0-9._~+/=-]+/gi
 /** `apiKey=x`, `token: x`, `"secret":"x"`, `?access_token=x` (authorization is handled above). */
-const KEY_VALUE = /\b([\w-]*(?:token|key|secret|password)[\w-]*)("?\s*[:=]\s*"?)([^\s"',;&]+)/gi
+const KEY_VALUE = /\b([\w-]*(?:token|key|secret|password)[\w-]*)("?\s*[:=]\s*"?)((?<=")[^"\r\n]*|[^\s"',;&]+)/gi
 
 export function redactText(text: string, secrets: readonly string[]): string {
   let out = maskCredentials(text)

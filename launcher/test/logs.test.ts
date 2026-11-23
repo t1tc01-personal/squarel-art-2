@@ -30,7 +30,11 @@ describe('log redaction', () => {
 
   it('masks Authorization headers and key: value / key=value text', () => {
     expect(red('Authorization: Basic dXNlcjpwYXNz')).toBe('Authorization: Basic ••••')
-    expect(red('authorization=rawvalue next')).toBe('authorization=•••• next')
+    expect(red('authorization=rawvalue next')).toBe('authorization=••••')
+    expect(red('Authorization: OAuth abc123secret')).toBe('Authorization: ••••')
+    expect(red('Authorization: AWS4-HMAC-SHA256 Credential=x, Signature=deadbeef')).not.toContain('deadbeef')
+    expect(red('{"Authorization":"Weird s3cr3t-value","x":1}')).toBe('{"Authorization":"••••","x":1}')
+    expect(red('password: "my long pass"')).toBe('password: "••••"')
     expect(red('api_key: abc123 and token=xyz&a=1')).toBe('api_key: •••• and token=••••&a=1')
     expect(red('{"clientSecret":"s3cr3t"}')).toBe('{"clientSecret":"••••"}')
     expect(red('2026-01-01T10:00:01Z editor hello')).toBe('2026-01-01T10:00:01Z editor hello')
