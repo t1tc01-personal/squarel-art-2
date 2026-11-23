@@ -71,6 +71,8 @@ export interface IpcContext {
   }
   /** shell.showItemInFolder; called only with a checked, real path. */
   showItemInFolder(path: string): void
+  /** The launcher window's title bar buttons. `close(true)` hides it (tray), `close(false)` quits. */
+  window: { minimize(): void; close(toTray: boolean): void }
   launcherUpdater: { check(): Promise<Latest> }
   emit<E extends EventName>(event: E, payload: EventPayload<E>): void
   /** Called after a successful env:set (e.g. BRIDGE_PORT → restart the supervisor). */
@@ -495,6 +497,14 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       return undefined
     },
     'projects:recent': () => recentProjects(),
+    'window:minimize': async () => {
+      ctx.window.minimize()
+      return undefined
+    },
+    'window:close': async () => {
+      ctx.window.close((await getState()).closeToTray)
+      return undefined
+    },
   }
 
   // ---- paths chosen by the user ----------------------------------------------------------------

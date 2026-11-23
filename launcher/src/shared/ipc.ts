@@ -211,6 +211,9 @@ export const CHANNELS = {
   },
   'shell:reveal': { input: z.strictObject({ path: z.string().min(1).max(32_767) }), output: none },
   'projects:recent': { input: none, output: z.array(recentProjectSchema).max(3) },
+  'window:minimize': { input: none, output: none },
+  /** Hides the window when state.closeToTray, otherwise quits the app. */
+  'window:close': { input: none, output: none },
 } as const
 export type Channel = keyof typeof CHANNELS
 export type ChannelInput<C extends Channel> = z.infer<(typeof CHANNELS)[C]['input']>
@@ -245,6 +248,8 @@ export interface SquarelApi {
   pickFile(input: { filters: FileFilter[] }): Promise<string | null>
   reveal(input: { path: string }): Promise<void>
   recentProjects(): Promise<RecentProject[]>
+  minimizeWindow(): Promise<void>
+  closeWindow(): Promise<void>
   onPresenceChanged(cb: (groups: PresenceGroup[]) => void): Unsubscribe
   onTaskEvent(cb: (e: TaskEvent) => void): Unsubscribe
   onComponentsChanged(cb: () => void): Unsubscribe

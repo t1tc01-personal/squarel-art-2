@@ -32,6 +32,8 @@ const api: SquarelApi = {
   pickFile: (input) => call('dialog:pickFile', input),
   reveal: (input) => call('shell:reveal', input),
   recentProjects: () => call('projects:recent'),
+  minimizeWindow: () => call('window:minimize'),
+  closeWindow: () => call('window:close'),
   onPresenceChanged: (cb) => subscribe('presence:changed', cb),
   onTaskEvent: (cb) => subscribe('task:event', cb),
   onComponentsChanged: (cb) => subscribe('components:changed', () => cb()),

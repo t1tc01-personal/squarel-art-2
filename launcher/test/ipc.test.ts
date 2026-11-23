@@ -51,6 +51,7 @@ function setup(fx: Fixtures = {}) {
   const picked: { folder: string | null; file: string | null } = { folder: null, file: null }
   const events: { event: string; payload: unknown }[] = []
   const logs: string[] = []
+  const windowCalls: string[] = []
   const ctx: IpcContext = {
     d,
     launcherVersion: '0.2.0',
@@ -67,11 +68,15 @@ function setup(fx: Fixtures = {}) {
     bridge: () => ({ mode: 'down', port: 4321, clients: [], since: '2026-01-01T00:00:00Z' }),
     dialogs: { pickFolder: async () => picked.folder, pickFile: async () => picked.file },
     showItemInFolder: (p) => void revealed.push(p),
+    window: {
+      minimize: () => void windowCalls.push('minimize'),
+      close: (toTray) => void windowCalls.push(toTray ? 'hide' : 'quit'),
+    },
     launcherUpdater: { check: async () => ({ ok: true, version: '0.2.0' }) },
     emit: (event, payload) => void events.push({ event, payload }),
     log: (m) => void logs.push(m),
   }
-  return { h: createIpcHandlers(ctx), d, revealed, events, logs, picked, getState: () => state }
+  return { h: createIpcHandlers(ctx), d, revealed, events, logs, picked, windowCalls, getState: () => state }
 }
 
 describe('ipc handlers', () => {
@@ -321,5 +326,17 @@ describe('ipc handlers', () => {
     const list = (await h.handle('projects:recent', APP, undefined)) as { slug: string; version: string }[]
     expect(list.map((p) => p.slug)).toEqual(['dog', 'cat'])
     expect(list[1]?.version).toBe('v000002')
+  })
+
+  it('window:close hides to the tray only when closeToTray is on', async () => {
+    const { h, windowCalls } = setup()
+    await h.handle('window:minimize', APP, undefined)
+    await h.handle('window:close', APP, undefined)
+    await h.handle('state:set', APP, { closeToTray: false })
+    await h.handle('window:close', APP, undefined)
+    expect(windowCalls).toEqual(['minimize', 'hide', 'quit'])
+    await expect(
+      h.handle('window:close', { url: APP_URL, fromAppWindow: false }, undefined),
+    ).rejects.toThrow()
   })
 })

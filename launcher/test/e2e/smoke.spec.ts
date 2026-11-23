@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { launchIsolated } from './launch'
 
-test('launches a frameless 1280x800 window showing the SQUAREL wordmark', async () => {
+test('launches a frameless 1280x800 window showing the shell', async () => {
   const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
-    await expect(page.getByText('SQUAREL', { exact: true })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
     const size = await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0]
       return { bounds: win.getContentBounds() }
@@ -27,7 +27,7 @@ test('blocks new windows and navigation away from the app page', async () => {
   const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
-    await expect(page.getByText('SQUAREL', { exact: true })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
     // Record shell.openExternal instead of opening a real browser.
     await app.evaluate(({ shell }) => {
       const opened: string[] = []
@@ -51,7 +51,7 @@ test('blocks new windows and navigation away from the app page', async () => {
     })
     await page.waitForTimeout(500)
     expect(page.url()).toBe(appUrl)
-    expect(await page.evaluate(() => document.body.innerText)).toContain('SQUAREL')
+    expect(await page.evaluate(() => document.body.textContent)).toContain('Squarel Art Launcher')
   } finally {
     await close()
   }

@@ -5,8 +5,9 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { EventName, EventPayload } from '../shared/ipc'
 import { type BridgeSupervisor, createBridgeSupervisor } from './bridge/supervisor'
 import type { BridgeState } from './bridge/types'
-import { createDeps } from './deps'
+import { createDeps, type Deps } from './deps'
 import { parseEnv, readVar } from './env-store'
+import { FAKE_FIXTURE, type FakeWorld, loadFakeWorld } from './fake-mode'
 import { createIpcHandlers, type IpcHandlers } from './ipc-handlers'
 import { appPaths } from './paths'
 import { createScheduler } from './scheduler'
@@ -34,6 +35,13 @@ function devRendererUrl(): string | undefined {
  */
 const TEST_MODE = !app.isPackaged && process.env.SQUAREL_LAUNCHER_TEST === '1'
 if (TEST_MODE && process.env.APPDATA) app.setPath('userData', join(process.env.APPDATA, 'electron-user-data'))
+
+/**
+ * Fake mode (e2e of the UI): main runs on createDeps('fake') from test/<fixture>. Honoured only in
+ * test mode (isolated profile, unpackaged build) and only for a `fixtures/<name>` value.
+ */
+const FAKE_NAME = process.env.SQUAREL_LAUNCHER_FAKE ?? ''
+const FAKE_MODE = TEST_MODE && FAKE_FIXTURE.test(FAKE_NAME)
 
 /** True only for the app's own page: the dev server URL or the packaged index.html. */
 export function isAppUrl(url: string): boolean {
@@ -104,12 +112,16 @@ export function stopBackgroundWork(): void {
 
 /** Services behind the IPC channels: state, bridge supervisor, scheduler, presence polling. */
 async function startServices(): Promise<IpcHandlers> {
-  const d = createDeps('real')
+  const fake: FakeWorld | undefined = FAKE_MODE
+    ? await loadFakeWorld(join(app.getAppPath(), 'test'), FAKE_NAME, process.env)
+    : undefined
+  const d: Deps = fake?.deps ?? createDeps('real')
   const paths = appPaths(d.env)
   const logsDir = join(dirname(paths.stateFile), 'logs')
   const log = (m: string) => console.warn(`[launcher] ${m}`)
 
   let state: LauncherState = await loadState(paths.stateFile)
+  if (fake) state = { ...state, ...fake.state }
   const readPort = async (): Promise<number> => {
     if (!state.squarelDir) return DEFAULT_BRIDGE_PORT
     try {
@@ -126,6 +138,7 @@ async function startServices(): Promise<IpcHandlers> {
   let supPort = DEFAULT_BRIDGE_PORT
   let unsubscribeBridge: (() => void) | undefined
   const bridge = (): BridgeState =>
+    fake?.bridge ??
     sup?.state() ?? { mode: 'down', port: supPort, clients: [], since: new Date(0).toISOString() }
 
   let lastPresence = ''
@@ -217,6 +230,11 @@ async function startServices(): Promise<IpcHandlers> {
       },
     },
     showItemInFolder: (p) => shell.showItemInFolder(p),
+    window: {
+      minimize: () => mainWindow?.minimize(),
+      // TODO(T15): the tray icon is how a hidden window comes back.
+      close: (toTray) => (toTray ? mainWindow?.hide() : app.quit()),
+    },
     launcherUpdater: updater,
     emit: send,
     onEnvChanged: (key) => {

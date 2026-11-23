@@ -36,6 +36,9 @@
   --font-ui: "Geist", system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --font-pixel: "Pixelify Sans", monospace;
+
+  --brand-launch-more: #3a3410;
+  --accent-aseprite: #ff77a8;
 }
 
 * {
@@ -55,41 +58,4 @@ body {
   font: 400 13px / 20px var(--font-ui);
   overflow: hidden;
   user-select: none;
-}
-
-.shell {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.titlebar {
-  -webkit-app-region: drag;
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  height: 36px;
-  padding: 0 var(--space-12);
-  background: var(--bg-sidebar);
-  border-bottom: 1px solid var(--border-default);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.titlebar-logo {
-  width: 16px;
-  height: 16px;
-  background: var(--accent-brand);
-  border-radius: 2px;
-}
-
-.content {
-  flex: 1;
-  padding: 20px var(--space-32);
-}
-
-.wordmark {
-  margin: 0;
-  font: 600 22px / 28px var(--font-pixel);
-  color: var(--accent-brand);
 }

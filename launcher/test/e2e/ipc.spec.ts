@@ -7,7 +7,7 @@ test('window.squarel exposes only the typed API and main validates calls', async
   const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
-    await expect(page.getByText('SQUAREL', { exact: true })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
     const r = await page.evaluate(async () => {
       const api = (window as any).squarel
       const keys = Object.keys(api).sort()
@@ -22,11 +22,13 @@ test('window.squarel exposes only the typed API and main validates calls', async
       [
         'applyUpdates',
         'checkUpdates',
+        'closeWindow',
         'getEnv',
         'getPresence',
         'getState',
         'lastChecks',
         'listComponents',
+        'minimizeWindow',
         'onChecksChanged',
         'onComponentsChanged',
         'onPresenceChanged',
