@@ -83,6 +83,7 @@ export const presenceGroupSchema = z.object({
       status: z.enum(['online', 'busy', 'away', 'offline']),
       icon: str(100_000),
       iconKind: z.enum(['name', 'data']).optional(),
+      componentId: str(64).optional(),
     }),
   ),
 })

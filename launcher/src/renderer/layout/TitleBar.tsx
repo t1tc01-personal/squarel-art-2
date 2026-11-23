@@ -5,7 +5,7 @@ import { Logo } from '../components/Icon'
 export function TitleBar() {
   return (
     <header className="titlebar">
-      <Logo cell={2} className="titlebar-logo" />
+      <Logo height={16} className="titlebar-logo" />
       <span className="titlebar-name">Squarel Art Launcher</span>
       <div className="titlebar-buttons">
         <button

@@ -7,7 +7,7 @@
  * fixture never names a real path on anyone's machine.
  */
 import { readFile } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { BridgeState } from './bridge/types'
 import { createDeps, type Deps, type Fixtures } from './deps'
 import type { LauncherState } from './state'
@@ -41,6 +41,17 @@ export interface FakeWorld {
   bridge: BridgeState
 }
 
+/** Copy sources may only come from the launcher's test fixtures or the repo's integrations folder. */
+const COPY_ROOTS = (testDir: string) => [
+  join(testDir, 'fixtures'),
+  resolve(testDir, '..', '..', 'integrations'),
+]
+
+function within(root: string, full: string): boolean {
+  const rel = relative(root, full)
+  return rel !== '' && !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`)
+}
+
 const sub = (s: string) => s.split('{root}').join(ROOT)
 
 /**
@@ -64,9 +75,8 @@ export async function loadFakeWorld(
       typeof v === 'string' ? sub(v) : JSON.stringify(v, (_k, x) => (typeof x === 'string' ? sub(x) : x))
   for (const [k, src] of Object.entries(fx.copy ?? {})) {
     const full = resolve(dir, src)
-    const repo = resolve(testDir, '..', '..')
-    const rel = relative(repo, full)
-    if (rel.startsWith(`..${sep}`) || rel === '..') throw new Error(`fixture copy outside the repo: ${src}`)
+    if (!COPY_ROOTS(testDir).some((root) => within(root, full)))
+      throw new Error(`fixture copy must come from launcher/test/fixtures or integrations/: ${src}`)
     files[sub(k)] = await readFile(full, /\.png$/i.test(full) ? 'latin1' : 'utf8')
   }
   if (fx.env)

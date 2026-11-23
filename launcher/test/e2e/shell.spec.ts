@@ -71,7 +71,7 @@ test('connections panel shows 2 Claude sessions, Aseprite, Bridge, Cloudflare, R
     await expect(rows.nth(1)).toContainText('Rảnh')
     await expect(rows.nth(2)).toContainText('thu-sync · 1.3.18.6')
     await expect(rows.nth(3)).toContainText('ws://127.0.0.1:4321')
-    await expect(rows.nth(4)).toContainText('Còn 9140 neuron hôm nay')
+    await expect(rows.nth(4)).toContainText('Còn 9.140 neuron hôm nay')
     await expect(rows.nth(5)).toContainText('Chưa có key · tuỳ chọn')
     await expect(p.getByRole('region', { name: 'Claude Code' })).toContainText('2')
     await expect(p).toContainText('Mọi thứ ổn · 5 kết nối')
@@ -125,13 +125,14 @@ test('custom title bar buttons minimize/close', async () => {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.restore())
     await expect.poll(async () => (await win())?.minimized).toBe(false)
 
-    // closeToTray (fixture: on) → the window hides, the app keeps running.
+    // closeToTray (fixture: on) → the app keeps running; until the tray exists (T15) the window
+    // minimizes instead of hiding, so it can always be brought back.
     await page.getByRole('button', { name: 'Đóng' }).click()
-    await expect.poll(async () => (await win())?.visible).toBe(false)
+    await expect.poll(async () => (await win())?.minimized).toBe(true)
     expect(app.windows()).toHaveLength(1)
 
     // closeToTray off → closing quits the app.
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.restore())
     await page.evaluate(() => (window as any).squarel.setState({ closeToTray: false }))
     const quit = app.waitForEvent('close')
     await page.getByRole('button', { name: 'Đóng' }).click()

@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { Icon, type IconName } from './Icon'
 
 export interface LaunchAction {
@@ -26,14 +33,24 @@ export function LaunchButton({
   const [open, setOpen] = useState(false)
   const menuId = useId()
   const wrap = useRef<HTMLDivElement>(null)
+  const toggle = useRef<HTMLButtonElement>(null)
+
+  /** Closes the menu; keyboard and item closes hand focus back to the ▾ toggle. */
+  const close = useCallback((refocus: boolean) => {
+    setOpen(false)
+    if (refocus) toggle.current?.focus()
+  }, [])
 
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false)
+      if (!wrap.current?.contains(e.target as Node)) close(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        close(true)
+      }
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
@@ -42,7 +59,26 @@ export function LaunchButton({
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, close])
+
+  /** Roving focus between enabled items: ArrowUp/ArrowDown wrap, Home/End jump; Tab closes. */
+  const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Tab') {
+      close(false)
+      return
+    }
+    const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('.launch-item:not(:disabled)')]
+    if (!items.length) return
+    const at = items.indexOf(document.activeElement as HTMLButtonElement)
+    let next: number | undefined
+    if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % items.length
+    else if (e.key === 'ArrowUp') next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = items.length - 1
+    if (next === undefined) return
+    e.preventDefault()
+    items[next]?.focus()
+  }
 
   return (
     <div className="launch" ref={wrap}>
@@ -52,6 +88,7 @@ export function LaunchButton({
       </button>
       {actions.length > 0 && (
         <button
+          ref={toggle}
           type="button"
           className="launch-more"
           aria-label="Cách mở khác"
@@ -64,16 +101,17 @@ export function LaunchButton({
         </button>
       )}
       {open && (
-        <div className="launch-menu" role="menu" id={menuId}>
+        <div className="launch-menu" role="menu" id={menuId} tabIndex={-1} onKeyDown={onMenuKey}>
           {actions.map((a) => (
             <button
               key={a.id}
               type="button"
               role="menuitem"
+              tabIndex={-1}
               className="launch-item"
               disabled={a.disabled}
               onClick={() => {
-                setOpen(false)
+                close(true)
                 a.onSelect()
               }}
             >

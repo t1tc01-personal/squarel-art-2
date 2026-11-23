@@ -71,7 +71,7 @@ export interface IpcContext {
   }
   /** shell.showItemInFolder; called only with a checked, real path. */
   showItemInFolder(path: string): void
-  /** The launcher window's title bar buttons. `close(true)` hides it (tray), `close(false)` quits. */
+  /** Title bar buttons. `close(true)` keeps the app running (tray; minimized until T15), `close(false)` quits. */
   window: { minimize(): void; close(toTray: boolean): void }
   launcherUpdater: { check(): Promise<Latest> }
   emit<E extends EventName>(event: E, payload: EventPayload<E>): void

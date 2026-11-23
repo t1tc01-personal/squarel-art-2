@@ -232,8 +232,8 @@ async function startServices(): Promise<IpcHandlers> {
     showItemInFolder: (p) => shell.showItemInFolder(p),
     window: {
       minimize: () => mainWindow?.minimize(),
-      // TODO(T15): the tray icon is how a hidden window comes back.
-      close: (toTray) => (toTray ? mainWindow?.hide() : app.quit()),
+      // TODO(T15): hide instead of minimize once the tray icon exists to bring the window back.
+      close: (toTray) => (toTray ? mainWindow?.minimize() : app.quit()),
     },
     launcherUpdater: updater,
     emit: send,

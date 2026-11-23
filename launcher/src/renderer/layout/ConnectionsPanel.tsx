@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ComponentView, PresenceGroup, PresenceItem } from '../../shared/model'
 import { Icon, type IconName, ModelIcon } from '../components/Icon'
 import { PresenceRow } from '../components/PresenceRow'
+import { componentIcon as toolIcon } from '../presence-icon'
 
 const STORAGE_KEY = 'squarel.connections.collapsed'
 
@@ -28,12 +29,6 @@ const FILTERS: { id: Filter; icon: IconName; label: string }[] = [
 ]
 
 const live = (i: PresenceItem) => i.status === 'online' || i.status === 'busy'
-
-/** The integration icon (from components:list) for a bridge tool row `tool-<id>-…`. */
-function toolIcon(item: PresenceItem, components: ComponentView[]) {
-  const c = components.find((x) => x.kind === 'integration' && item.id.startsWith(`tool-${x.id}-`))
-  return c ? { icon: c.icon, iconKind: c.iconKind } : undefined
-}
 
 function GroupIcon({ group, components }: { group: PresenceGroup; components: ComponentView[] }) {
   if (group.id === 'claude') return <Icon name="bolt" className="group-icon is-brand" />

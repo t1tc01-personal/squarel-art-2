@@ -110,6 +110,7 @@ describe('connections presence', () => {
     expect(g[1]?.items.map((i) => [i.title, i.subtitle, i.status])).toEqual([
       ['Aseprite', 'hero · 1.3.18', 'online'],
     ])
+    expect(g[1]?.items[0]?.componentId).toBe('aseprite')
   })
 
   it("neurons left sums today's cloudflare usage only", async () => {
@@ -123,7 +124,7 @@ describe('connections presence', () => {
     ].join('\n')
     const g = await run({ [`${DATA}/usage.jsonl`]: usage }, { env: 'CLOUDFLARE_API_TOKEN=cf-secret\n' })
     const cf = g[2]?.items.find((i) => i.id === 'svc-cloudflare')
-    expect(cf).toMatchObject({ status: 'online', subtitle: 'Còn 8500 neuron hôm nay' })
+    expect(cf).toMatchObject({ status: 'online', subtitle: 'Còn 8.500 neuron hôm nay' })
     expect(JSON.stringify(g)).not.toContain('cf-secret')
   })
 
@@ -171,6 +172,6 @@ describe('connections presence', () => {
       { [`${DATA}/usage.jsonl`]: `${old}\n${filler}${recent}\n` },
       { env: 'CLOUDFLARE_API_TOKEN=t\n' },
     )
-    expect(g[2]?.items.find((i) => i.id === 'svc-cloudflare')?.subtitle).toBe('Còn 9900 neuron hôm nay')
+    expect(g[2]?.items.find((i) => i.id === 'svc-cloudflare')?.subtitle).toBe('Còn 9.900 neuron hôm nay')
   })
 })

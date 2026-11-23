@@ -44,6 +44,8 @@ export interface PresenceItem {
   icon: string
   /** Defaults to 'name'. */
   iconKind?: 'name' | 'data'
+  /** The component (integration id) this row belongs to, e.g. a bridge tool's integration. */
+  componentId?: string
 }
 export interface PresenceGroup {
   id: 'claude' | 'tools' | 'services'

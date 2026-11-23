@@ -157,8 +157,20 @@ export function ModelIcon({
   return <Icon name={isIconName(icon) ? icon : 'box'} size={size} className={className} />
 }
 
-/** The yellow pixel "S" (6×7 grid). `cell` 2 → 12×14 in the title bar, 3 → 18×21 in the rail. */
+/**
+ * The yellow pixel "S" (6×7 grid). `cell` 3 → 18×21 in the rail; `height` 16 gives the 16px
+ * title-bar logo of design.md (cell 16/7 px, width kept in proportion).
+ */
 const LOGO = ['.####.', '#....#', '#.....', '.####.', '.....#', '#....#', '.####.'] as const
-export function Logo({ cell = 3, className }: { cell?: number; className?: string }) {
-  return <PixelGrid rows={LOGO} cell={cell} className={className ? `logo ${className}` : 'logo'} />
+export function Logo({
+  cell = 3,
+  height,
+  className,
+}: {
+  cell?: number
+  height?: number
+  className?: string
+}) {
+  const c = height ? height / LOGO.length : cell
+  return <PixelGrid rows={LOGO} cell={c} className={className ? `logo ${className}` : 'logo'} />
 }

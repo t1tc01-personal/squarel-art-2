@@ -12,6 +12,7 @@ const FUTURE_SKEW_MS = 5_000
 const MAX_USAGE_BYTES = 2 * 1024 * 1024
 const NEURON_BUDGET = 10_000
 const RUN_FILE = /^mcp-\d+\.json$/
+const VI_NUMBER = new Intl.NumberFormat('vi-VN')
 
 function baseName(p: string): string {
   const parts = p.split(/[\\/]+/).filter(Boolean)
@@ -137,6 +138,7 @@ export async function buildPresence(
         status: 'online',
         icon: 'box',
         iconKind: 'name',
+        componentId: i.manifest.id,
       })
     }
   }
@@ -147,7 +149,7 @@ export async function buildPresence(
     services.push({
       id: 'svc-cloudflare',
       title: 'Cloudflare AI',
-      subtitle: `Còn ${left} neuron hôm nay`,
+      subtitle: `Còn ${VI_NUMBER.format(left)} neuron hôm nay`,
       status: 'online',
       icon: 'cloud',
     })
