@@ -108,6 +108,13 @@ export async function runChecks(
       run: () => B.claudeSeesSquarel(d, ctx),
     },
     {
+      id: 'claude-skills',
+      group: 'claude',
+      label: 'Skill /pixel-new, /pixel-export… trong Claude Code',
+      description: 'Các skill pixel-* nằm trong ~/.claude/skills và khớp với thư mục Squarel.',
+      run: () => B.claudeSkills(d, ctx),
+    },
+    {
       id: 'mcp-starts',
       group: 'claude',
       label: 'MCP server khởi động',

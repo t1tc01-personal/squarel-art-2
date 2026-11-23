@@ -295,6 +295,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       env,
       bridge: ctx.bridge(),
       selected: s.selected,
+      homeDir: ctx.homeDir,
       ...(ctx.smoke ? { smoke: ctx.smoke } : {}),
       // N2: the MCP smoke test starts Squarel from its folder; not while an update/build changes it.
       ...(squarelBusy ? { squarelBusy: squarelBusyText || 'Đang có thao tác trên thư mục Squarel' } : {}),

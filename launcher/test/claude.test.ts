@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { copySkills, registerMcp } from '../src/main/claude'
+import { type CheckCtx, claudeSkills } from '../src/main/checks/builtin'
+import { copySkills, registerMcp, skillStatus } from '../src/main/claude'
 import { createDeps } from '../src/main/deps'
 
 describe('registerMcp', () => {
@@ -199,5 +200,45 @@ describe('copySkills', () => {
   it('returns [] when the source has no skills', async () => {
     root = await mkdtemp(join(tmpdir(), 'sq-skills-'))
     expect(await copySkills(join(root, 'none'), join(root, 'home'), createDeps('real'))).toEqual([])
+  })
+})
+
+describe('skill health check', () => {
+  let root = ''
+  afterEach(async () => {
+    if (root) await rm(root, { recursive: true, force: true })
+  })
+
+  it('claude-skills fails when skills are missing, warns when outdated, passes after copySkills', async () => {
+    root = await mkdtemp(join(tmpdir(), 'sq-skillcheck-'))
+    const sq = join(root, 'sq')
+    const home = join(root, 'home')
+    const src = join(sq, '.claude', 'skills')
+    await mkdir(join(src, 'pixel-new', 'ref'), { recursive: true })
+    await mkdir(join(src, 'pixel-art'), { recursive: true })
+    await writeFile(join(src, 'pixel-new', 'SKILL.md'), 'new v1')
+    await writeFile(join(src, 'pixel-new', 'ref', 'a.md'), 'ref v1')
+    await writeFile(join(src, 'pixel-art', 'SKILL.md'), 'art v1')
+    await mkdir(join(home, '.claude', 'skills', 'synced'), { recursive: true }) // someone else's skill
+    const d = createDeps('real')
+    const check = () => claudeSkills(d, { squarelDir: sq, homeDir: home } as CheckCtx)
+
+    const missing = await check()
+    expect(missing).toMatchObject({ result: 'fail', detail: 'thiếu /pixel-art, /pixel-new' })
+    expect(missing.fix).toMatchObject({ componentId: 'squarel', kind: 'fix', id: 'copy-skills' })
+
+    await copySkills(sq, home, d)
+    expect(await check()).toMatchObject({ result: 'pass', detail: '2 skill' })
+
+    // Squarel updated a reference file: the copy is outdated, the fix updates it.
+    await writeFile(join(src, 'pixel-new', 'ref', 'a.md'), 'ref v2')
+    expect(await check()).toMatchObject({ result: 'warn', detail: 'cũ hơn Squarel: /pixel-new' })
+    expect(await skillStatus(sq, home, d)).toEqual({
+      names: ['pixel-art', 'pixel-new'],
+      missing: [],
+      outdated: ['pixel-new'],
+    })
+
+    expect(await claudeSkills(d, { homeDir: home } as CheckCtx)).toMatchObject({ result: 'fail' })
   })
 })

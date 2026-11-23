@@ -4,6 +4,7 @@ import { join, win32 } from 'node:path'
 import { substitute } from '@squarel/integration-schema'
 import type { ActionRef, CheckResult } from '../../shared/model'
 import type { BridgeState } from '../bridge/types'
+import { skillStatus } from '../claude'
 import type { Deps } from '../deps'
 import { type EnvDoc, readVar } from '../env-store'
 import { isInsideDir, type LoadedIntegration } from '../registry/integrations'
@@ -17,6 +18,8 @@ export interface CheckCtx {
   bridge: BridgeState
   /** Ids of the integrations the user selected; only those get checks. */
   selected: string[]
+  /** The user's home folder: Claude Code reads skills from ~/.claude/skills. */
+  homeDir?: string
   /** Test seam: replaces the real MCP stdio smoke test. */
   smoke?: (squarelDir: string, d: Deps) => Promise<{ ok: boolean; tools: number; ms: number; error?: string }>
   /** Set while an update / build holds the Squarel folder: the MCP smoke test is skipped (N2). */
@@ -68,7 +71,9 @@ export async function claudeInstalled(d: Deps): Promise<Draft> {
 }
 
 export async function claudeSeesSquarel(d: Deps, ctx: CheckCtx): Promise<Draft> {
-  const r = await lines(d, ['claude', 'mcp', 'list'], ctx.squarelDir ?? tmpdir())
+  // A neutral folder: inside the Squarel checkout its own .mcp.json (project scope) would show up
+  // as "squarel" too, while Claude Code opened anywhere else needs the user-scope registration.
+  const r = await lines(d, ['claude', 'mcp', 'list'], tmpdir())
   if (r.code !== 0) return { result: 'fail', detail: r.error ?? `claude mcp list thoát với mã ${r.code}` }
   if (/^squarel:.*(✓|Connected)/m.test(r.out.join('\n'))) return { result: 'pass', detail: 'squarel ✓' }
   return {
@@ -76,6 +81,25 @@ export async function claudeSeesSquarel(d: Deps, ctx: CheckCtx): Promise<Draft> 
     detail: 'không thấy server squarel',
     fix: { componentId: 'squarel', kind: 'fix', id: 'register-mcp', label: 'Đăng ký lại' },
   }
+}
+
+const COPY_SKILLS: ActionRef = { componentId: 'squarel', kind: 'fix', id: 'copy-skills', label: 'Chép skill' }
+
+/** Squarel's pixel-* skills are in ~/.claude/skills and match the Squarel folder (/pixel-new …). */
+export async function claudeSkills(d: Deps, ctx: CheckCtx): Promise<Draft> {
+  if (!ctx.squarelDir) return { result: 'fail', detail: 'chưa chọn thư mục Squarel' }
+  if (!ctx.homeDir) return { result: 'warn', detail: 'không biết thư mục người dùng' }
+  const s = await skillStatus(ctx.squarelDir, ctx.homeDir, d)
+  if (s.names.length === 0) return { result: 'warn', detail: 'thư mục Squarel không có skill pixel-*' }
+  if (s.missing.length)
+    return { result: 'fail', detail: `thiếu ${s.missing.map((n) => `/${n}`).join(', ')}`, fix: COPY_SKILLS }
+  if (s.outdated.length)
+    return {
+      result: 'warn',
+      detail: `cũ hơn Squarel: ${s.outdated.map((n) => `/${n}`).join(', ')}`,
+      fix: { ...COPY_SKILLS, label: 'Cập nhật skill' },
+    }
+  return { result: 'pass', detail: `${s.names.length} skill` }
 }
 
 export async function mcpStarts(

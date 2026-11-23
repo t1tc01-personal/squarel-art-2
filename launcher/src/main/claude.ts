@@ -44,19 +44,63 @@ async function copyDir(src: string, dst: string, d: Deps): Promise<void> {
   }
 }
 
-export async function copySkills(squarelDir: string, homeDir: string, d: Deps): Promise<string[]> {
-  const srcRoot = join(squarelDir, '.claude', 'skills')
-  const dstRoot = join(homeDir, '.claude', 'skills')
+/** The pixel-* skill folders Squarel ships (`<squarel>/.claude/skills`), sorted. */
+export async function skillNames(squarelDir: string, d: Deps): Promise<string[]> {
   let entries: Dirent[]
   try {
-    entries = (await d.fs.readdir(srcRoot, { withFileTypes: true })) as Dirent[]
+    entries = (await d.fs.readdir(join(squarelDir, '.claude', 'skills'), { withFileTypes: true })) as Dirent[]
   } catch {
     return []
   }
-  const names = entries
+  return entries
     .filter((e) => e.isDirectory() && !e.isSymbolicLink() && e.name.startsWith('pixel-'))
     .map((e) => e.name)
     .sort()
+}
+
+/** Every file below `dir` as relative path → content (forward slashes). */
+async function readTree(dir: string, d: Deps, prefix = ''): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const entries = (await d.fs.readdir(dir, { withFileTypes: true })) as Dirent[]
+  for (const e of entries) {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name
+    if (e.isDirectory()) for (const [k, v] of await readTree(join(dir, e.name), d, rel)) out.set(k, v)
+    else if (e.isFile()) out.set(rel, String(await d.fs.readFile(join(dir, e.name), 'utf8')))
+  }
+  return out
+}
+
+/**
+ * Which of Squarel's skills Claude Code has in `~/.claude/skills`: missing (no folder) or
+ * outdated (a file differs or is missing; extra files in the copy are ignored).
+ */
+export async function skillStatus(
+  squarelDir: string,
+  homeDir: string,
+  d: Deps,
+): Promise<{ names: string[]; missing: string[]; outdated: string[] }> {
+  const names = await skillNames(squarelDir, d)
+  const missing: string[] = []
+  const outdated: string[] = []
+  for (const name of names) {
+    const src = await readTree(join(squarelDir, '.claude', 'skills', name), d)
+    let dst: Map<string, string>
+    try {
+      dst = await readTree(join(homeDir, '.claude', 'skills', name), d)
+    } catch {
+      missing.push(name)
+      continue
+    }
+    if (!dst.has('SKILL.md')) missing.push(name)
+    else if ([...src].some(([k, v]) => dst.get(k) !== v)) outdated.push(name)
+  }
+  return { names, missing, outdated }
+}
+
+export async function copySkills(squarelDir: string, homeDir: string, d: Deps): Promise<string[]> {
+  const srcRoot = join(squarelDir, '.claude', 'skills')
+  const dstRoot = join(homeDir, '.claude', 'skills')
+  const names = await skillNames(squarelDir, d)
   if (names.length === 0) return []
   await d.fs.mkdir(dstRoot, { recursive: true })
   for (const leftover of (await d.fs.readdir(dstRoot)) as string[]) {
