@@ -74,12 +74,22 @@ interface Def {
   run: () => Promise<B.Draft> | B.Draft
 }
 
-/** `only`: run just these check ids (the setup wizard verifies one thing at a time). */
+/**
+ * Checks that only run when the user asks (button, wizard), never on the schedule:
+ * `claude mcp list` starts every MCP server the user configured in Claude Code.
+ */
+export const ON_DEMAND_CHECKS: readonly string[] = ['claude-sees-squarel']
+
+/**
+ * `only`: run just these check ids (the setup wizard verifies one thing at a time).
+ * `skip`: never run these; a result for the same id in `previous` takes their place.
+ */
 export async function runChecks(
   reg: Registry,
   ctx: B.CheckCtx,
   d: Deps,
   only?: readonly string[],
+  opts: { skip?: readonly string[]; previous?: readonly CheckResult[] } = {},
 ): Promise<CheckResult[]> {
   const smoke = ctx.smoke ?? realSmoke
   const defs: Def[] = [
@@ -94,7 +104,7 @@ export async function runChecks(
       id: 'claude-sees-squarel',
       group: 'claude',
       label: 'Claude Code thấy server "squarel"',
-      description: 'claude mcp list báo Connected.',
+      description: 'claude mcp list báo Connected. Chỉ chạy khi bạn bấm kiểm tra, không chạy theo lịch.',
       run: () => B.claudeSeesSquarel(d, ctx),
     },
     {
@@ -158,10 +168,11 @@ export async function runChecks(
       run: () => B.diskSpace(d, ctx.dataDir),
     },
   )
-  return Promise.all(
+  const results = await Promise.all(
     defs
       .filter((x) => !only || only.includes(x.id))
-      .map(async ({ run, ...meta }): Promise<CheckResult> => {
+      .map(async ({ run, ...meta }): Promise<CheckResult | undefined> => {
+        if (opts.skip?.includes(meta.id)) return opts.previous?.find((r) => r.id === meta.id)
         try {
           const r = await run()
           return {
@@ -179,4 +190,5 @@ export async function runChecks(
         }
       }),
   )
+  return results.filter((r): r is CheckResult => r !== undefined)
 }

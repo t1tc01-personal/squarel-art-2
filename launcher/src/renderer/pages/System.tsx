@@ -20,7 +20,7 @@ const TABS = [
 
 function Components() {
   const { components } = useData()
-  const { run, notify } = useTasks()
+  const { run, track, notify } = useTasks()
   const [checking, setChecking] = useState(false)
   const [info, setInfo] = useState<UpdatesInfo | null>(null)
   const core = components.filter((c) => c.kind === 'core')
@@ -38,6 +38,12 @@ function Components() {
   const plan = info?.squarel
   const finishing = plan?.kind === 'tag' && plan.from === plan.to
   const applyAll = () => {
+    // A Squarel tag plan (also "finishing" a half-done update, from === to) goes through
+    // updates:apply, which installs a downloaded launcher update first and then moves Squarel.
+    if (plan?.kind === 'tag') {
+      void track(finishing ? 'Hoàn tất cập nhật' : 'Cập nhật', () => api.applyUpdates())
+      return
+    }
     const first = updatable.flatMap((c) => c.actions.filter((a) => a.kind === 'update'))[0]
     if (first) void run(first)
   }

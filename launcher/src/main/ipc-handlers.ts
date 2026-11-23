@@ -30,7 +30,7 @@ import {
 import type { ActionRef, CheckResult, PresenceGroup, TaskEvent } from '../shared/model'
 import { type ActionCtx, type Resolved, resolveAction, squarelUpdate } from './actions'
 import type { BridgeState } from './bridge/types'
-import { type CheckCtx, runChecks } from './checks/runner'
+import { type CheckCtx, ON_DEMAND_CHECKS, runChecks } from './checks/runner'
 import type { Deps } from './deps'
 import { type EnvDoc, maskSecret, parseEnv, readVar, serializeEnv, setVar } from './env-store'
 import { readLogs } from './logs'
@@ -118,8 +118,11 @@ export interface IpcContext {
 export interface IpcHandlers {
   readonly channels: readonly Channel[]
   handle(channel: string, sender: SenderInfo, payload: unknown): Promise<unknown>
-  /** Shared with the scheduler: one run at a time, result also pushed as `checks:changed`. */
-  runChecks(): Promise<CheckResult[]>
+  /**
+   * Shared with the scheduler: one run at a time, result also pushed as `checks:changed`.
+   * `scheduled` skips ON_DEMAND_CHECKS and keeps their last result.
+   */
+  runChecks(opts?: { scheduled?: boolean }): Promise<CheckResult[]>
   checkUpdates(): Promise<UpdatesInfo>
   presence(): Promise<PresenceGroup[]>
   /** Resolves once no task started by action:run / updates:apply is running. */
@@ -388,13 +391,19 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
 
   let lastChecks: ChecksSnapshot | null = null
   let checksInFlight: Promise<CheckResult[]> | undefined
-  function runChecksOnce(): Promise<CheckResult[]> {
+  function runChecksOnce(opts: { scheduled?: boolean } = {}): Promise<CheckResult[]> {
     checksInFlight ??= (async () => {
       try {
         const s = await getState()
         const env = await readEnv(s)
         const reg = await registry(s)
-        const results = await runChecks(reg, await checkCtx(s, env), d)
+        const results = await runChecks(
+          reg,
+          await checkCtx(s, env),
+          d,
+          undefined,
+          opts.scheduled ? { skip: ON_DEMAND_CHECKS, previous: lastChecks?.results ?? [] } : {},
+        )
         lastChecks = { at: d.now().toISOString(), results }
         push('checks:changed', lastChecks)
         return results

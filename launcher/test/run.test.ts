@@ -11,6 +11,7 @@ import {
   resolveExecutable,
   runCommand,
 } from '../src/main/run'
+import { system32, systemRoot } from '../src/main/system-root'
 
 const dirs: string[] = []
 const tmp = async (name: string) => {
@@ -70,6 +71,14 @@ describe('runCommand', () => {
     const cwd = await tmp('run-cmd')
     const shim = await makeEchoShim(cwd)
     const r = await collect([shim, VI_ARG], cwd)
+    expect(r).toEqual({ code: 0, out: [JSON.stringify([VI_ARG])], err: [] })
+  })
+
+  it('a .cmd shim always runs through System32 cmd.exe, never the ComSpec of the env', async () => {
+    const cwd = await tmp('run-cmd-comspec')
+    const shim = await makeEchoShim(cwd)
+    // node.exe as "ComSpec" would treat /d as a script path and fail.
+    const r = await collect([shim, VI_ARG], cwd, undefined, { ComSpec: process.execPath })
     expect(r).toEqual({ code: 0, out: [JSON.stringify([VI_ARG])], err: [] })
   })
 
@@ -345,5 +354,26 @@ describe('isProcessRunning', () => {
     for (const bad of ['node', 'a b.exe', 'x.exe" & calc', '*.exe', '../x.exe']) {
       await expect(isProcessRunning(bad)).rejects.toThrow()
     }
+  })
+})
+
+describe('systemRoot', () => {
+  it('uses a plain drive path from SystemRoot (any key case)', () => {
+    expect(systemRoot({ SYSTEMROOT: 'D:\\Win' })).toBe('D:\\Win')
+    expect(system32({ SystemRoot: 'D:\\Win' }, 'cmd.exe')).toBe('D:\\Win\\System32\\cmd.exe')
+  })
+
+  it('falls back to C:\\Windows for a missing, relative, quoted or %-expanding SystemRoot', () => {
+    for (const bad of [
+      undefined,
+      '',
+      'Windows',
+      '\\\\host\\share',
+      'C:\\x" & calc',
+      'C:\\%TEMP%',
+      'C:/Windows',
+    ])
+      expect(systemRoot(bad === undefined ? {} : { SystemRoot: bad })).toBe('C:\\Windows')
+    expect(system32({ SystemRoot: 'C:\\x"y' }, 'cmd.exe')).toBe('C:\\Windows\\System32\\cmd.exe')
   })
 })

@@ -41,6 +41,8 @@
         "@@progress {\"step\":6,\"total\":6,\"label\":\"Install\",\"percent\":100}"
       ]
     },
+    "claude mcp remove squarel-launcher-check --scope user": { "code": 1, "lines": ["No MCP server named squarel-launcher-check"] },
+    "claude mcp add squarel-launcher-check --scope user -- node {install}\\src\\mcp\\index.ts": { "code": 0 },
     "claude mcp remove squarel --scope user": { "code": 1, "lines": ["No MCP server named squarel"] },
     "claude mcp add squarel --scope user -- node {install}\\src\\mcp\\index.ts": {
       "code": 0,

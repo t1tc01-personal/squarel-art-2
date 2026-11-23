@@ -127,12 +127,20 @@ export async function buildPresence(
   const claude = await sessions(dataDir, d)
 
   const tools: PresenceItem[] = []
+  const used = new Set<string>()
+  /** Two editor windows may show the same project: later ids get a `~2`, `~3`… suffix. */
+  const unique = (base: string) => {
+    let id = base
+    for (let n = 2; used.has(id); n++) id = `${base}~${n}`
+    used.add(id)
+    return id
+  }
   for (const i of reg.integrations) {
     const want = i.manifest.bridge?.client
     if (!want) continue
     for (const c of bridge.clients.filter((x) => x.name === want)) {
       tools.push({
-        id: `tool-${i.manifest.id}-${c.slug ?? c.name}`,
+        id: unique(`tool-${i.manifest.id}-${c.slug ?? c.name}`),
         title: i.manifest.name,
         subtitle: [c.slug, c.app].filter(Boolean).join(' · ') || 'Đã kết nối',
         status: 'online',

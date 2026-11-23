@@ -49,6 +49,13 @@ export interface BridgeSupervisor {
 
 const PROBE_MS = 1500
 const TOOL_MS = 5000
+/** Tools that may start a program first (open_in_editor launches Aseprite) get longer. */
+const SLOW_TOOL_MS = new Map<string, number>([['open_in_editor', 60_000]])
+
+/** Per-call reply timeout of a bridge tool. */
+export function toolTimeoutMs(name: string): number {
+  return SLOW_TOOL_MS.get(name) ?? TOOL_MS
+}
 const OWN_CONNECT_RETRY_MS = 250
 /** Own child alive but unreachable: fast retries this long, then retry every pollMs with a message… */
 const OWN_GRACE_MS = 3000
@@ -337,7 +344,7 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
 
     sendTool(name, input) {
       if (!conn) return Promise.reject(new Error('Bridge chưa kết nối'))
-      return conn.tool(name, input, TOOL_MS)
+      return conn.tool(name, input, toolTimeoutMs(name))
     },
   }
 }

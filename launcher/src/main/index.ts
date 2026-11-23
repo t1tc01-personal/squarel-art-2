@@ -448,7 +448,7 @@ async function startServices(): Promise<IpcHandlers> {
   handlers = createIpcHandlers({
     d,
     launcherVersion: app.getVersion(),
-    isDev: !app.isPackaged,
+    isDev: fake?.isDev ?? !app.isPackaged,
     homeDir: fake?.homeDir ?? homedir(),
     logsDir,
     isAppUrl,
@@ -580,7 +580,7 @@ async function startServices(): Promise<IpcHandlers> {
   const scheduler = createScheduler(
     { checksMs: CHECKS_MS, updatesMs: UPDATES_MS },
     {
-      checks: () => (handlers as IpcHandlers).runChecks(),
+      checks: () => (handlers as IpcHandlers).runChecks({ scheduled: true }),
       updates: () => (handlers as IpcHandlers).checkUpdates(),
     },
     { setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (h) => clearTimeout(h as NodeJS.Timeout) },

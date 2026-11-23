@@ -61,7 +61,7 @@ Làm theo thứ tự:
    pnpm --dir launcher build; pnpm --dir launcher e2e
    ```
 
-3. Commit, đẩy nhánh lên `main`.
+3. Commit và merge vào `main`. Chỉ gắn tag cho commit **đã nằm trên `main`**.
 4. Tạo và đẩy tag. **Chỉ làm khi chủ dự án đồng ý**, vì Release là công khai:
 
    ```powershell
@@ -77,17 +77,18 @@ Làm theo thứ tự:
    | Job | Quyền | Việc |
    |---|---|---|
    | `check` | `contents: read` | `pnpm install` → `pnpm check`; `pnpm --dir launcher install` → `pnpm --dir launcher check` |
-   | `release` | `contents: write` | So tag với hai `package.json`, build launcher, `electron-builder --publish always` bằng `GITHUB_TOKEN` |
+   | `release` | `contents: write` | So tag với hai `package.json`, build launcher, `electron-builder --publish always` bằng `GITHUB_TOKEN` → tải lên một Release **nháp** (`releaseType: draft`) |
 
-6. Mở trang Release của tag, kiểm tra có đủ:
+6. Mở trang Releases, mở bản **nháp** của tag, kiểm tra có đủ:
    - `Squarel-Art-Launcher-Setup-X.Y.Z.exe`;
    - `Squarel-Art-Launcher-Setup-X.Y.Z.exe.blockmap`;
    - `latest.yml`.
 7. Thêm ghi chú phát hành và dòng SmartScreen ở trên.
+8. Bấm **Publish release**. Chỉ khi đó Release mới công khai và launcher đã cài mới thấy bản cập nhật (bản nháp không có trong feed của `electron-updater`).
 
-Workflow chỉ chạy khi đẩy tag `v*`, không dùng secret nào ngoài `GITHUB_TOKEN`. Các action được ghim theo SHA commit đầy đủ; muốn nâng phiên bản action thì đổi cả SHA lẫn chú thích phiên bản.
+Workflow chạy khi đẩy tag `v*`, không dùng secret nào ngoài `GITHUB_TOKEN`. Lần chạy đầu tiên trên một tag thật mới là bài thử thật của workflow. Trước đó có thể chạy thử bằng tay: tab **Actions → release → Run workflow** (`workflow_dispatch`) chạy job `check` và job `dry-run` (build launcher, `electron-builder --publish never`), chỉ với quyền `contents: read`, không tạo Release và không tải lên gì. Trong workflow, giá trị như tên tag được truyền qua `env` (`$env:TAG`), không viết `${{ }}` thẳng trong script. Các action được ghim theo SHA commit đầy đủ; muốn nâng phiên bản action thì đổi cả SHA lẫn chú thích phiên bản.
 
-`publish` trong `electron-builder.yml` phải trùng với feed trong `launcher/src/main/updates/electron-updater.ts` (`github`, `t1tc01-personal`, `squarel-art-2`). Đổi một chỗ thì đổi cả hai.
+`publish` trong `electron-builder.yml` phải trùng với feed trong `launcher/src/main/updates/updater-config.ts` (`github`, `t1tc01-personal`, `squarel-art-2`). Đổi một chỗ thì đổi cả hai.
 
 ## Thử trên máy sạch: Windows Sandbox
 
@@ -126,5 +127,7 @@ Windows Sandbox có sẵn trên Windows 11 Pro (bật trong *Turn Windows featur
 - [ ] `winget` là App Execution Alias trong `%LOCALAPPDATA%\Microsoft\WindowsApps`: launcher chạy được.
 - [ ] Khay: biểu tượng hiện, bấm trái mở cửa sổ, menu bấm phải đủ mục, "Thoát" tắt hẳn và dừng bridge của launcher.
 - [ ] Bật "Khởi động cùng Windows": có mục khởi động (Task Manager → Startup apps), đăng nhập lại thì launcher mở ẩn dưới khay.
-- [ ] Cập nhật launcher: cài bản cũ, phát hành bản mới, launcher tải nền rồi `quitAndInstall` khởi động lại đúng bản mới.
+- [ ] Cập nhật launcher: cài bản cũ, phát hành bản mới, launcher tải nền rồi chỉ cài khi bấm "Khởi động lại để cập nhật" (`quitAndInstall`), khởi động lại đúng bản mới. Thoát launcher bình thường thì **không** tự cài.
+- [ ] Cập nhật Squarel (chỉ làm được sau khi tag `v0.2.0` đã có trên GitHub): repo Squarel ở tag cũ hơn, bấm Cập nhật → `git fetch --tags --force`, `git checkout v0.2.0`, `pnpm install`, rồi cài lại extension. Thử hai lần: lần đầu để Aseprite **đang mở** (extension bị bỏ qua, có dòng nhắc đóng Aseprite, nút đổi thành "Hoàn tất cập nhật"); lần sau đóng Aseprite rồi bấm **"Hoàn tất cập nhật"** → extension được cài, nút biến mất.
+- [ ] "Cài mới" trong wizard (chỉ sau khi phát hành): clone đúng tag `v0.2.0` vào `%LOCALAPPDATA%\SquarelArt\app` rồi `pnpm install`.
 - [ ] Windows Sandbox: cài exe, wizard hiện nhánh "không có winget".

@@ -16,6 +16,7 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { lstatSync, statSync } from 'node:fs'
 import { extname, isAbsolute, join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
+import { system32, systemRoot } from './system-root'
 
 export interface RunSpec {
   argv: string[]
@@ -170,8 +171,7 @@ function mergeEnv(overrides: Record<string, string> | undefined): NodeJS.Process
 }
 
 function systemExe(name: string): string {
-  const root = envGet(process.env, 'SystemRoot') ?? 'C:\\Windows'
-  return join(root, 'System32', name)
+  return system32(process.env, name)
 }
 
 /** Kills the child and, on Windows, its whole process tree. */
@@ -236,8 +236,8 @@ export async function runCommand(spec: RunSpec): Promise<{ code: number }> {
   let fileArgs: string[]
   let verbatim = false
   if (resolved.kind === 'cmd') {
-    file = envGet(env, 'ComSpec') ?? systemExe('cmd.exe')
-    if (!isAbsolute(file)) file = systemExe('cmd.exe')
+    // Always System32 cmd.exe: ComSpec from the (merged) env is never trusted.
+    file = systemExe('cmd.exe')
     fileArgs = cmdShimArgs(resolved.path, args)
     verbatim = true
   } else {
@@ -346,7 +346,7 @@ export async function isProcessRunning(imageName: string): Promise<boolean> {
   const lines: string[] = []
   const { code } = await runCommand({
     argv: [systemExe('tasklist.exe'), '/FI', `IMAGENAME eq ${imageName}`, '/NH', '/FO', 'CSV'],
-    cwd: envGet(process.env, 'SystemRoot') ?? 'C:\\Windows',
+    cwd: systemRoot(process.env),
     onLine: (l) => lines.push(l),
   })
   if (code !== 0) throw new Error(`tasklist thoát với mã ${code}`)

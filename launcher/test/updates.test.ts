@@ -6,6 +6,7 @@ import type { LoadedIntegration, Registry } from '../src/main/registry/registry'
 import { createLauncherUpdater } from '../src/main/updates/launcher'
 import { applySquarelUpdate, planSquarelUpdate } from '../src/main/updates/squarel'
 import { applyToolUpdate } from '../src/main/updates/tools'
+import { configureUpdater } from '../src/main/updates/updater-config'
 import type { TaskEvent } from '../src/shared/model'
 
 const SQ = join('D:', 'sq')
@@ -254,6 +255,41 @@ describe('applySquarelUpdate', () => {
     expect(events.at(-1)?.kind).toBe('done')
   })
 
+  it('an extension command that cannot be substituted is logged but does not keep the pending marker', async () => {
+    const broken: LoadedIntegration = {
+      manifest: manifest({
+        id: 'broken',
+        extension: {
+          version: { source: 'a', installed: 'b' },
+          install: { run: ['pnpm', 'x', '{recentProject}'] },
+        },
+      }),
+      dir: join(SQ, 'integrations', 'broken'),
+      source: 'squarel',
+    }
+    const { d } = recording({
+      run: repo({
+        'git fetch --tags --force': { code: 0 },
+        'git checkout --detach refs/tags/v0.2.0': { code: 0 },
+        'pnpm install': { code: 0 },
+      }),
+    })
+    const events: TaskEvent[] = []
+    await applySquarelUpdate(
+      { kind: 'tag', to: '0.2.0' },
+      {
+        squarelDir: SQ,
+        reg: { ...reg, integrations: [broken] },
+        selected: ['broken'],
+        onEvent: (e) => events.push(e),
+      },
+      d,
+    )
+    expect(events.some((e) => e.kind === 'line' && /broken|Aseprite/.test(e.text ?? ''))).toBe(true)
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Đã cập nhật Squarel' })
+    await expect(d.fs.stat(MARKER)).rejects.toThrow()
+  })
+
   it('none and blocked plans run nothing', async () => {
     const { d, calls } = recording({ run: repo() })
     const events: TaskEvent[] = []
@@ -432,5 +468,21 @@ describe('createLauncherUpdater', () => {
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('unreachable')
     expect(r.message).not.toContain('token-should-not-leak')
+  })
+})
+
+describe('configureUpdater', () => {
+  it('downloads in the background but never installs on quit by itself', () => {
+    const target: Record<string, unknown> & { feeds: unknown[] } = {
+      feeds: [],
+      setFeedURL(o: unknown) {
+        this.feeds.push(o)
+      },
+    }
+    configureUpdater(target as never)
+    expect(target.autoInstallOnAppQuit).toBe(false)
+    expect(target.autoDownload).toBe(true)
+    expect(target.logger).toBeNull()
+    expect(target.feeds).toEqual([{ provider: 'github', owner: 't1tc01-personal', repo: 'squarel-art-2' }])
   })
 })

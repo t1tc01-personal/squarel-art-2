@@ -26,6 +26,8 @@ interface FixtureFile {
   now: string
   /** false = no Squarel folder yet (first-run wizard); default true (`{root}\squarel`). */
   squarel?: boolean
+  /** true = plan Squarel updates like an installed launcher (an unpackaged build never moves the repo). */
+  packaged?: boolean
   /** Result of the MCP smoke test (checks), instead of starting a real server. */
   smoke?: { tools: number; ms: number }
   state?: Partial<
@@ -55,6 +57,8 @@ export interface FakeWorld {
   /** Fake home folder (skills are copied there, in memory). */
   homeDir: string
   smoke?: CheckCtx['smoke']
+  /** Set when the fixture asks for installed-launcher update planning (`packaged: true`). */
+  isDev?: false
 }
 
 /** Copy sources may only come from the launcher's test fixtures or the repo's integrations folder. */
@@ -142,6 +146,7 @@ export async function loadFakeWorld(
     state: fx.squarel === false ? { ...fx.state } : { ...fx.state, squarelDir },
     bridge: fx.bridge,
     homeDir: `${ROOT}\\home`,
+    ...(fx.packaged ? { isDev: false as const } : {}),
     ...(smoke ? { smoke: async () => ({ ok: true, ...smoke }) } : {}),
   }
 }

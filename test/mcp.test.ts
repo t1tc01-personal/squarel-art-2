@@ -10,6 +10,7 @@ import { createMcpServer } from '../src/mcp/server.ts'
 import { MockProvider } from '../src/providers/mock.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { ALL_TOOLS } from '../src/tools/registry.ts'
+import { SQUAREL_VERSION } from '../src/version.ts'
 import { tempDir } from './helpers.ts'
 
 let t: ReturnType<typeof tempDir>
@@ -32,6 +33,7 @@ describe('MCP server (in-memory transport)', () => {
     await server.connect(a)
     const client = new Client({ name: 'test', version: '1.0.0' })
     await client.connect(b)
+    expect(client.getServerVersion()).toMatchObject({ name: 'squarel', version: SQUAREL_VERSION })
 
     const { tools } = await client.listTools()
     expect(tools.map((x) => x.name).sort()).toEqual(ALL_TOOLS.map((x) => x.name).sort())

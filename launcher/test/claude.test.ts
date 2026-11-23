@@ -11,6 +11,10 @@ describe('registerMcp', () => {
   const removeCmd = 'claude mcp remove squarel --scope user'
   const addCmd = (p: string) => `claude mcp add squarel --scope user -- node ${p}`
 
+  const CHECK = 'squarel-launcher-check'
+  const removeCheck = `claude mcp remove ${CHECK} --scope user`
+  const addCheck = (p: string) => `claude mcp add ${CHECK} --scope user -- node ${p}`
+
   it('registerMcp passes the absolute path as a single argv item', async () => {
     const calls: { argv: string[]; cwd: string }[] = []
     const d = createDeps('fake', { files: { [entry]: '' } })
@@ -22,9 +26,14 @@ describe('registerMcp', () => {
     const r = await registerMcp(dir, d)
     expect(r.ok).toBe(true)
     expect(r.output).toContain('Added')
-    expect(calls).toHaveLength(2)
-    expect(calls[0]?.argv.join(' ')).toBe(removeCmd)
-    expect(calls[1]?.argv).toEqual([
+    expect(calls.map((c) => c.argv.join(' '))).toEqual([
+      removeCheck,
+      addCheck(entry),
+      removeCheck,
+      removeCmd,
+      addCmd(entry),
+    ])
+    expect(calls.at(-1)?.argv).toEqual([
       'claude',
       'mcp',
       'add',
@@ -38,10 +47,38 @@ describe('registerMcp', () => {
     expect(calls.every((c) => c.cwd === dir)).toBe(true)
   })
 
+  it('a failing add never removes the existing squarel registration', async () => {
+    const calls: string[] = []
+    const d = createDeps('fake', {
+      files: { [entry]: '' },
+      run: {
+        [removeCheck]: { code: 1 },
+        [addCheck(entry)]: { code: 3, lines: ['config is locked'] },
+        [removeCmd]: { code: 0 },
+        [addCmd(entry)]: { code: 0 },
+      },
+    })
+    const run = d.run
+    d.run = async (spec) => {
+      calls.push(spec.argv.join(' '))
+      return run(spec)
+    }
+    const r = await registerMcp(dir, d)
+    expect(r.ok).toBe(false)
+    expect(r.output).toContain('config is locked')
+    expect(calls).not.toContain(removeCmd)
+    expect(calls).not.toContain(addCmd(entry))
+  })
+
   it('ignores remove failure but reports add failure', async () => {
     const d = createDeps('fake', {
       files: { [entry]: '' },
-      run: { [removeCmd]: { code: 1 }, [addCmd(entry)]: { code: 3 } },
+      run: {
+        [removeCheck]: { code: 0 },
+        [addCheck(entry)]: { code: 0 },
+        [removeCmd]: { code: 1 },
+        [addCmd(entry)]: { code: 3 },
+      },
     })
     expect((await registerMcp(dir, d)).ok).toBe(false)
   })

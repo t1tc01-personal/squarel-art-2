@@ -39,6 +39,8 @@ export interface Toast {
 interface Tasks {
   /** Runs an action; resolves with the task id, or undefined when nothing was started. */
   run(ref: ActionRef): Promise<string | undefined>
+  /** Starts a task through another call (e.g. updates:apply) and follows it like `run`. */
+  track(label: string, start: () => Promise<string>): Promise<string | undefined>
   /** Last event per task started from this window. */
   last: Record<string, TaskEvent>
   toasts: Toast[]
@@ -143,6 +145,27 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     setToasts((ts) => [...ts.slice(-2), { ...t, id }])
   }, [])
 
+  const track = useCallback(
+    async (label: string, start: () => Promise<string>): Promise<string | undefined> => {
+      try {
+        const taskId = await start()
+        labels.current.set(taskId, label)
+        const end = finished.current.get(taskId)
+        const toast: Toast = !end
+          ? { id: taskId, label, kind: 'running', text: 'Đang chạy…' }
+          : end.kind === 'done'
+            ? { id: taskId, label, kind: 'done', text: end.text ?? 'Xong' }
+            : { id: taskId, label, kind: 'error', text: end.text ?? 'Thất bại' }
+        setToasts((ts) => [...ts.slice(-2), toast])
+        return taskId
+      } catch (e) {
+        notify({ label, kind: 'error', text: errorText(e) })
+        return undefined
+      }
+    },
+    [notify],
+  )
+
   const run = useCallback(
     async (ref: ActionRef): Promise<string | undefined> => {
       if (ref.componentId === 'settings' && ref.kind === 'fix' && ref.id === 'open-settings') {
@@ -154,27 +177,16 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         setConsent(null)
         if (!ok) return undefined
       }
-      try {
-        const taskId = await api.runAction(ref)
-        labels.current.set(taskId, ref.label)
-        const end = finished.current.get(taskId)
-        const toast: Toast = !end
-          ? { id: taskId, label: ref.label, kind: 'running', text: 'Đang chạy…' }
-          : end.kind === 'done'
-            ? { id: taskId, label: ref.label, kind: 'done', text: end.text ?? 'Xong' }
-            : { id: taskId, label: ref.label, kind: 'error', text: end.text ?? 'Thất bại' }
-        setToasts((ts) => [...ts.slice(-2), toast])
-        return taskId
-      } catch (e) {
-        notify({ label: ref.label, kind: 'error', text: errorText(e) })
-        return undefined
-      }
+      return track(ref.label, () => api.runAction(ref))
     },
-    [go, notify],
+    [go, track],
   )
 
   const dismiss = useCallback((id: string) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
-  const value = useMemo(() => ({ run, last, toasts, dismiss, notify }), [run, last, toasts, dismiss, notify])
+  const value = useMemo(
+    () => ({ run, track, last, toasts, dismiss, notify }),
+    [run, track, last, toasts, dismiss, notify],
+  )
   return (
     <TasksContext.Provider value={value}>
       {children}

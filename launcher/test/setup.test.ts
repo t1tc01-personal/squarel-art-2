@@ -294,16 +294,29 @@ describe('clone', () => {
 })
 
 describe('hasWinget', () => {
+  const WINGET = 'D:\\Apps\\WindowsApps\\winget.exe'
+  const OK = { 'winget --version': { code: 0, lines: ['v1.9'] } }
+  const at = (path: string) => createDeps('fake', { which: { winget: path }, run: OK })
+
   it('is true only when winget --version exits 0', async () => {
-    expect(
-      await hasWinget(createDeps('fake', { run: { 'winget --version': { code: 0, lines: ['v1.9'] } } })),
-    ).toBe(true)
-    expect(await hasWinget(createDeps('fake', {}))).toBe(false)
-    const d = createDeps('fake', {})
+    expect(await hasWinget(at(WINGET))).toBe(true)
+    expect(await hasWinget(createDeps('fake', { which: { winget: WINGET } }))).toBe(false)
+    const d = createDeps('fake', { which: { winget: WINGET } })
     d.run = async () => {
       throw new Error('ENOENT')
     }
     expect(await hasWinget(d)).toBe(false)
+  })
+
+  it('a winget path the terminal window cannot carry safely counts as no winget (download pages instead)', async () => {
+    expect(await hasWinget(createDeps('fake', { run: OK }))).toBe(false) // not found on PATH
+    for (const user of ["O'Brien", 'An (work)', 'a&b', 'x%TEMP%'])
+      expect(
+        await hasWinget(at(`D:\\Home\\${user}\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe`)),
+      ).toBe(false)
+    expect(
+      await hasWinget(at('D:\\Home\\An Nguyen\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe')),
+    ).toBe(true)
   })
 })
 

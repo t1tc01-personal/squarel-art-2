@@ -113,6 +113,21 @@ describe('connections presence', () => {
     expect(g[1]?.items[0]?.componentId).toBe('aseprite')
   })
 
+  it('two clients on the same slug get distinct ids', async () => {
+    const clients = [
+      { name: 'aseprite', slug: 'hero', app: '1.3.18', connectedAt: iso(9), lastSeen: iso(1) },
+      { name: 'aseprite', slug: 'hero', app: '1.3.18', connectedAt: iso(5), lastSeen: iso(1) },
+      { name: 'aseprite', connectedAt: iso(5), lastSeen: iso(1) },
+      { name: 'aseprite', connectedAt: iso(4), lastSeen: iso(1) },
+      { name: 'aseprite', slug: 'hero~2', connectedAt: iso(3), lastSeen: iso(1) },
+    ]
+    const g = await run({}, { b: bridge({ clients }), r: reg('aseprite') })
+    const ids = g[1]?.items.map((i) => i.id) ?? []
+    expect(ids).toHaveLength(5)
+    expect(new Set(ids).size).toBe(5)
+    expect(ids[0]).toBe('tool-aseprite-hero')
+  })
+
   it("neurons left sums today's cloudflare usage only", async () => {
     const line = (o: Record<string, unknown>) => JSON.stringify(o)
     const usage = [

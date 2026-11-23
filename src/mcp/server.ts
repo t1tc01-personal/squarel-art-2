@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { ALL_TOOLS, runTool } from '../tools/registry.ts'
 import { type ToolContext, ToolError } from '../tools/types.ts'
+import { SQUAREL_VERSION } from '../version.ts'
 
 export const SERVER_INSTRUCTIONS = `Squarel Art: pixel-art toolkit.
 Workflow: project_list/project_open or project_create → canvas_view (look before and after changes) → edit → export.
@@ -28,7 +29,7 @@ export function createMcpServer(
   opts: { version?: string; onToolCall?: (name: string) => void } = {},
 ): McpServer {
   const server = new McpServer(
-    { name: 'squarel', version: opts.version ?? '0.1.0' },
+    { name: 'squarel', version: opts.version ?? SQUAREL_VERSION },
     { instructions: SERVER_INSTRUCTIONS },
   )
   for (const tool of ALL_TOOLS) {

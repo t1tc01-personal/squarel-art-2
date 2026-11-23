@@ -22,9 +22,9 @@ Launcher là một app Windows (Electron) để cài, chạy và theo dõi Squar
 
 | Bước | Việc |
 |---|---|
-| 1. Chào mừng | Chọn **Cài mới** (launcher clone Squarel vào `%LOCALAPPDATA%\SquarelArt\app`) hoặc **Dùng repo đã clone** (trỏ vào thư mục có `package.json` tên `squarel-art`). Chọn `DATA_DIR` |
+| 1. Chào mừng | Chọn **Cài mới** (launcher clone Squarel vào `%LOCALAPPDATA%\SquarelArt\app`) hoặc **Dùng repo đã clone** (trỏ vào thư mục có `package.json` tên `squarel-art`) |
 | 2. Cài công cụ | Kiểm tra Git, Node ≥ 22.18, pnpm. Thiếu thì cài bằng `winget` trong một cửa sổ terminal: Windows hỏi quyền admin, winget hỏi điều khoản, bạn tự trả lời. Sau đó clone (nếu cài mới) và `pnpm install` |
-| 3. Cấu hình | Ghi `.env`, kiểm tra token Cloudflare (miễn phí), chọn tích hợp. Aseprite: build, đã có, hoặc bỏ qua |
+| 3. Cấu hình | Chọn `DATA_DIR`, ghi `.env`, kiểm tra token Cloudflare (miễn phí), chọn tích hợp. Aseprite: build, đã có, hoặc bỏ qua |
 | 4. Kết nối Claude | `claude mcp add squarel --scope user …`, chép skill vào `~/.claude/skills`, chạy thử MCP, cài extension của tích hợp đã chọn |
 
 Đóng wizard giữa chừng thì lần sau mở lại đúng bước đó.

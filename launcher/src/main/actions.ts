@@ -25,6 +25,7 @@ import {
   claudeTerminalArgv,
   cloneArgv,
   OFFICIAL_DOWNLOADS,
+  wingetPath,
   wingetTerminalArgv,
 } from './setup'
 import type { LauncherState } from './state'
@@ -331,7 +332,7 @@ function resolveCoreInstall(ref: ActionRef, ctx: ActionCtx): Resolved | undefine
     return terminalTask(
       `${cid}:install`,
       () => {
-        const exe = ctx.d.which('winget')
+        const exe = wingetPath(ctx.d)
         if (!exe)
           throw new Error('Không tìm thấy winget. Bấm "Kiểm tra lại", hoặc dùng trang tải chính thức.')
         return wingetTerminalArgv(ctx.d, spec, exe)

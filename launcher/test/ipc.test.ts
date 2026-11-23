@@ -326,6 +326,10 @@ describe('ipc handlers', () => {
   it('action:run starts a known action and streams task events', async () => {
     const { h, events } = setup({
       run: {
+        [`claude mcp add squarel-launcher-check --scope user -- node ${join(SQ, 'src', 'mcp', 'index.ts')}`]:
+          {
+            code: 0,
+          },
         [`claude mcp add squarel --scope user -- node ${join(SQ, 'src', 'mcp', 'index.ts')}`]: {
           code: 0,
           lines: ['Added squarel'],
@@ -669,6 +673,28 @@ describe('tasks and the quit path (Task 15)', () => {
     const free = (await h.runChecks()).find((r) => r.id === 'mcp-starts')
     expect(free).toMatchObject({ result: 'pass' })
     expect(smokes).toBe(1)
+  })
+
+  it('scheduled checks never run claude mcp list (it starts every MCP server); checks:run does', async () => {
+    const { h, d } = setup({
+      run: { 'claude mcp list': { code: 0, lines: ['squarel: node x - ✓ Connected'] } },
+    })
+    const calls: string[] = []
+    const run = d.run
+    d.run = async (spec) => {
+      calls.push(spec.argv.join(' '))
+      return run(spec)
+    }
+    const scheduled = await h.runChecks({ scheduled: true })
+    expect(calls).not.toContain('claude mcp list')
+    expect(scheduled.map((r) => r.id)).not.toContain('claude-sees-squarel')
+    const manual = (await h.handle('checks:run', APP, undefined)) as { id: string; result: string }[]
+    expect(calls).toContain('claude mcp list')
+    expect(manual.find((r) => r.id === 'claude-sees-squarel')?.result).toBe('pass')
+    calls.length = 0
+    const again = await h.runChecks({ scheduled: true })
+    expect(calls).not.toContain('claude mcp list')
+    expect(again.find((r) => r.id === 'claude-sees-squarel')?.result).toBe('pass')
   })
 
   it('runningTasks lists running tasks; abortTasks aborts their signal and waits for them', async () => {

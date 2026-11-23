@@ -3,6 +3,9 @@ import type { Dirent } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import type { Deps } from './deps'
 
+/** Throwaway server name used to check that `claude mcp add` works before the old entry is removed. */
+const CHECK_NAME = 'squarel-launcher-check'
+
 export async function registerMcp(squarelDir: string, d: Deps): Promise<{ ok: boolean; output: string }> {
   if (!isAbsolute(squarelDir)) {
     return { ok: false, output: 'Đường dẫn thư mục Squarel phải là đường dẫn tuyệt đối.' }
@@ -15,17 +18,17 @@ export async function registerMcp(squarelDir: string, d: Deps): Promise<{ ok: bo
   }
   const lines: string[] = []
   const onLine = (l: string) => void lines.push(l)
-  // A stale registration may or may not exist; its exit code is irrelevant.
-  await d.run({
-    argv: ['claude', 'mcp', 'remove', 'squarel', '--scope', 'user'],
-    cwd: squarelDir,
-    onLine,
-  })
-  const add = await d.run({
-    argv: ['claude', 'mcp', 'add', 'squarel', '--scope', 'user', '--', 'node', entry],
-    cwd: squarelDir,
-    onLine,
-  })
+  const claude = (...args: string[]) => d.run({ argv: ['claude', 'mcp', ...args], cwd: squarelDir, onLine })
+  const server = ['--scope', 'user', '--', 'node', entry]
+  // `claude mcp add` refuses an existing name, so the old registration has to go before the new
+  // one is added. Prove first that an add works (under a throwaway name), so a failing add never
+  // leaves Claude Code without Squarel. Remove results are irrelevant (the name may not exist).
+  await claude('remove', CHECK_NAME, '--scope', 'user')
+  const probe = await claude('add', CHECK_NAME, ...server)
+  await claude('remove', CHECK_NAME, '--scope', 'user')
+  if (probe.code !== 0) return { ok: false, output: lines.join('\n') }
+  await claude('remove', 'squarel', '--scope', 'user')
+  const add = await claude('add', 'squarel', ...server)
   return { ok: add.code === 0, output: lines.join('\n') }
 }
 

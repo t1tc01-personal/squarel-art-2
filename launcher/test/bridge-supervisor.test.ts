@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
-import { createBridgeSupervisor } from '../src/main/bridge/supervisor'
+import { createBridgeSupervisor, toolTimeoutMs } from '../src/main/bridge/supervisor'
 import type { BridgeState } from '../src/main/bridge/types'
 import { type BridgeChild, createDeps, type Deps } from '../src/main/deps'
 
@@ -450,5 +450,13 @@ describe('bridge supervisor', () => {
     await clock.advance(5_000)
     expect(sup.state().mode).toBe('own')
     expect(sup.state().message).toBe('Bridge trên cổng 4321 từ chối token')
+  })
+})
+
+describe('toolTimeoutMs', () => {
+  it('waits about a minute for open_in_editor (it may start the editor), 5 s for other tools', () => {
+    expect(toolTimeoutMs('open_in_editor')).toBe(60_000)
+    expect(toolTimeoutMs('project_list')).toBe(5000)
+    expect(toolTimeoutMs('constructor')).toBe(5000)
   })
 })

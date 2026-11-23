@@ -7,12 +7,13 @@
  * official download page in the browser; it never downloads or starts an installer itself.
  */
 import { tmpdir } from 'node:os'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute } from 'node:path'
 import type { ActionRef, ComponentView } from '../shared/model'
 import type { Deps } from './deps'
 import { CORE, type InstallSpec } from './registry/core'
 import { wingetCommand } from './registry/registry'
 import type { LauncherState } from './state'
+import { system32 as system32In } from './system-root'
 import { releaseTag } from './updates/squarel'
 
 export const SQUAREL_REPO = 'https://github.com/t1tc01-personal/squarel-art-2.git'
@@ -88,7 +89,18 @@ export function step2Done(facts: SetupFacts): boolean {
 
 // ---- what to install -----------------------------------------------------------------------
 
+/**
+ * Absolute path of winget.exe on PATH, or undefined when there is none or when the path cannot be
+ * passed through the visible terminal window safely (SAFE_ITEM, e.g. a user folder with `'` or `(`).
+ */
+export function wingetPath(d: Deps): string | undefined {
+  const exe = d.which('winget')
+  return exe && isAbsolute(exe) && /\\winget\.exe$/i.test(exe) && SAFE_ITEM.test(exe) ? exe : undefined
+}
+
+/** winget usable for installs: found at a safe path and `winget --version` works. */
 export async function hasWinget(d: Deps): Promise<boolean> {
+  if (!wingetPath(d)) return false
   try {
     const { code } = await d.run({
       argv: ['winget', '--version'],
@@ -152,9 +164,7 @@ function envGet(env: NodeJS.ProcessEnv, key: string): string | undefined {
 
 /** `%SystemRoot%\System32\<name>`; never taken from ComSpec or PATH. */
 function system32(d: Deps, name: string): string {
-  const root = envGet(d.env, 'SystemRoot')
-  const base = root && /^[A-Za-z]:\\[^"%]*$/.test(root) ? root : 'C:\\Windows'
-  return join(base, 'System32', name)
+  return system32In(d.env, name)
 }
 
 /**

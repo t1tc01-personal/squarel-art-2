@@ -8,6 +8,7 @@ import type { GenRequest, ImageProvider, RawImage } from '../src/providers/types
 import { createToolContext } from '../src/tools/context.ts'
 import { ALL_TOOLS, runTool } from '../src/tools/registry.ts'
 import type { ToolContext, ToolResult } from '../src/tools/types.ts'
+import { SQUAREL_VERSION } from '../src/version.ts'
 import { fakeAiImage, tempDir } from './helpers.ts'
 
 /** A paid provider double (behaves like Retro Diffusion but offline). */
@@ -204,6 +205,7 @@ describe('AI proposals (mock + paid provider double)', () => {
     const json = JSON.parse(readFileSync(ex.files!.find((f) => f.endsWith('.json'))!, 'utf8'))
     expect(json.frames).toHaveLength(4)
     expect(json.meta.size).toEqual({ w: 128, h: 32 })
+    expect(json.meta.version).toBe(SQUAREL_VERSION)
   })
 
   it('paid provider: price first, confirm, budget cap', async () => {

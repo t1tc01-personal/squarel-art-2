@@ -36,7 +36,7 @@ Trên Windows, **Squarel Art Launcher** làm thay bạn phần lớn các bướ
 
 Chi tiết ở [docs/launcher.md](launcher.md). Muốn tự làm từng bước thì đọc tiếp bên dưới.
 
-Mọi lệnh bên dưới chạy trong **PowerShell**, tại thư mục repo `D:\code\squarel-art-2`, trừ khi có ghi khác.
+Mọi lệnh bên dưới chạy trong **PowerShell**, tại thư mục repo (nơi bạn đã clone, viết là `<thư mục repo>` trong các lệnh; thay bằng đường dẫn thật), trừ khi có ghi khác.
 
 ---
 
@@ -77,7 +77,7 @@ git --version
 ## 2. Cài thư viện và chạy test
 
 ```powershell
-cd D:\code\squarel-art-2
+cd <thư mục repo>
 ```
 
 ```powershell
@@ -132,8 +132,8 @@ pnpm check
 Repo đã có sẵn `.mcp.json` khai báo server `squarel`, và 4 skill trong `.claude/skills/`. Không cần cài gì thêm cho Claude Code.
 
 1. Mở Claude Code **tại thư mục repo**:
-   - App Claude desktop: tab **Code** → chọn thư mục `D:\code\squarel-art-2`.
-   - Hoặc trong terminal: `cd D:\code\squarel-art-2` rồi gõ `claude`.
+   - App Claude desktop: tab **Code** → chọn thư mục `<thư mục repo>`.
+   - Hoặc trong terminal: `cd <thư mục repo>` rồi gõ `claude`.
 2. Lần đầu, Claude Code hỏi có cho phép MCP server `squarel` của project không. Chọn **cho phép**.
 3. Gõ vào ô chat:
 
@@ -263,7 +263,7 @@ Tìm file `Aseprite.exe`:
 | Steam | `C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe` (Steam → chuột phải Aseprite → *Manage → Browse local files*) |
 | Bộ cài từ aseprite.org | `C:\Program Files\Aseprite\Aseprite.exe` |
 | itch.io | Thư mục bạn chọn |
-| Tự build bằng `pnpm aseprite:build` | `D:\code\squarel-art-2\vendor\aseprite\build\bin\aseprite.exe` (script tự ghi vào `.env`) |
+| Tự build bằng `pnpm aseprite:build` | `<thư mục repo>\vendor\aseprite\build\bin\aseprite.exe` (script tự ghi vào `.env`) |
 
 Ghi vào `.env`:
 
@@ -369,7 +369,7 @@ Service local-sd mới được kiểm tra cú pháp, chưa chạy thật. Nếu
 **Dùng Squarel khi mở Claude Code ở thư mục khác.** Lệnh dưới thêm server cho mọi project của bạn. `.env` vẫn được đọc từ thư mục repo này, nên không phải cấu hình lại:
 
 ```powershell
-claude mcp add squarel --scope user -- node D:\code\squarel-art-2\src\mcp\index.ts
+claude mcp add squarel --scope user -- node <thư mục repo>\src\mcp\index.ts
 ```
 
 Các skill `/pixel-new`, `/pixel-export`… nằm trong repo này nên chỉ có khi mở Claude Code ở đây. Muốn dùng mọi nơi, copy thư mục `.claude\skills\pixel-*` vào `C:\Users\<tên>\.claude\skills\`.

@@ -193,6 +193,24 @@ test('system → components shows update buttons only where latest > installed',
   }
 })
 
+test('"Hoàn tất cập nhật" (tag plan from === to with a pending marker) runs updates:apply', async () => {
+  const { page, close } = await open('fixtures/squarel-pending')
+  try {
+    await rail(page).getByRole('button', { name: 'Hệ thống' }).click()
+    await content(page).getByRole('button', { name: 'Kiểm tra' }).click()
+    await expect(content(page).getByTestId('squarel-plan')).toHaveText('Hoàn tất cập nhật')
+    await content(page).getByRole('button', { name: 'Hoàn tất cập nhật' }).click()
+    const toast = page.getByTestId('toast').last()
+    await expect(toast).toContainText('Hoàn tất cập nhật')
+    await expect(toast).toContainText('Đã cập nhật Squarel')
+    // The marker is gone, so the next check finds nothing left to do.
+    await content(page).getByRole('button', { name: 'Kiểm tra' }).click()
+    await expect(content(page).getByTestId('squarel-plan')).toHaveText('Squarel đã đúng phiên bản')
+  } finally {
+    await close()
+  }
+})
+
 test('health tab groups results and the fix button opens Settings', async () => {
   const { page, close } = await open()
   try {

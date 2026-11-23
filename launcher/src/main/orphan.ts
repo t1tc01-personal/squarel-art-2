@@ -7,8 +7,8 @@
  * After a kill the supervisor's normal cycle spawns a fresh own bridge.
  */
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { BridgeChild, Deps } from './deps'
+import { system32 } from './system-root'
 
 export interface OwnerRecord {
   pid: number
@@ -138,13 +138,7 @@ export async function windowsProcInfo(
   d: Pick<Deps, 'run' | 'env'>,
 ): Promise<ProcInfo | undefined> {
   if (!Number.isInteger(pid) || pid <= 0) return undefined
-  const ps = join(
-    d.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe',
-  )
+  const ps = system32(d.env, 'WindowsPowerShell', 'v1.0', 'powershell.exe')
   const script = [
     `$p = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'`,
     "if ($p) { [pscustomobject]@{ image = $p.ExecutablePath; cmd = $p.CommandLine; created = $p.CreationDate.ToUniversalTime().ToString('o') } | ConvertTo-Json -Compress }",

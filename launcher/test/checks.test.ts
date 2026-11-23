@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { BridgeState } from '../src/main/bridge/types'
-import { type CheckCtx, runChecks, smokeTestMcp } from '../src/main/checks/runner'
+import { type CheckCtx, ON_DEMAND_CHECKS, runChecks, smokeTestMcp } from '../src/main/checks/runner'
 import { createDeps, type Fixtures } from '../src/main/deps'
 import { parseEnv } from '../src/main/env-store'
 import type { Registry } from '../src/main/registry/registry'
@@ -132,6 +132,26 @@ describe('health checks', () => {
       runChecks(noReg, ctx(), deps({ run: { 'claude mcp list': { code: 0, lines: [line] } } }))
     expect(find(await mk('squarel: node x - ✓ Connected'), 'claude-sees-squarel').result).toBe('pass')
     expect(find(await mk('squarel: node x - ✗ Failed'), 'claude-sees-squarel').result).toBe('fail')
+  })
+
+  it('skipped (on-demand) checks never run; a previous result is carried over in place', async () => {
+    const d = deps({ run: { 'claude mcp list': { code: 0, lines: ['squarel: node x - ✓ Connected'] } } })
+    const calls: string[] = []
+    const run = d.run
+    d.run = async (spec) => {
+      calls.push(spec.argv.join(' '))
+      return run(spec)
+    }
+    const first = await runChecks(noReg, ctx(), d)
+    expect(calls).toContain('claude mcp list')
+    calls.length = 0
+    const skipped = await runChecks(noReg, ctx(), d, undefined, { skip: ON_DEMAND_CHECKS })
+    expect(calls).not.toContain('claude mcp list')
+    expect(skipped.map((r) => r.id)).not.toContain('claude-sees-squarel')
+    const carried = await runChecks(noReg, ctx(), d, undefined, { skip: ON_DEMAND_CHECKS, previous: first })
+    expect(calls).not.toContain('claude mcp list')
+    expect(carried.map((r) => r.id)).toEqual(first.map((r) => r.id))
+    expect(find(carried, 'claude-sees-squarel').result).toBe('pass')
   })
 
   it('every result has a Vietnamese label and description', async () => {

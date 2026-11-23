@@ -227,7 +227,8 @@ export async function applySquarelUpdate(
     try {
       argv = task.run.map((a) => substitute(a, toolsDir ? { toolsDir } : {}))
     } catch (e) {
-      skipped++
+      // A manifest that cannot be substituted will not fix itself on a retry: log it, but do not
+      // keep the pending marker for it (only a closed-tool skip does).
       emit({
         taskId,
         kind: 'line',

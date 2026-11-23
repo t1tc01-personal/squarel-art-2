@@ -41,9 +41,10 @@ nsis:
   uninstallerIcon: build/icon.ico
   deleteAppDataOnUninstall: false
 
-# Must match the electron-updater feed in src/main/updates/electron-updater.ts.
+# Must match the electron-updater feed in src/main/updates/updater-config.ts.
+# Draft: CI uploads the files, a person checks them and publishes the Release (docs/release.md).
 publish:
   provider: github
   owner: t1tc01-personal
   repo: squarel-art-2
-  releaseType: release
+  releaseType: draft
