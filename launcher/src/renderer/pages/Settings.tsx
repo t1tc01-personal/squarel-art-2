@@ -145,6 +145,27 @@ export function Settings() {
     }
   }
 
+  /** Same rule as the wizard: main accepts only a folder whose package.json is named squarel-art. */
+  const pickSquarel = async () => {
+    try {
+      const dir = await api.pickFolder()
+      if (!dir) return
+      setState(await api.setState({ squarelDir: dir, mode: 'clone' }))
+      api.getEnv().then(setEnv, report('env:get'))
+      api.about().then(setAbout, report('app:about'))
+    } catch (e) {
+      notify({ label: 'Chọn thư mục Squarel', kind: 'error', text: errorText(e) })
+    }
+  }
+  const reopenSetup = async () => {
+    try {
+      await api.setState({ setupStep: 1 })
+      location.reload() // Root asks main for setup:info again and shows the wizard
+    } catch (e) {
+      notify({ label: 'Mở trình thiết lập', kind: 'error', text: errorText(e) })
+    }
+  }
+
   const provider = (value('IMAGE_PROVIDER') || 'cloudflare') as Provider
   const aseprite = state?.selected.includes('aseprite') && components.some((c) => c.id === 'aseprite')
   const envFile = state?.squarelDir ? `${state.squarelDir}\\.env` : undefined
@@ -170,11 +191,31 @@ export function Settings() {
               Mở file .env
             </Button>
           )}
-          <Button type="primary" disabled={saving || dirty.length === 0} onClick={save}>
+          <Button type="primary" disabled={saving || dirty.length === 0 || !envFile} onClick={save}>
             {saving ? 'Đang lưu…' : saved && dirty.length === 0 ? 'Đã lưu' : 'Lưu thay đổi'}
           </Button>
         </div>
       </div>
+
+      {!envFile && (
+        <section className="card settings-missing" role="alert" aria-label="Chưa có thư mục Squarel">
+          <div>
+            <h2 className="card-title">Chưa có thư mục Squarel</h2>
+            <p className="row-sub">
+              Cấu hình được ghi vào file .env trong repo Squarel. Chọn repo đã clone, hoặc mở lại trình thiết
+              lập để tải về.
+            </p>
+          </div>
+          <div className="page-actions">
+            <Button type="secondary" icon="folder" onClick={() => void pickSquarel()}>
+              Chọn thư mục Squarel
+            </Button>
+            <Button type="primary" onClick={() => void reopenSetup()}>
+              Mở trình thiết lập
+            </Button>
+          </div>
+        </section>
+      )}
 
       <div className="settings-grid">
         <div className="settings-col">

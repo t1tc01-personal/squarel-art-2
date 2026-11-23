@@ -139,8 +139,19 @@ export function Step2({ info, state, reload, go, log }: StepProps) {
           <Button type="ghost" onClick={() => void go(1)}>
             Quay lại
           </Button>
-          {/* Never a trap: Health and Connections keep reporting whatever is still missing. */}
-          <Button type="ghost" onClick={() => void go('done')}>
+          {/* Never a trap: Health and Connections keep reporting whatever is still missing. Without a
+              Squarel folder the launcher has nothing to work on (Settings writes its .env), so the
+              skip waits for it. */}
+          <Button
+            type="ghost"
+            disabled={!squarelOk}
+            title={
+              squarelOk
+                ? undefined
+                : 'Cần có thư mục Squarel trước (tải về, hoặc Quay lại để chọn repo đã clone)'
+            }
+            onClick={() => void go('done')}
+          >
             Bỏ qua, vào launcher
           </Button>
           <span className="wiz-footer-spacer" />

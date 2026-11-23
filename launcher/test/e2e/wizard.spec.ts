@@ -168,10 +168,21 @@ test('step 2 is never a trap: "Bỏ qua, vào launcher" opens the launcher', asy
     await wizard(page).getByRole('button', { name: 'Tiếp tục' }).click()
     await expect(h1(page)).toHaveText('Cài công cụ cần thiết')
     await expect(wizard(page).getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
-    await wizard(page).getByRole('button', { name: 'Bỏ qua, vào launcher' }).click()
+    // Without a Squarel folder the launcher has nothing to work on: the skip waits for it.
+    const skip = wizard(page).getByRole('button', { name: 'Bỏ qua, vào launcher' })
+    await expect(skip).toBeDisabled()
+    const rows = wizard(page).getByTestId('install-row')
+    await rows.filter({ hasText: 'Squarel Art' }).getByRole('button', { name: 'Tải về' }).click()
+    await consent(page, /^git clone /)
+    await expect(rows.filter({ hasText: 'Squarel Art' })).toContainText('Xong')
+    // pnpm install still missing: "Tiếp tục" stays off, the skip is now allowed.
+    await expect(wizard(page).getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
+    await expect(skip).toBeEnabled()
+    await skip.click()
     await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
     const st = await page.evaluate(() => (window as any).squarel.getState())
     expect(st).toMatchObject({ setupStep: 'done' })
+    expect(st.squarelDir).toBeTruthy()
     expect(st.setupCompleted).toBeUndefined() // skipping never counts as finishing steps 3–4
   } finally {
     await close()

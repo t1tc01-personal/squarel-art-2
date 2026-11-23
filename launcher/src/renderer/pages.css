@@ -490,6 +490,15 @@
   flex-direction: column;
   gap: var(--space-16);
 }
+.settings-missing {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-16);
+  margin-bottom: var(--space-16);
+  border-color: var(--status-warn);
+  background: var(--status-warn-soft);
+}
 .settings-card-head {
   display: flex;
   justify-content: space-between;
