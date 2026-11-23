@@ -113,8 +113,9 @@ export function Step2({ info, state, reload, go, log }: StepProps) {
     note: 'Cài xong, mở terminal và chạy claude một lần để đăng nhập. Launcher không đăng nhập thay bạn.',
   })
 
+  // Claude Code can come later (step 4 and Health report it); the rest is needed to run Squarel.
   const requiredOk = info.tools
-    .filter((t) => t.required && t.id !== 'launcher')
+    .filter((t) => t.required && t.id !== 'launcher' && t.id !== 'claude-code')
     .every((t) => t.installed && t.level !== 'error')
   const canGo = requiredOk && info.depsInstalled
   const pending = rows.filter((r) => r.level !== 'ok').length
@@ -138,12 +139,21 @@ export function Step2({ info, state, reload, go, log }: StepProps) {
           <Button type="ghost" onClick={() => void go(1)}>
             Quay lại
           </Button>
+          {/* Never a trap: Health and Connections keep reporting whatever is still missing. */}
+          <Button type="ghost" onClick={() => void go('done')}>
+            Bỏ qua, vào launcher
+          </Button>
           <span className="wiz-footer-spacer" />
           <span className="wiz-footer-hint">{pending ? `Còn ${pending} mục cần làm` : 'Đủ công cụ'}</span>
           <Button type="secondary" icon="refresh" onClick={() => void reload(true)}>
             Kiểm tra lại
           </Button>
-          <Button type="primary" disabled={!canGo} onClick={() => void go(3)}>
+          {/* A returning user (setup finished before) does not redo steps 3–4. */}
+          <Button
+            type="primary"
+            disabled={!canGo}
+            onClick={() => void go(state?.setupCompleted ? 'done' : 3)}
+          >
             Tiếp tục
           </Button>
         </>

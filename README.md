@@ -147,7 +147,7 @@ pnpm cli export --project test --preset print-png --options '{\"widthMm\":200}'
 | `pnpm check` | Cả ba lệnh trên |
 | `pnpm mcp` | Chạy MCP server bằng tay (để debug) |
 | `pnpm eval -- --provider mock` | Đánh giá chất lượng ảnh AI. Với provider thật cần `--yes` |
-| `pnpm aseprite:build` | Tự build Aseprite từ source vào `vendor/` (dùng cá nhân) và ghi `ASEPRITE_PATH`. Thêm `-- --check` để chỉ kiểm tra công cụ, `-- --install-deps` để cài VS Build Tools |
+| `pnpm aseprite:build` | Tự build Aseprite từ source vào `vendor/` (dùng cá nhân) và ghi `ASEPRITE_PATH`. Thêm `-- --check` để chỉ kiểm tra công cụ, `-- --install-deps` để mở winget và Visual Studio Installer cài VS Build Tools (bạn tự đồng ý điều khoản và bấm Install) |
 | `pnpm aseprite:test` | Thử chuyển đổi thật qua Aseprite CLI (cần `ASEPRITE_PATH`) |
 | `pnpm docs:tools` | Sinh lại [docs/tools.md](docs/tools.md) |
 

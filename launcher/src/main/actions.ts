@@ -71,12 +71,21 @@ export interface ActionCtx {
 
 /** Never wait for credentials: a clone must fail instead of hanging. */
 const GIT_ENV = { GIT_TERMINAL_PROMPT: '0' }
+const CLONE_MS = 10 * 60_000
 
 /**
  * `squarelDir: true` = the task runs in or changes the Squarel folder; at most one such task runs
  * at a time (a git checkout must never race a `pnpm install` or an extension build).
  */
-export type Resolved = { key: string; body: ActionBody; squarelDir?: boolean } | { error: string }
+export type Resolved =
+  | {
+      key: string
+      body: ActionBody
+      squarelDir?: boolean
+      /** Shown to other actions while this one holds the Squarel folder (e.g. "Aseprite đang build…"). */
+      busyText?: string
+    }
+  | { error: string }
 
 const msg = (e: unknown) => maskCredentials(String((e as Error)?.message ?? e))
 
@@ -264,7 +273,17 @@ function resolveCoreInstall(ref: ActionRef, ctx: ActionCtx): Resolved | undefine
   if ((kind === 'install' || kind === 'terminal') && id === 'winget') {
     const spec = core.install
     if (!spec?.winget) return undefined
-    return terminalTask(`${cid}:install`, () => wingetTerminalArgv(ctx.d, spec), core.name, ctx)
+    return terminalTask(
+      `${cid}:install`,
+      () => {
+        const exe = ctx.d.which('winget')
+        if (!exe)
+          throw new Error('Không tìm thấy winget. Bấm "Kiểm tra lại", hoặc dùng trang tải chính thức.')
+        return wingetTerminalArgv(ctx.d, spec, exe)
+      },
+      core.name,
+      ctx,
+    )
   }
   if (kind === 'terminal' && id === 'terminal' && cid === 'claude-code')
     return terminalTask(`${cid}:install`, () => claudeTerminalArgv(ctx.d), core.name, ctx)
@@ -289,14 +308,33 @@ function cloneSquarel(ctx: ActionCtx): Resolved {
       if (problem) return emit({ taskId, kind: 'error', text: problem })
       const parent = dirname(target)
       await ctx.d.fs.mkdir(parent, { recursive: true })
-      const code = await runStep(taskId, argv, parent, emit, ctx.d, GIT_ENV)
-      if (code !== 0)
-        return emit({ taskId, kind: 'error', code, text: `Tải Squarel thất bại (mã thoát ${code})` })
+      // The target was absent or empty, so anything in it now came from this clone.
+      const cleanup = () => ctx.d.fs.rm(target, { recursive: true, force: true }).catch(() => {})
+      let missingTag = false
+      const watch: Emit = (e) => {
+        if (e.kind === 'line' && /Remote branch .* not found/i.test(e.text ?? '')) missingTag = true
+        emit(e)
+      }
+      const code = await runStep(taskId, argv, parent, watch, ctx.d, GIT_ENV, AbortSignal.timeout(CLONE_MS))
+      if (code !== 0) {
+        await cleanup()
+        return emit({
+          taskId,
+          kind: 'error',
+          code,
+          text: missingTag
+            ? `Chưa có bản Squarel v${ctx.launcherVersion} trên GitHub. Hãy clone repo bằng git rồi chọn "Dùng repo đã clone".`
+            : code === -1
+              ? 'Tải Squarel quá lâu hoặc bị dừng; đã xoá phần tải dở.'
+              : `Tải Squarel thất bại (mã thoát ${code})`,
+        })
+      }
       try {
         const pkg = JSON.parse(String(await ctx.d.fs.readFile(join(target, 'package.json'), 'utf8')))
         if (pkg?.name !== 'squarel-art') throw new Error('not squarel')
       } catch {
-        return emit({ taskId, kind: 'error', text: 'Bản tải về không phải Squarel (package.json)' })
+        await cleanup()
+        return emit({ taskId, kind: 'error', text: 'Bản tải về không phải Squarel (package.json); đã xoá.' })
       }
       await ctx.setState({ squarelDir: target, mode: 'fresh' })
       emit({ taskId, kind: 'done', code: 0, text: `Đã tải Squarel vào ${target}` })
@@ -404,6 +442,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     return {
       key: `${cid}:update`,
       squarelDir: i.source === 'squarel',
+      busyText: `${m.name} đang cập nhật…`,
       body: async (taskId, emit) => {
         const latest = await latestGitTag(repo, ctx.d)
         if (!latest.ok)
@@ -446,6 +485,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     return {
       key: `${cid}:install`,
       squarelDir: i.source === 'squarel',
+      busyText: `${m.name} đang ${run.some((a) => /build/i.test(a)) ? 'build' : 'cài'}…`,
       body: (taskId, emit) =>
         runManifestCommand(taskId, emit, ctx, i, run, { toolsDir: ctx.toolsDir(cid) }, `Cài ${m.name}`),
     }

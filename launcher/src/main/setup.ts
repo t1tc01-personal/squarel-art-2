@@ -55,22 +55,35 @@ export function setupFacts(views: ComponentView[], depsInstalled: boolean): Setu
   return { squarelOk, requiredMissing }
 }
 
+/** Without these Squarel cannot run at all: a finished setup goes back to step 2. */
+const BLOCKING_DONE = ['node', 'git', 'pnpm']
+/** Steps 3–4 also need the libraries; Claude Code can be installed later (Health shows it). */
+const BLOCKING_STEPS = [...BLOCKING_DONE, 'squarel-deps']
+
 /**
  * The step to show: the saved one (closing mid-way resumes there), except that
  * - a finished setup whose Squarel folder is gone starts over at step 1,
- * - a finished setup (or steps 3–4) with a missing required component goes back to step 2,
+ * - a finished setup with Node, Git or pnpm missing goes back to step 2 (a missing Claude Code
+ *   only shows in Health and Connections),
+ * - steps 3–4 with Squarel, Node, Git, pnpm or the libraries missing go back to step 2,
  * - no install mode chosen yet means step 1.
  */
 export function nextSetupStep(state: LauncherState, facts: SetupFacts): LauncherState['setupStep'] {
   const s = state.setupStep
+  const missing = (ids: string[]) => facts.requiredMissing.some((id) => ids.includes(id))
   if (s === 'done') {
     if (!facts.squarelOk) return 1
-    return facts.requiredMissing.length ? 2 : 'done'
+    return missing(BLOCKING_DONE) ? 2 : 'done'
   }
   if (s === 1) return 1
   if (!state.mode && !facts.squarelOk) return 1
-  if (s >= 3 && (!facts.squarelOk || facts.requiredMissing.length)) return 2
+  if (s >= 3 && (!facts.squarelOk || missing(BLOCKING_STEPS))) return 2
   return s
+}
+
+/** Step 2 is satisfied: Squarel, Node, Git, pnpm and the libraries are there. */
+export function step2Done(facts: SetupFacts): boolean {
+  return facts.squarelOk && !facts.requiredMissing.some((id) => BLOCKING_STEPS.includes(id))
 }
 
 // ---- what to install -----------------------------------------------------------------------
@@ -166,12 +179,17 @@ export function terminalArgv(d: Deps, inner: string[], allowPipe = false): strin
 const PACKAGE_ID = /^[A-Za-z0-9][A-Za-z0-9.+-]{0,127}$/
 const OVERRIDE = /^[A-Za-z0-9 .-]{1,1000}$/
 
-/** `winget install --id <id> -e [--override …]` inside `cmd /k`; no `--accept-*`, no silent flags. */
-export function wingetTerminalArgv(d: Deps, spec: InstallSpec): string[] {
+/**
+ * `<winget.exe> install --id <id> -e [--override …]` inside `cmd /k`; no `--accept-*`, no silent
+ * flags. `wingetExe` is the absolute path found on PATH (never a bare name cmd would search).
+ */
+export function wingetTerminalArgv(d: Deps, spec: InstallSpec, wingetExe: string): string[] {
   if (!spec.winget || !PACKAGE_ID.test(spec.winget)) throw new Error('Mã gói winget không hợp lệ')
   if (spec.override !== undefined && !OVERRIDE.test(spec.override))
     throw new Error('Tham số --override không hợp lệ')
-  const winget = ['winget', 'install', '--id', spec.winget, '-e']
+  if (!isAbsolute(wingetExe) || !/\\winget\.exe$/i.test(wingetExe))
+    throw new Error('Đường dẫn winget không hợp lệ')
+  const winget = [wingetExe, 'install', '--id', spec.winget, '-e']
   if (spec.override) winget.push('--override', spec.override)
   return terminalArgv(d, [system32(d, 'cmd.exe'), '/d', '/k', ...winget])
 }
@@ -196,7 +214,7 @@ export function claudeTerminalArgv(d: Deps): string[] {
 /** `git clone` of the launcher's own release tag; throws when the version is not a release tag. */
 export function cloneArgv(launcherVersion: string, target: string): string[] {
   const tag = releaseTag(launcherVersion.trim())
-  return ['git', 'clone', '--branch', tag, '--depth', '1', SQUAREL_REPO, target]
+  return ['git', 'clone', '--branch', tag, '--depth', '1', '--', SQUAREL_REPO, target]
 }
 
 /** Why the clone target cannot be used (undefined = absent or empty, fine). */
@@ -245,5 +263,22 @@ export async function refreshPath(d: Deps): Promise<void> {
   }
   if (parts.length === 0) return
   const key = Object.keys(d.env).find((k) => k.toUpperCase() === 'PATH') ?? 'Path'
-  d.env[key] = parts.join(';')
+  d.env[key] = mergePath(parts.join(';'), d.env[key] ?? '')
+}
+
+/**
+ * Registry PATH first, then whatever the launcher's own PATH had on top (e.g. entries its parent
+ * added); duplicates dropped case-insensitively, ignoring a trailing backslash.
+ */
+export function mergePath(fromRegistry: string, current: string): string {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of [...fromRegistry.split(';'), ...current.split(';')]) {
+    const p = raw.trim()
+    const k = p.replace(/[\\/]+$/, '').toLowerCase()
+    if (!p || seen.has(k)) continue
+    seen.add(k)
+    out.push(p)
+  }
+  return out.join(';')
 }

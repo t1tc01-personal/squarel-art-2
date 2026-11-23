@@ -3,6 +3,7 @@
   "squarel": false,
   "state": { "setupStep": 1, "selected": [], "closeToTray": true },
   "smoke": { "tools": 41, "ms": 312 },
+  "which": { "winget": "{root}\\WindowsApps\\winget.exe" },
   "files": {
     "{root}/not-squarel/package.json": { "name": "some-other-app", "version": "1.0.0" }
   },
@@ -12,7 +13,7 @@
     "node --version": { "code": 0, "lines": ["v24.19.0"] },
     "pnpm -v": { "code": 0, "lines": ["10.20.0"] },
     "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
-    "git clone --branch v0.2.0 --depth 1 https://github.com/t1tc01-personal/squarel-art-2.git {install}": {
+    "git clone --branch v0.2.0 --depth 1 -- https://github.com/t1tc01-personal/squarel-art-2.git {install}": {
       "code": 0,
       "lines": ["Cloning into 'app'...", "Note: switching to 'v0.2.0'."],
       "files": {

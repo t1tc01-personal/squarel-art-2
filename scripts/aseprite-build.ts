@@ -36,6 +36,7 @@ import {
   VC_TOOLS_COMPONENT,
   VS_BUILD_TOOLS_WINGET,
   vsDevEnvCommand,
+  vsModifyArgs,
 } from './lib/aseprite-build.ts'
 
 const VS_INSTALLER_DIR = join(
@@ -207,7 +208,9 @@ async function main() {
   step('1/6 Build tools')
   let vs = findVs()
   if (!vs && args.installDeps) {
-    console.log('Installing Visual Studio 2022 Build Tools (~7 GB; Windows will ask for admin rights)…')
+    console.log(
+      'Installing Visual Studio 2022 Build Tools (~7 GB). Answer the winget and Windows (admin) prompts, then click Install in the Visual Studio Installer window…',
+    )
     run('winget', VS_BUILD_TOOLS_WINGET)
     vs = findVs()
   }
@@ -216,15 +219,8 @@ async function main() {
   let ninja = env && firstLine(capture('ninja', ['--version'], { env }))
   if (vs && (!cmake || !ninja) && args.installDeps) {
     console.log('Adding the "C++ CMake tools" component (CMake + Ninja) to Visual Studio…')
-    run(join(VS_INSTALLER_DIR, 'setup.exe'), [
-      'modify',
-      '--installPath',
-      vs.path,
-      '--add',
-      'Microsoft.VisualStudio.Component.VC.CMake.Project',
-      '--passive',
-      '--norestart',
-    ])
+    console.log('The Visual Studio Installer opens its own window: click Modify there.')
+    run(join(VS_INSTALLER_DIR, 'setup.exe'), vsModifyArgs(vs.path))
     env = vsDevEnv(vs)
     cmake = firstLine(capture('cmake', ['--version'], { env }))
     ninja = firstLine(capture('ninja', ['--version'], { env }))
@@ -249,7 +245,7 @@ async function main() {
   if (missing.length) {
     const hint = !git
       ? 'Install Git: winget install Git.Git'
-      : 'Run again with --install-deps (installs VS 2022 Build Tools with the C++ workload, Windows 11 SDK, CMake and Ninja),\n  or install them yourself: see docs/setup.md, section 6.'
+      : 'Run again with --install-deps (opens winget and the Visual Studio Installer for VS 2022 Build Tools with the C++ workload, Windows 11 SDK, CMake and Ninja; you accept the terms and click Install there),\n  or install them yourself: see docs/setup.md, section 6.'
     fail(`missing: ${missing.join(', ')}.\n  ${hint}`)
   }
   if (args.check) {

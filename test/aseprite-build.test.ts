@@ -13,6 +13,7 @@ import {
   upsertEnv,
   VS_BUILD_TOOLS_WINGET,
   vsDevEnvCommand,
+  vsModifyArgs,
 } from '../scripts/lib/aseprite-build.ts'
 import { tempDir } from './helpers.ts'
 
@@ -117,6 +118,13 @@ describe('aseprite:build helpers', () => {
     expect(override).toContain('Microsoft.VisualStudio.Workload.VCTools')
     expect(override).toContain('Microsoft.VisualStudio.Component.VC.CMake.Project')
     expect(VS_BUILD_TOOLS_WINGET).not.toContain('--accept-package-agreements') // the user accepts the licence
+  })
+
+  it('never accepts terms or hides the installer for the user', () => {
+    const forbidden = /--passive|--quiet|--accept-package-agreements|--accept-source-agreements/
+    expect(VS_BUILD_TOOLS_WINGET.join(' ')).not.toMatch(forbidden)
+    expect(vsModifyArgs('D:\\BuildTools').join(' ')).not.toMatch(forbidden)
+    expect(vsModifyArgs('D:\\BuildTools')).toContain('Microsoft.VisualStudio.Component.VC.CMake.Project')
   })
 
   it('script --help runs without building anything', () => {

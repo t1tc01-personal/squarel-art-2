@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process'
 import * as nodeFs from 'node:fs/promises'
 import { WebSocket } from 'ws'
-import { isProcessRunning, type RunSpec, runCommand, spawnDetached } from './run'
+import { isProcessRunning, type RunSpec, resolveExecutable, runCommand, spawnDetached } from './run'
 
 export type DetachedSpec = Omit<RunSpec, 'onLine' | 'signal'>
 
@@ -43,6 +43,8 @@ export interface Deps {
   clearTimer: (handle: unknown) => void
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
+  /** Absolute path of a program found on PATH (PATHEXT, App Execution Aliases), or undefined. */
+  which: (name: string) => string | undefined
 }
 
 export interface Fixtures {
@@ -63,6 +65,8 @@ export interface Fixtures {
   freeBytes?: number
   platform?: NodeJS.Platform
   env?: NodeJS.ProcessEnv
+  /** `which` results by program name; others are not found. */
+  which?: Record<string, string>
 }
 
 function realIsPidAlive(pid: number): boolean {
@@ -201,6 +205,7 @@ function createFake(fx: Fixtures): Deps {
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     platform: fx.platform ?? 'win32',
     env: fx.env ?? {},
+    which: (name) => fx.which?.[name],
   }
 }
 
@@ -223,6 +228,7 @@ function createReal(): Deps {
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     platform: process.platform,
     env: process.env,
+    which: (name) => resolveExecutable(name, process.env)?.path,
   }
 }
 

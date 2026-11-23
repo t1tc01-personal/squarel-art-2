@@ -64,6 +64,7 @@ export async function runStep(
   onEvent: (e: TaskEvent) => void,
   d: Deps,
   env?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<number> {
   onEvent({ taskId, kind: 'line', text: `> ${showArgv(argv)}` })
   try {
@@ -71,6 +72,7 @@ export async function runStep(
       argv,
       cwd,
       ...(env ? { env } : {}),
+      ...(signal ? { signal } : {}),
       onLine: (text) => onEvent({ taskId, kind: 'line', text: maskCredentials(text) }),
     })
     return code

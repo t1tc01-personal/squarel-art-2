@@ -199,7 +199,8 @@ Các bước:
 
 2. Nếu thiếu Visual Studio, CMake hoặc Ninja, cài bằng lệnh dưới. Nó gọi `winget` để cài **Visual Studio 2022 Build Tools**, chỉ gồm phần cần thiết: trình biên dịch C++, Windows 11 SDK, CMake và Ninja.
    - Windows sẽ hỏi quyền admin.
-   - winget hỏi bạn đồng ý điều khoản: gõ `Y`.
+   - winget hỏi bạn đồng ý điều khoản: tự đọc rồi gõ `Y`.
+   - Trình cài Visual Studio mở cửa sổ riêng với các mục đã chọn sẵn: bạn bấm **Install** (hoặc **Modify**) ở đó. Lệnh không tự đồng ý điều khoản và không cài ngầm.
    - Cài xong có thể phải khởi động lại máy.
 
    ```powershell
@@ -379,7 +380,7 @@ Các skill `/pixel-new`, `/pixel-export`… nằm trong repo này nên chỉ có
 | `cloudflare [not configured]` trong `usage_today` | Thiếu hoặc sai tên biến `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` trong `.env`. Sửa xong phải mở lại phiên Claude Code để server đọc lại `.env` |
 | Cloudflare lỗi `401` / `403` | Token sai, đã bị xoá, hoặc thiếu quyền Workers AI. Tạo token mới (bước 5) |
 | Cloudflare báo hết quota | Đã dùng hết 10.000 neuron hôm nay. Chờ đến 7:00 sáng, hoặc dùng `local-sd` / `mock` |
-| `pnpm aseprite:build` báo `missing: Visual Studio…` | Chạy `pnpm aseprite:build -- --install-deps --check` (bước 6.1a) |
+| `pnpm aseprite:build` báo `missing: Visual Studio…` | Chạy `pnpm aseprite:build -- --install-deps --check` (bước 6.1a), rồi bấm Install trong cửa sổ Visual Studio Installer |
 | Build Aseprite lỗi giữa chừng | Chạy lại với `--clean`. Nếu vẫn lỗi, gửi Claude phần cuối output |
 | Không có menu Squarel trong Aseprite | Đang dùng bản trial, Aseprite cũ hơn 1.3, hoặc chưa cài extension (bước 6.3) |
 | Aseprite không kết nối | Cần Claude Code đang mở ở repo hoặc `pnpm bridge` đang chạy. Xem thêm [aseprite.md](aseprite.md#xử-lý-sự-cố) |

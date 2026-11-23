@@ -113,7 +113,9 @@ export function Step3(props: StepProps) {
             Quay lại
           </Button>
           <span className="wiz-footer-spacer" />
-          <span className="wiz-footer-hint">Khoá được lưu trong .env trên máy này, không gửi đi đâu</span>
+          <span className="wiz-footer-hint">
+            Khoá chỉ lưu trong .env trên máy này; token chỉ gửi tới Cloudflare khi bạn bấm Kiểm tra
+          </span>
           <Button
             type="primary"
             disabled={saving}
@@ -295,7 +297,9 @@ function IntegrationCard({
       label: `${opt.label} (${i.name})`,
       needsConsent: {
         command: opt.command,
-        ...(i.id === 'aseprite' ? { sizeHint: '~7 GB Build Tools, ~6 phút build' } : {}),
+        ...(i.id === 'aseprite'
+          ? { sizeHint: '~1 GB tải về (mã nguồn Aseprite + Skia), cần VS Build Tools ~7 GB, build ~6 phút' }
+          : {}),
       },
     })
     if (taskId) setBuild(i.id, taskId)

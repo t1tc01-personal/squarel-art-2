@@ -125,7 +125,13 @@ export function TasksProvider({ children }: { children: ReactNode }) {
                 ? { ...t, kind: 'done', text: e.text ?? 'Xong' }
                 : e.kind === 'error'
                   ? { ...t, kind: 'error', text: e.text ?? 'Thất bại' }
-                  : { ...t, text: e.text ?? t.text },
+                  : {
+                      ...t,
+                      text:
+                        e.kind === 'progress' && e.percent !== undefined
+                          ? `${e.text ? `${e.text} · ` : ''}${Math.round(e.percent)}%`
+                          : (e.text ?? t.text),
+                    },
           ),
         )
       }),

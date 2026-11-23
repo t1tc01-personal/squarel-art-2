@@ -69,7 +69,7 @@ test('fresh mode walks steps 1→4 with fake deps and ends on Home', async () =>
     await rows.filter({ hasText: 'Squarel Art' }).getByRole('button', { name: 'Tải về' }).click()
     await consent(
       page,
-      /^git clone --branch v0\.2\.0 --depth 1 https:\/\/github\.com\/t1tc01-personal\/squarel-art-2\.git .+SquarelArt\\app$/,
+      /^git clone --branch v0\.2\.0 --depth 1 -- https:\/\/github\.com\/t1tc01-personal\/squarel-art-2\.git .+SquarelArt\\app$/,
     )
     await expect(rows.filter({ hasText: 'Squarel Art' })).toContainText('Xong')
     await rows.filter({ hasText: 'pnpm install' }).getByRole('button', { name: 'Cài' }).click()
@@ -106,7 +106,7 @@ test('fresh mode walks steps 1→4 with fake deps and ends on Home', async () =>
     await expect.poll(async () => (await sink(app)).launched.length).toBe(1)
     const term = (await sink(app)).launched[0]?.argv ?? []
     expect(term.slice(1, 4)).toEqual(['/d', '/c', 'start'])
-    expect(term).toContain('winget')
+    expect(term).toContain(`${ROOT}\\WindowsApps\\winget.exe`)
     expect(term.join(' ')).not.toMatch(/--accept|--passive|--quiet/)
     // The build runs in the background; the wizard can go on.
     await ase.getByRole('button', { name: 'Bắt đầu build' }).click()
@@ -156,6 +156,22 @@ test('clone mode rejects a folder that is not squarel-art', async () => {
     const st = await page.evaluate(() => (window as any).squarel.getState())
     expect(st.squarelDir).toBeUndefined()
     expect(st.setupStep).toBe(1)
+  } finally {
+    await close()
+  }
+})
+
+test('step 2 is never a trap: "Bỏ qua, vào launcher" opens the launcher', async () => {
+  const { close, app } = await launchIsolated({ fake: FAKE })
+  try {
+    const page = await app.firstWindow()
+    await wizard(page).getByRole('button', { name: 'Tiếp tục' }).click()
+    await expect(h1(page)).toHaveText('Cài công cụ cần thiết')
+    await expect(wizard(page).getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
+    await wizard(page).getByRole('button', { name: 'Bỏ qua, vào launcher' }).click()
+    await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
+    const st = await page.evaluate(() => (window as any).squarel.getState())
+    expect(st).toMatchObject({ setupStep: 'done', setupCompleted: true })
   } finally {
     await close()
   }

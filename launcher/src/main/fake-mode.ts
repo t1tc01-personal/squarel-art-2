@@ -40,6 +40,8 @@ interface FixtureFile {
   /** Commands; `files` / `copy` (same format as above) are written when the command runs. */
   run?: Record<string, { code: number; lines?: string[]; files?: FileMap; copy?: Record<string, string> }>
   fetch?: Fixtures['fetch']
+  /** Programs found on PATH (absolute paths, placeholders allowed). */
+  which?: Record<string, string>
   alivePids?: number[]
   running?: string[]
   bridge: BridgeState
@@ -129,6 +131,7 @@ export async function loadFakeWorld(
     alivePids: fx.alivePids,
     running: fx.running,
     fetch: fx.fetch,
+    which: Object.fromEntries(Object.entries(fx.which ?? {}).map(([k, v]) => [k, sub(v)])),
     platform: 'win32',
     env: { APPDATA: env.APPDATA, LOCALAPPDATA: env.LOCALAPPDATA },
   })

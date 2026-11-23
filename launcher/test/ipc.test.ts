@@ -577,6 +577,44 @@ describe('logs, clipboard, about, license', () => {
   })
 })
 
+describe('setup:info', () => {
+  const tools = (extra: Fixtures['run'] = {}): Fixtures => ({
+    run: {
+      'node --version': { code: 0, lines: ['v24.19.0'] },
+      'git --version': { code: 0, lines: ['git version 2.55.0'] },
+      'pnpm -v': { code: 0, lines: ['10.20.0'] },
+      ...extra,
+    },
+    files: { [join(SQ, 'node_modules', '.modules.yaml')]: 'x' },
+  })
+
+  it('a missing Claude Code does not reopen a finished setup', async () => {
+    const { h } = setup(tools())
+    expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 'done' })
+  })
+
+  it('Node missing reopens step 2 once per start; "Bỏ qua, vào launcher" then sticks', async () => {
+    const { h, getState } = setup()
+    expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 2 })
+    expect(getState().setupStep).toBe(2)
+    await h.handle('state:set', APP, { setupStep: 'done' })
+    expect(getState().setupCompleted).toBe(true)
+    expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 'done' })
+  })
+
+  it('a returning user back at step 2 is done as soon as step 2 is satisfied', async () => {
+    const { h } = setup(tools())
+    await h.handle('state:set', APP, { setupStep: 'done' })
+    await h.handle('state:set', APP, { setupStep: 2, mode: 'clone' })
+    expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 'done' })
+    // Someone who never finished goes on to step 3 instead.
+    const fresh = setup(tools())
+    await fresh.h.handle('state:set', APP, { setupStep: 2, mode: 'clone' })
+    expect(fresh.getState().setupCompleted).toBeUndefined()
+    expect(await fresh.h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 2 })
+  })
+})
+
 describe('redactText', () => {
   it('masks .env secrets, URL credentials, Bearer tokens and token query params', () => {
     expect(redactText('x secret-value-1234 y', ['secret-value-1234'])).toBe('x ••••1234 y')

@@ -7,7 +7,11 @@ import { join } from 'node:path'
 export const ASEPRITE_GIT = 'https://github.com/aseprite/aseprite.git'
 export const VC_TOOLS_COMPONENT = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
 
-/** winget command that installs the minimum MSVC toolchain Aseprite needs (C++ compiler, Win11 SDK, CMake+Ninja). */
+/**
+ * winget command that installs the minimum MSVC toolchain Aseprite needs (C++ compiler, Win11 SDK, CMake+Ninja).
+ * No --passive / --quiet / --accept-*: winget asks about its terms and the Visual Studio Installer opens its
+ * own window, where the user reads the licence and clicks Install.
+ */
 export const VS_BUILD_TOOLS_WINGET = [
   'install',
   '--id',
@@ -17,13 +21,25 @@ export const VS_BUILD_TOOLS_WINGET = [
   'winget',
   '--override',
   [
-    '--wait --passive --norestart',
+    '--wait --norestart',
     '--add Microsoft.VisualStudio.Workload.VCTools',
     `--add ${VC_TOOLS_COMPONENT}`,
     '--add Microsoft.VisualStudio.Component.Windows11SDK.26100',
     '--add Microsoft.VisualStudio.Component.VC.CMake.Project',
   ].join(' '),
 ]
+
+/** VS Installer `modify` that adds CMake + Ninja to an existing install; its window asks the user (no --passive). */
+export function vsModifyArgs(installPath: string): string[] {
+  return [
+    'modify',
+    '--installPath',
+    installPath,
+    '--add',
+    'Microsoft.VisualStudio.Component.VC.CMake.Project',
+    '--norestart',
+  ]
+}
 
 function versionKey(tag: string): number[] {
   return tag

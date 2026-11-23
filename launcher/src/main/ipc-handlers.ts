@@ -46,6 +46,7 @@ import {
   nextSetupStep,
   refreshPath,
   setupFacts,
+  step2Done,
 } from './setup'
 import type { LauncherState } from './state'
 import { planSquarelUpdate } from './updates/squarel'
@@ -291,6 +292,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     }
   }
 
+  let setupStartChecked = false
+
   /** Everything the setup wizard needs; detection only (no update checks over the network). */
   async function setupInfo(refresh: boolean): Promise<SetupInfo> {
     if (refresh) await refreshPath(d).catch(() => {})
@@ -309,7 +312,13 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     const depsInstalled = s.squarelDir
       ? await exists(join(s.squarelDir, 'node_modules', '.modules.yaml'))
       : false
-    const step = nextSetupStep(s, setupFacts(tools, depsInstalled))
+    const facts = setupFacts(tools, depsInstalled)
+    // A finished setup is re-checked once per launcher start only, so "Bỏ qua, vào launcher" sticks
+    // for this session (Health keeps reporting what is missing).
+    let step = s.setupStep === 'done' && setupStartChecked ? 'done' : nextSetupStep(s, facts)
+    setupStartChecked = true
+    // A returning user (setup completed before) sent back to step 2 is done once step 2 is.
+    if (step === 2 && s.setupCompleted && step2Done(facts)) step = 'done'
     if (step !== s.setupStep) await updateState((st) => ({ ...st, setupStep: step }))
     let defaultInstall: string | null = null
     try {
@@ -408,14 +417,23 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   const running = new Map<string, Promise<void>>()
   /** One task at a time may run in / change the Squarel folder. */
   let squarelBusy = false
+  /** What holds the Squarel folder now (message for refused actions). */
+  let squarelBusyText = ''
   let seq = 0
   function startTask(resolved: Resolved, secrets: string[]): string {
     if ('error' in resolved) throw new IpcError(resolved.error)
     const { key, body } = resolved
     if (running.has(key)) throw new IpcError('Thao tác này đang chạy')
     if (resolved.squarelDir && squarelBusy)
-      throw new IpcError('Đang có thao tác khác trên thư mục Squarel, chờ thao tác đó xong rồi thử lại')
-    if (resolved.squarelDir) squarelBusy = true
+      throw new IpcError(
+        squarelBusyText
+          ? `${squarelBusyText} Chờ xong rồi thử lại.`
+          : 'Đang có thao tác khác trên thư mục Squarel, chờ thao tác đó xong rồi thử lại',
+      )
+    if (resolved.squarelDir) {
+      squarelBusy = true
+      squarelBusyText = resolved.busyText ?? ''
+    }
     const taskId = `${key}#${++seq}`
     const redact = (t: string) => {
       const out = scrub(t, secrets)
@@ -434,7 +452,10 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       } catch (e) {
         emit({ taskId, kind: 'error', text: errMsg(e) })
       } finally {
-        if (resolved.squarelDir) squarelBusy = false
+        if (resolved.squarelDir) {
+          squarelBusy = false
+          squarelBusyText = ''
+        }
         running.delete(key)
         push('components:changed', null)
       }
@@ -603,7 +624,11 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'state:get': () => getState(),
     'state:set': async (patch) => {
       if (patch.squarelDir !== undefined) patch.squarelDir = await checkSquarelDir(patch.squarelDir)
-      const s = await updateState((st) => ({ ...st, ...patch }))
+      const s = await updateState((st) => ({
+        ...st,
+        ...patch,
+        ...(patch.setupStep === 'done' ? { setupCompleted: true } : {}),
+      }))
       push('components:changed', null)
       return s
     },

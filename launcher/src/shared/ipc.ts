@@ -114,10 +114,11 @@ export const launcherStateSchema = z.object({
   closeToTray: z.boolean(),
   autostart: z.boolean(),
   lastUpdateCheck: z.string().optional(),
+  setupCompleted: z.boolean().optional(),
 })
 export type LauncherStateView = z.infer<typeof launcherStateSchema>
 
-/** Fields the renderer may change; `schema` and `lastUpdateCheck` belong to main. */
+/** Fields the renderer may change; `schema`, `lastUpdateCheck` and `setupCompleted` belong to main. */
 export const statePatchSchema = z
   .strictObject({
     squarelDir: z

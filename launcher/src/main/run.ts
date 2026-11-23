@@ -38,15 +38,28 @@ function envGet(env: NodeJS.ProcessEnv, key: string): string | undefined {
   return undefined
 }
 
-function isFile(p: string): boolean {
+/**
+ * True for `%LOCALAPPDATA%\Microsoft\WindowsApps\<name>.exe` (App Execution Aliases such as
+ * winget.exe) of the given environment, compared case-insensitively. Nothing else qualifies.
+ */
+export function isAppExecutionAlias(p: string, env: NodeJS.ProcessEnv): boolean {
+  const local = envGet(env, 'LOCALAPPDATA')
+  if (!local || !isAbsolute(local)) return false
+  const dir = `${local.replace(/[\\/]+$/, '')}\\Microsoft\\WindowsApps\\`.toLowerCase()
+  const lower = p.toLowerCase()
+  return lower.startsWith(dir) && /^[^\\/]+\.exe$/.test(lower.slice(dir.length))
+}
+
+function isFile(p: string, env: NodeJS.ProcessEnv): boolean {
   try {
     return statSync(p).isFile()
   } catch (e) {
-    // App execution aliases (e.g. %LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe) are reparse
-    // points stat() cannot follow (EACCES); CreateProcess starts them fine.
-    if (!IS_WIN || (e as NodeJS.ErrnoException).code !== 'EACCES') return false
+    // App execution aliases are reparse points stat() cannot follow (EACCES); CreateProcess
+    // starts them fine. Accepted only in the user's own WindowsApps folder.
+    if (!IS_WIN || (e as NodeJS.ErrnoException).code !== 'EACCES' || !isAppExecutionAlias(p, env))
+      return false
     try {
-      return lstatSync(p).isSymbolicLink() && /\\WindowsApps\\[^\\]+\.exe$/i.test(p)
+      return lstatSync(p).isSymbolicLink()
     } catch {
       return false
     }
@@ -85,7 +98,7 @@ export function resolveExecutable(
   const pick = (base: string) => {
     for (const c of candidates(base)) {
       const kind = kindOf(c)
-      if (kind && isFile(c)) return { path: c, kind }
+      if (kind && isFile(c, env)) return { path: c, kind }
     }
     return undefined
   }

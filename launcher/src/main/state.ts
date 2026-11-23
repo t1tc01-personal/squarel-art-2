@@ -11,6 +11,8 @@ export interface LauncherState {
   closeToTray: boolean
   autostart: boolean
   lastUpdateCheck?: string
+  /** Set once the wizard reached "done"; a returning user skips steps 3–4 (main only). */
+  setupCompleted?: boolean
 }
 
 const defaults = (): LauncherState => ({
@@ -54,6 +56,7 @@ export async function loadState(file: string): Promise<LauncherState> {
   if (typeof r.closeToTray === 'boolean') s.closeToTray = r.closeToTray
   if (typeof r.autostart === 'boolean') s.autostart = r.autostart
   if (typeof r.lastUpdateCheck === 'string') s.lastUpdateCheck = r.lastUpdateCheck
+  if (r.setupCompleted === true) s.setupCompleted = true
   return s
 }
 

@@ -4,17 +4,21 @@ import { type ActionCtx, resolveAction } from '../src/main/actions'
 import { createDeps, type DetachedSpec, type Fixtures } from '../src/main/deps'
 import { parseEnv } from '../src/main/env-store'
 import { CORE } from '../src/main/registry/core'
-import type { Registry } from '../src/main/registry/registry'
+import type { LoadedIntegration, Registry } from '../src/main/registry/registry'
+import { isAppExecutionAlias } from '../src/main/run'
 import {
   CLAUDE_INSTALL_COMMAND,
   checkCloneTarget,
   cloneArgv,
   hasWinget,
   installPlan,
+  mergePath,
   nextSetupStep,
   OFFICIAL_DOWNLOADS,
+  refreshPath,
   SQUAREL_REPO,
   setupFacts,
+  step2Done,
   terminalArgv,
   wingetTerminalArgv,
 } from '../src/main/setup'
@@ -64,15 +68,27 @@ describe('nextSetupStep', () => {
 
   it('missing required component sends a done setup back to step 2', () => {
     const s = state({ setupStep: 'done', squarelDir: 'D:\\sq', mode: 'clone' })
-    expect(nextSetupStep(s, { squarelOk: true, requiredMissing: ['node'] })).toBe(2)
-    // Steps 3 and 4 need every required component too.
-    expect(nextSetupStep({ ...s, setupStep: 4 }, { squarelOk: true, requiredMissing: ['claude-code'] })).toBe(
-      2,
-    )
+    for (const id of ['node', 'git', 'pnpm'])
+      expect(nextSetupStep(s, { squarelOk: true, requiredMissing: [id] }), id).toBe(2)
+    // Steps 3 and 4 also need the libraries.
+    expect(
+      nextSetupStep({ ...s, setupStep: 4 }, { squarelOk: true, requiredMissing: ['squarel-deps'] }),
+    ).toBe(2)
     // Squarel itself gone: choose the folder again.
     expect(nextSetupStep(s, { squarelOk: false, requiredMissing: [] })).toBe(1)
     // No install mode chosen yet: start at the welcome step.
     expect(nextSetupStep(state({ setupStep: 3 }), { squarelOk: false, requiredMissing: [] })).toBe(1)
+  })
+
+  it('a missing Claude Code never sends the user back into the wizard', () => {
+    const s = state({ setupStep: 'done', squarelDir: 'D:\\sq', mode: 'clone' })
+    const facts = { squarelOk: true, requiredMissing: ['claude-code'] }
+    expect(nextSetupStep(s, facts)).toBe('done')
+    expect(nextSetupStep({ ...s, setupStep: 3 }, facts)).toBe(3)
+    expect(nextSetupStep({ ...s, setupStep: 4 }, facts)).toBe(4)
+    expect(step2Done(facts)).toBe(true)
+    expect(step2Done({ squarelOk: true, requiredMissing: ['squarel-deps'] })).toBe(false)
+    expect(step2Done({ squarelOk: false, requiredMissing: [] })).toBe(false)
   })
 
   it('setupFacts lists missing or too-old required tools and missing node_modules', () => {
@@ -150,11 +166,12 @@ describe('installPlan', () => {
 describe('terminal commands', () => {
   const d = createDeps('fake', { env: { SystemRoot: 'C:\\Windows' } })
   const CMD = 'C:\\Windows\\System32\\cmd.exe'
+  const WINGET = 'D:\\Apps\\WindowsApps\\winget.exe'
 
   it('winget runs in its own visible window without accepting any agreement', () => {
     const git = CORE.find((c) => c.id === 'git')?.install
     if (!git) throw new Error('git install spec missing')
-    const argv = wingetTerminalArgv(d, git)
+    const argv = wingetTerminalArgv(d, git, WINGET)
     expect(argv).toEqual([
       CMD,
       '/d',
@@ -164,7 +181,7 @@ describe('terminal commands', () => {
       CMD,
       '/d',
       '/k',
-      'winget',
+      WINGET,
       'install',
       '--id',
       'Git.Git',
@@ -172,7 +189,7 @@ describe('terminal commands', () => {
     ])
     for (const c of CORE) {
       if (!c.install?.winget) continue
-      const all = wingetTerminalArgv(d, c.install).join(' ')
+      const all = wingetTerminalArgv(d, c.install, WINGET).join(' ')
       expect(all).not.toMatch(
         /--accept-package-agreements|--accept-source-agreements|--silent|--disable-interactivity/,
       )
@@ -182,7 +199,7 @@ describe('terminal commands', () => {
   it('VS Build Tools opens its own installer UI (no --passive / --quiet override)', () => {
     const vs = CORE.find((c) => c.id === 'vs-build-tools')?.install
     if (!vs) throw new Error('vs-build-tools install spec missing')
-    const argv = wingetTerminalArgv(d, vs)
+    const argv = wingetTerminalArgv(d, vs, WINGET)
     const i = argv.indexOf('--override')
     expect(i).toBeGreaterThan(0)
     expect(argv[i + 1]).toMatch(/--add Microsoft\.VisualStudio\.Workload\.VCTools/)
@@ -190,8 +207,11 @@ describe('terminal commands', () => {
   })
 
   it('rejects package ids and arguments that could reach a shell', () => {
-    expect(() => wingetTerminalArgv(d, { winget: 'Git.Git & calc' })).toThrow()
-    expect(() => wingetTerminalArgv(d, { winget: 'Git.Git', override: '--add x" & calc' })).toThrow()
+    expect(() => wingetTerminalArgv(d, { winget: 'Git.Git & calc' }, WINGET)).toThrow()
+    expect(() => wingetTerminalArgv(d, { winget: 'Git.Git', override: '--add x" & calc' }, WINGET)).toThrow()
+    // Only an absolute winget.exe path, never a bare name cmd.exe would search for.
+    expect(() => wingetTerminalArgv(d, { winget: 'Git.Git' }, 'winget')).toThrow()
+    expect(() => wingetTerminalArgv(d, { winget: 'Git.Git' }, 'D:\\x\\calc.exe')).toThrow()
     expect(() => terminalArgv(d, ['cmd.exe', '/k', 'a|b'])).toThrow()
   })
 
@@ -199,7 +219,47 @@ describe('terminal commands', () => {
     const evil = createDeps('fake', { env: { SystemRoot: 'C:\\Windows', ComSpec: 'D:\\evil\\cmd.exe' } })
     const git = CORE.find((c) => c.id === 'git')?.install
     if (!git) throw new Error('git install spec missing')
-    expect(wingetTerminalArgv(evil, git)[0]).toBe(CMD)
+    expect(wingetTerminalArgv(evil, git, WINGET)[0]).toBe(CMD)
+  })
+})
+
+describe('PATH and aliases', () => {
+  it('mergePath keeps registry entries first, adds the current extras, drops duplicates', () => {
+    expect(mergePath('C:\\Git\\cmd;C:\\Node\\', 'c:\\node;D:\\extra;C:\\GIT\\cmd\\;')).toBe(
+      'C:\\Git\\cmd;C:\\Node\\;D:\\extra',
+    )
+  })
+
+  it('refreshPath merges the machine and user PATH from the registry into the current one', async () => {
+    const reg = 'C:\\Windows\\System32\\reg.exe query'
+    const d = createDeps('fake', {
+      platform: 'win32',
+      env: { SystemRoot: 'C:\\Windows', USERPROFILE: 'D:\\me', Path: 'D:\\launcher-only;C:\\Windows' },
+      run: {
+        [`${reg} HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment /v Path`]: {
+          code: 0,
+          lines: ['', '    Path    REG_EXPAND_SZ    C:\\Windows;C:\\Program Files\\Git\\cmd'],
+        },
+        [`${reg} HKCU\\Environment /v Path`]: {
+          code: 0,
+          lines: ['    Path    REG_EXPAND_SZ    %USERPROFILE%\\AppData\\Local\\pnpm'],
+        },
+      },
+    })
+    await refreshPath(d)
+    expect(d.env.Path).toBe(
+      'C:\\Windows;C:\\Program Files\\Git\\cmd;D:\\me\\AppData\\Local\\pnpm;D:\\launcher-only',
+    )
+  })
+
+  it('only the WindowsApps folder of LOCALAPPDATA counts as an App Execution Alias', () => {
+    const env = { LOCALAPPDATA: 'D:\\Profile\\Local' }
+    expect(isAppExecutionAlias('D:\\Profile\\Local\\Microsoft\\WindowsApps\\winget.exe', env)).toBe(true)
+    expect(isAppExecutionAlias('d:\\profile\\local\\microsoft\\windowsapps\\WINGET.EXE', env)).toBe(true)
+    expect(isAppExecutionAlias('D:\\x\\WindowsApps\\a.exe', env)).toBe(false)
+    expect(isAppExecutionAlias('D:\\Profile\\Local\\Microsoft\\WindowsApps\\sub\\a.exe', env)).toBe(false)
+    expect(isAppExecutionAlias('D:\\Profile\\Local\\Microsoft\\WindowsApps\\a.cmd', env)).toBe(false)
+    expect(isAppExecutionAlias('D:\\Profile\\Local\\Microsoft\\WindowsApps\\a.exe', {})).toBe(false)
   })
 })
 
@@ -212,6 +272,7 @@ describe('clone', () => {
       'v0.2.0',
       '--depth',
       '1',
+      '--',
       SQUAREL_REPO,
       'D:\\Local App\\SquarelArt\\app',
     ])
@@ -252,7 +313,12 @@ describe('setup actions', () => {
     const launched: DetachedSpec[] = []
     const external: string[] = []
     const patches: Partial<LauncherState>[] = []
-    const d = createDeps('fake', { launched, env: { SystemRoot: 'C:\\Windows' }, ...fx })
+    const d = createDeps('fake', {
+      launched,
+      env: { SystemRoot: 'C:\\Windows' },
+      which: { winget: 'D:\\Apps\\WindowsApps\\winget.exe' },
+      ...fx,
+    })
     const reg: Registry = { core: CORE, integrations: [], comingSoon: [], problems: [] }
     const c: ActionCtx = {
       d,
@@ -326,7 +392,7 @@ describe('setup actions', () => {
   })
 
   it('clone runs git with the release tag into the default folder, then stores it as the Squarel folder', async () => {
-    const key = `git clone --branch v0.2.0 --depth 1 ${SQUAREL_REPO} ${INSTALL}`
+    const key = `git clone --branch v0.2.0 --depth 1 -- ${SQUAREL_REPO} ${INSTALL}`
     const { c, patches } = ctx({
       run: { [key]: { code: 0, files: { [join(INSTALL, 'package.json')]: '{"name":"squarel-art"}' } } },
     })
@@ -343,5 +409,80 @@ describe('setup actions', () => {
     const dev = ctx({}, { launcherVersion: '0.2.0+dev' })
     const ev2 = await run({ componentId: 'squarel', kind: 'install', id: 'clone' }, dev.c)
     expect(ev2.at(-1)).toMatchObject({ kind: 'error' })
+  })
+
+  const CLONE = `git clone --branch v0.2.0 --depth 1 -- ${SQUAREL_REPO} ${INSTALL}`
+
+  it('a missing release tag points to "Dùng repo đã clone" and leaves nothing behind', async () => {
+    const { c, patches } = ctx({
+      run: {
+        [CLONE]: {
+          code: 128,
+          lines: [
+            'warning: Could not find remote branch v0.2.0 to clone.',
+            'fatal: Remote branch v0.2.0 not found in upstream origin',
+          ],
+          files: { [join(INSTALL, '.git', 'HEAD')]: 'x' },
+        },
+      },
+    })
+    const ev = await run({ componentId: 'squarel', kind: 'install', id: 'clone' }, c)
+    expect(ev.at(-1)?.text).toMatch(/Dùng repo đã clone/)
+    expect(await c.d.fs.readdir(INSTALL)).toEqual([])
+    expect(patches).toEqual([])
+  })
+
+  it('a clone that is not Squarel is removed again; the clone has a time limit', async () => {
+    let signal: AbortSignal | undefined
+    const { c, patches } = ctx({
+      run: { [CLONE]: { code: 0, files: { [join(INSTALL, 'package.json')]: '{"name":"something-else"}' } } },
+    })
+    const run0 = c.d.run
+    c.d.run = async (spec) => {
+      signal = spec.signal
+      return run0(spec)
+    }
+    const ev = await run({ componentId: 'squarel', kind: 'install', id: 'clone' }, c)
+    expect(ev.at(-1)).toMatchObject({ kind: 'error' })
+    expect(await c.d.fs.readdir(INSTALL)).toEqual([])
+    expect(patches).toEqual([])
+    expect(signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('winget not found on PATH: the terminal is not opened', async () => {
+    const { c, launched } = ctx({ which: {} })
+    const ev = await run({ componentId: 'git', kind: 'terminal', id: 'winget' }, c)
+    expect(ev.at(-1)).toMatchObject({ kind: 'error' })
+    expect(launched).toEqual([])
+  })
+
+  it('an integration build that holds the Squarel folder names itself for other actions', () => {
+    const manifest = {
+      schema: 1,
+      id: 'aseprite',
+      name: 'Aseprite',
+      description: 'x',
+      icon: 'icon.png',
+      accent: '#FF77A8',
+      platforms: ['win32'],
+      detect: { candidates: ['C:\\A\\Aseprite.exe'] },
+      install: [{ id: 'build', label: 'Build', run: ['pnpm', 'aseprite:build', '--', '--json-progress'] }],
+      launch: [{ id: 'open', label: 'Mở', default: true, run: ['{exe}'] }],
+      checks: [],
+    } as unknown as LoadedIntegration['manifest']
+    const { c } = ctx(
+      {},
+      {
+        state: state({ squarelDir: 'D:\\sq', selected: ['aseprite'] }),
+        reg: {
+          core: CORE,
+          integrations: [{ manifest, dir: 'D:\\sq\\integrations\\aseprite', source: 'squarel' }],
+          comingSoon: [],
+          problems: [],
+        },
+      },
+    )
+    const r = resolveAction({ componentId: 'aseprite', kind: 'install', id: 'build', label: 'x' }, c)
+    expect(r).toMatchObject({ squarelDir: true, busyText: 'Aseprite đang build…' })
   })
 })
