@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { connect, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -183,10 +183,15 @@ test.describe('tray', () => {
       await a.app.firstWindow()
       await expect.poll(() => bridgeMode(a.app), { timeout: 45_000 }).toBe('own')
       await expect.poll(() => listening(own), { timeout: 30_000 }).toBe(true)
+      // The own bridge's pid is recorded (orphan recovery) while it runs…
+      const record = join(a.root, 'Roaming', 'SquarelArt Launcher', 'bridge-owner.json')
+      await expect.poll(() => existsSync(record)).toBe(true)
       const closed = a.app.waitForEvent('close')
       await trayClick(a.app, 'Thoát')
       await closed
       await expect.poll(() => listening(own), { timeout: 10_000 }).toBe(false)
+      // …and a normal quit leaves no record behind.
+      expect(existsSync(record)).toBe(false)
     } finally {
       await a.close().catch(() => {})
     }

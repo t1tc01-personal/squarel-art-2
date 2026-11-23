@@ -12,7 +12,13 @@ import { FAKE_FIXTURE, type FakeWorld, loadFakeWorld } from './fake-mode'
 import { createIpcHandlers, type IpcHandlers } from './ipc-handlers'
 import { createQuitController } from './lifecycle'
 import { pruneLauncherLogs } from './logs'
-import { type OrphanDeps, recordOwnBridge, recoverOrphanBridge, windowsProcInfo } from './orphan'
+import {
+  clearOwnRecord,
+  type OrphanDeps,
+  recordOwnBridge,
+  recoverOrphanBridge,
+  windowsProcInfo,
+} from './orphan'
 import { appPaths } from './paths'
 import { createScheduler } from './scheduler'
 import { type LauncherState, loadState, saveState } from './state'
@@ -211,6 +217,8 @@ let services:
   | {
       handlers: IpcHandlers
       bridge(): BridgeState
+      /** No bridge may (re)start from now on (quit decided). */
+      beginQuit(): void
       stopBridge(): Promise<void>
       killOwnChild(): void
       onTrayAction(action: TrayAction): void
@@ -248,6 +256,7 @@ const quit = createQuitController({
     const r = mainWindow ? await dialog.showMessageBox(mainWindow, opts) : await dialog.showMessageBox(opts)
     return r.response === 0
   },
+  beginQuit: () => services?.beginQuit(),
   abortTasks: async () => services?.handlers.abortTasks(),
   stopBackgroundWork,
   stopBridge: async () => services?.stopBridge(),
@@ -354,7 +363,15 @@ async function startServices(): Promise<IpcHandlers> {
     },
     write: async (text) => {
       await d.fs.mkdir(dirname(ownerFile), { recursive: true })
-      await d.fs.writeFile(ownerFile, text)
+      // tmp + rename: a crash mid-write never leaves a half record.
+      const tmp = `${ownerFile}.${process.pid}.tmp`
+      await d.fs.writeFile(tmp, text)
+      try {
+        await d.fs.rename(tmp, ownerFile)
+      } catch (e) {
+        await d.fs.rm(tmp, { force: true }).catch(() => {})
+        throw e
+      }
     },
     remove: () => d.fs.rm(ownerFile, { force: true }),
     isPidAlive: (pid) => d.isPidAlive(pid),
@@ -367,11 +384,14 @@ async function startServices(): Promise<IpcHandlers> {
     },
     log,
   }
+  /** Pid of the most recent own bridge (its record is cleared on a normal quit). */
+  let lastOwnPid: number | undefined
   /** The supervisor's deps: every own bridge it spawns is recorded. */
   const supDeps: Deps = {
     ...d,
     spawnBridge: (o) => {
       const child = d.spawnBridge(o)
+      lastOwnPid = child.pid
       void recordOwnBridge(owner, child, Number(o.env?.BRIDGE_PORT) || supPort, d.now())
       return child
     },
@@ -578,9 +598,14 @@ async function startServices(): Promise<IpcHandlers> {
   services = {
     handlers: h,
     bridge,
+    beginQuit() {
+      bridgeStopped = true
+    },
     async stopBridge() {
       bridgeStopped = true
       await chainBridge(stopSupervisor)
+      // The exit handler's async cleanup may not run before the process ends: clear it here.
+      if (lastOwnPid) await clearOwnRecord(owner, lastOwnPid)
     },
     killOwnChild: () => sup?.killOwnChild(),
     onTrayAction(action) {
@@ -626,8 +651,12 @@ function startTray(): void {
 }
 
 if (PRIMARY) {
+  /** A second instance that arrives before the window exists is answered once it does. */
+  let windowCreated = false
+  let showWhenCreated = false
   app.on('second-instance', () => {
-    if (app.isReady()) showWindow()
+    if (windowCreated) showWindow()
+    else showWhenCreated = true
   })
   app.on('before-quit', (event) => quit.beforeQuit(event))
   app.on('will-quit', () => tray?.destroy())
@@ -645,6 +674,8 @@ if (PRIMARY) {
     startTray()
     // Without a tray icon there would be no way back to a hidden window.
     createWindow(!START_HIDDEN || !tray)
+    windowCreated = true
+    if (showWhenCreated) showWindow()
     app.on('activate', () => showWindow())
   })
 }

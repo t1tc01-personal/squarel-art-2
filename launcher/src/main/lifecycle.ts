@@ -4,14 +4,16 @@
  *   app 'before-quit' ─► preventDefault ─► running tasks? ask ─► (cancel: keep running)
  *                                              │ yes / none
  *                                              ▼
- *                          abort tasks (tree-kill) → stop background work → await bridge stop
+ *        beginQuit (no more bridge restarts) → abort tasks (tree-kill) → stop background work
+ *                       → await bridge stop (deadline: then killOwnChild and go on)
  *                                              │
  *                                              ▼
  *                                  finish(): app.quit() again (now passes) or quitAndInstall
  *
  *   process 'exit' ─► killOwnChild() (synchronous last resort; never touches an attached bridge)
  *
- * Re-entry: while a shutdown runs, further quit requests are held back and join it.
+ * Re-entry: while a shutdown runs, further quit requests are held back and join it; an install
+ * (quitAndInstall) requested meanwhile replaces the plain quit as the finish step.
  */
 
 export interface QuitDeps {
@@ -19,6 +21,8 @@ export interface QuitDeps {
   runningTasks(): string[]
   /** Asks the user whether to stop those tasks and quit. */
   confirmStopTasks(labels: string[]): Promise<boolean>
+  /** The quit is decided: from now on nothing may start a bridge again (e.g. a task's resume). */
+  beginQuit(): void
   /** Aborts every running task (killing its process tree) and waits for them to end. */
   abortTasks(): Promise<void>
   /** Scheduler and presence polling (index.ts stopBackgroundWork). */
@@ -47,11 +51,17 @@ export interface QuitController {
 
 const name = (e: unknown) => (e as Error)?.name ?? 'Error'
 
-export function createQuitController(deps: QuitDeps): QuitController {
+/** How long a graceful bridge stop may take before the own child is killed outright. */
+export const STOP_DEADLINE_MS = 8000
+
+export function createQuitController(deps: QuitDeps, opts: { stopDeadlineMs?: number } = {}): QuitController {
+  const deadlineMs = opts.stopDeadlineMs ?? STOP_DEADLINE_MS
   let done = false
   let pending: Promise<boolean> | undefined
+  /** A non-default finish (install) requested for the pending shutdown; it outranks a plain quit. */
+  let finishOverride: (() => void) | undefined
 
-  async function run(finish: () => void): Promise<boolean> {
+  async function run(): Promise<boolean> {
     const labels = deps.runningTasks()
     if (labels.length) {
       let ok = false
@@ -61,6 +71,13 @@ export function createQuitController(deps: QuitDeps): QuitController {
         deps.log?.(`quit confirm failed: ${name(e)}`)
       }
       if (!ok) return false
+    }
+    try {
+      deps.beginQuit()
+    } catch (e) {
+      deps.log?.(`begin quit failed: ${name(e)}`)
+    }
+    if (labels.length) {
       try {
         await deps.abortTasks()
       } catch (e) {
@@ -72,22 +89,40 @@ export function createQuitController(deps: QuitDeps): QuitController {
     } catch (e) {
       deps.log?.(`stopping background work failed: ${name(e)}`)
     }
-    try {
-      await deps.stopBridge()
-    } catch (e) {
-      deps.log?.(`bridge stop failed: ${name(e)}`)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stopped = await Promise.race([
+      deps.stopBridge().then(
+        () => true,
+        (e) => {
+          deps.log?.(`bridge stop failed: ${name(e)}`)
+          return true
+        },
+      ),
+      new Promise<false>((r) => {
+        timer = setTimeout(() => r(false), deadlineMs)
+      }),
+    ])
+    clearTimeout(timer)
+    if (!stopped) {
+      deps.log?.(`bridge stop took over ${deadlineMs} ms: killing the own bridge`)
+      try {
+        deps.killOwnChild()
+      } catch {}
     }
     done = true
+    const finish = finishOverride ?? deps.quit
+    finishOverride = undefined
     finish()
     return true
   }
 
-  function shutdown(finish: () => void = deps.quit): Promise<boolean> {
+  function shutdown(finish?: () => void): Promise<boolean> {
     if (done) {
-      finish()
+      ;(finish ?? deps.quit)()
       return Promise.resolve(true)
     }
-    pending ??= run(finish).finally(() => {
+    if (finish) finishOverride = finish
+    pending ??= run().finally(() => {
       pending = undefined
     })
     return pending

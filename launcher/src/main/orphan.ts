@@ -36,7 +36,8 @@ export interface OrphanDeps {
   log?(message: string): void
 }
 
-export type OrphanOutcome = 'none' | 'gone' | 'not-ours' | 'killed'
+/** `unknown`: the process could not be inspected; the record stays for the next start. */
+export type OrphanOutcome = 'none' | 'gone' | 'not-ours' | 'killed' | 'unknown'
 
 /** Spawn → process creation time skew we accept. */
 const START_SKEW_MS = 30_000
@@ -76,7 +77,8 @@ export async function recoverOrphanBridge(deps: OrphanDeps): Promise<OrphanOutco
   let outcome: OrphanOutcome = 'gone'
   if (deps.isPidAlive(rec.pid)) {
     const info = await deps.procInfo(rec.pid).catch(() => undefined)
-    if (info && isOurBridge(rec, info)) {
+    if (!info) return 'unknown' // cannot prove anything either way: keep the record, touch nothing
+    if (isOurBridge(rec, info)) {
       deps.log?.(`orphaned bridge (pid ${rec.pid}) from an earlier run: stopping it`)
       await deps.kill(rec.pid)
       outcome = 'killed'
@@ -86,6 +88,15 @@ export async function recoverOrphanBridge(deps: OrphanDeps): Promise<OrphanOutco
   }
   await deps.remove().catch(() => {})
   return outcome
+}
+
+/** Drops the record of `pid` once that process is gone (normal quit, after the bridge stop). */
+export async function clearOwnRecord(
+  deps: Pick<OrphanDeps, 'read' | 'remove' | 'isPidAlive'>,
+  pid: number,
+): Promise<void> {
+  const cur = parseRecord((await deps.read().catch(() => undefined)) ?? '')
+  if (cur?.pid === pid && !deps.isPidAlive(pid)) await deps.remove().catch(() => {})
 }
 
 /** Remembers a freshly spawned own bridge; the record goes away when that child exits. */
