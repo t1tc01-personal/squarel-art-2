@@ -128,7 +128,7 @@ if (testSink) (globalThis as { __squarelTest?: TestSink }).__squarelTest = testS
 
 /** LICENSE.md shipped with the launcher: resources in a packaged build, repo root from source. */
 function licensePath(): string {
-  // TODO(T16): electron-builder `extraResources: [{ from: '../LICENSE.md', to: 'LICENSE.md' }]` (no builder config yet).
+  // Packaged: electron-builder.yml `extraResources` copies ../LICENSE.md to resources/LICENSE.md.
   return app.isPackaged
     ? join(process.resourcesPath, 'LICENSE.md')
     : join(app.getAppPath(), '..', 'LICENSE.md')

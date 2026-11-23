@@ -49,6 +49,18 @@ Squarel thì **lo cả quy trình làm ra sản phẩm**. Aseprite chỉ là nơ
 
 Hai cái dùng chung được: cài thêm một MCP Aseprite bên cạnh Squarel cho những việc Squarel không làm.
 
+## Launcher (Windows)
+
+Không muốn gõ lệnh? **Squarel Art Launcher** là app Windows cài và chạy Squarel thay bạn:
+- wizard 4 bước: cài Git/Node/pnpm qua `winget`, clone Squarel, ghi `.env`, đăng ký với Claude Code;
+- giữ bridge, hiện Aseprite và phiên Claude Code nào đang kết nối;
+- mở Aseprite, cài extension, health check, xem nhật ký;
+- tự cập nhật từ GitHub Release, đưa Squarel lên cùng phiên bản.
+
+Tải `Squarel-Art-Launcher-Setup-X.Y.Z.exe` ở trang [Releases](https://github.com/t1tc01-personal/squarel-art-2/releases). Bộ cài chưa ký số: khi SmartScreen chặn, bấm **More info → Run anyway**.
+
+Chi tiết: [docs/launcher.md](docs/launcher.md). Build và phát hành: [docs/release.md](docs/release.md).
+
 ## Yêu cầu
 
 - Node.js ≥ 22.18 (đã thử với Node 24) và pnpm.
@@ -155,6 +167,7 @@ pnpm cli export --project test --preset print-png --options '{\"widthMm\":200}'
 
 - [Cài đặt từng bước](docs/setup.md) · [Kiến trúc](docs/architecture.md) · [Kế hoạch](docs/plans/2026-11-22-personal-tool-plan.md) · [Kế hoạch SaaS (để dành)](docs/plans/2026-11-22-saas-plan.md)
 - [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md) · [Viết tích hợp](docs/integrations.md)
+- [Launcher](docs/launcher.md) · [Build và phát hành](docs/release.md)
 
 ## Giấy phép
 

@@ -16,6 +16,26 @@ Làm lần lượt từ trên xuống. Mỗi bước có một lệnh kiểm tra
 
 Không có Cloudflare hay Aseprite thì vẫn dùng được: Claude vẫn vẽ, sửa, chuyển ảnh chụp thành pixel art và xuất file. Chỉ thiếu phần AI tạo ảnh và phần vẽ tay.
 
+## Cách nhanh: dùng launcher
+
+Trên Windows, **Squarel Art Launcher** làm thay bạn phần lớn các bước dưới đây:
+
+| Bước trong hướng dẫn này | Launcher làm |
+|---|---|
+| 1. Node, pnpm, Git | Có: cài bằng `winget` (bạn tự bấm đồng ý) |
+| 2. Cài thư viện | Có: clone Squarel (hoặc dùng repo đã clone) và `pnpm install` |
+| 3. File `.env` | Có: màn hình Cấu hình và Cài đặt |
+| 4. Cắm vào Claude Code | Có: `claude mcp add`, chép skill, chạy thử MCP. Bạn vẫn tự đăng nhập `claude` |
+| 5. Cloudflare | Một phần: bạn tự lấy token (mục 5), launcher kiểm tra token |
+| 6. Aseprite | Có: build hoặc trỏ vào bản đã có, cài extension |
+| 7, 8 | Không: làm tay theo hướng dẫn |
+
+1. Tải `Squarel-Art-Launcher-Setup-X.Y.Z.exe` ở trang [Releases](https://github.com/t1tc01-personal/squarel-art-2/releases).
+2. Chạy file. SmartScreen chặn thì bấm **More info → Run anyway** (bộ cài chưa ký số).
+3. Đi hết wizard 4 bước.
+
+Chi tiết ở [docs/launcher.md](launcher.md). Muốn tự làm từng bước thì đọc tiếp bên dưới.
+
 Mọi lệnh bên dưới chạy trong **PowerShell**, tại thư mục repo `D:\code\squarel-art-2`, trừ khi có ghi khác.
 
 ---

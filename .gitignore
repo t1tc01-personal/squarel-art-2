@@ -11,5 +11,6 @@ evals/out/
 vendor/
 launcher/out/
 launcher/dist/
+launcher/build/
 launcher/test-results/
 launcher/playwright-report/

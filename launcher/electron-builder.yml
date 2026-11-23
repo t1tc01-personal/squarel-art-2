@@ -1,0 +1,49 @@
+# Squarel Art Launcher packaging (electron-builder). Build: `pnpm dist` (see docs/release.md).
+appId: art.squarel.launcher
+productName: Squarel Art Launcher
+copyright: Copyright (c) Squarel Art. PolyForm Shield 1.0.0.
+
+directories:
+  output: dist
+  buildResources: build
+
+# Only the electron-vite output and package.json go into app.asar. Production node_modules are
+# added by electron-builder; renderer-only packages are bundled by Vite, so they are left out.
+# Never: .env, vendor/, logs, .superpowers/, tests, sources, source maps.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/*.{ts,mts,cts,tsx}'
+  - '!node_modules/react/**'
+  - '!node_modules/react-dom/**'
+  - '!node_modules/scheduler/**'
+  - '!node_modules/@fontsource/**'
+asarUnpack: []
+
+# LICENSE.md next to app.asar: process.resourcesPath/LICENSE.md (the "Giấy phép" link in Cài đặt).
+extraResources:
+  - from: ../LICENSE.md
+    to: LICENSE.md
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Squarel-Art-Launcher-Setup-${version}.${ext}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+
+# Must match the electron-updater feed in src/main/updates/electron-updater.ts.
+publish:
+  provider: github
+  owner: t1tc01-personal
+  repo: squarel-art-2
+  releaseType: release

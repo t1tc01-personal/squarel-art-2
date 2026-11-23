@@ -9,10 +9,12 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "icon": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-icon.mts",
+    "dist": "pnpm build && pnpm icon && electron-builder --win --publish never",
     "test": "vitest run",
     "e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "lint": "biome check src test",
+    "lint": "biome check src test scripts",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {
@@ -35,9 +37,11 @@
     "@types/ws": "8.18.1",
     "@vitejs/plugin-react": "6.3.0",
     "electron": "45.4.1",
+    "electron-builder": "26.18.1",
     "electron-vite": "6.0.0",
     "typescript": "7.0.2",
     "vite": "8.3.8",
     "vitest": "5.1.1"
-  }
+  },
+  "author": "Squarel Art"
 }

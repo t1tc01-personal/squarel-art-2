@@ -22,7 +22,7 @@ function repoFiles(): string[] | null {
 }
 
 const files = repoFiles()
-const SKIP_CONTENT = [/^pnpm-lock\.yaml$/, /\.(png|gif|webp|gz|zip|aseprite|ico|exe)$/i]
+const SKIP_CONTENT = [/(^|\/)pnpm-lock\.yaml$/, /\.(png|gif|webp|gz|zip|aseprite|ico|exe)$/i]
 
 /** Patterns that must never appear in committed text. */
 const SECRET_PATTERNS: [string, RegExp][] = [
