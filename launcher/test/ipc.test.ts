@@ -598,12 +598,13 @@ describe('setup:info', () => {
     expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 2 })
     expect(getState().setupStep).toBe(2)
     await h.handle('state:set', APP, { setupStep: 'done' })
-    expect(getState().setupCompleted).toBe(true)
+    expect(getState().setupCompleted).toBeUndefined() // a skip is not a finished setup
     expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 'done' })
   })
 
   it('a returning user back at step 2 is done as soon as step 2 is satisfied', async () => {
     const { h } = setup(tools())
+    await h.handle('state:set', APP, { setupStep: 4 })
     await h.handle('state:set', APP, { setupStep: 'done' })
     await h.handle('state:set', APP, { setupStep: 2, mode: 'clone' })
     expect(await h.handle('setup:info', APP, { refresh: false })).toMatchObject({ step: 'done' })

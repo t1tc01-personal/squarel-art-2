@@ -627,7 +627,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       const s = await updateState((st) => ({
         ...st,
         ...patch,
-        ...(patch.setupStep === 'done' ? { setupCompleted: true } : {}),
+        // Only finishing step 4 completes setup; "Bỏ qua, vào launcher" from step 2 does not.
+        ...(patch.setupStep === 'done' && st.setupStep === 4 ? { setupCompleted: true } : {}),
       }))
       push('components:changed', null)
       return s

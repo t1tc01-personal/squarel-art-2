@@ -171,7 +171,8 @@ test('step 2 is never a trap: "Bỏ qua, vào launcher" opens the launcher', asy
     await wizard(page).getByRole('button', { name: 'Bỏ qua, vào launcher' }).click()
     await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
     const st = await page.evaluate(() => (window as any).squarel.getState())
-    expect(st).toMatchObject({ setupStep: 'done', setupCompleted: true })
+    expect(st).toMatchObject({ setupStep: 'done' })
+    expect(st.setupCompleted).toBeUndefined() // skipping never counts as finishing steps 3–4
   } finally {
     await close()
   }
