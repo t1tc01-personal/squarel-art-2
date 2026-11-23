@@ -9,6 +9,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - Project README in English, Vietnamese, Japanese, Simplified Chinese and Korean.
 - `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates.
 - CI workflow that runs the Squarel and launcher checks on every push to `main` and every pull request.
+- Launcher: progress card for building Aseprite. It shows the overall percent, the current step with its file counter and estimated time left, the duration of every step, the last output line, and the full log on demand. It has Huỷ (with confirmation) and Thử lại buttons. The card appears in setup step 3 and, in a compact form, in the integration page banner. Toasts for long tasks now include a progress bar and open the tool's page when clicked.
+- `pnpm aseprite:build --json-progress` also reports the weighted overall percent, the compiled-file counter and the list of steps.
+
+### Fixed
+
+- Launcher: the Aseprite build progress no longer jumps back to about 0% when compiling starts. Before, it looked stuck or reset.
 
 ## [0.2.0] - 2026-11-24
 

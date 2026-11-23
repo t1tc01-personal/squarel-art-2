@@ -450,7 +450,10 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   }
 
   // ---- tasks --------------------------------------------------------------------------------
-  const running = new Map<string, { done: Promise<void>; label: string; abort: AbortController }>()
+  const running = new Map<
+    string,
+    { done: Promise<void>; label: string; abort: AbortController; taskId: string }
+  >()
   /** One task at a time may run in / change the Squarel folder. */
   let squarelBusy = false
   /** What holds the Squarel folder now (message for refused actions). */
@@ -476,12 +479,14 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       return out.length > MAX_TEXT ? `${out.slice(0, MAX_TEXT)}…` : out
     }
     let finished = false
+    const abort = new AbortController()
     const emit = (e: TaskEvent) => {
       if (finished) return
       if (e.kind === 'done' || e.kind === 'error') finished = true
-      push('task:event', { ...e, taskId, ...(e.text !== undefined ? { text: redact(e.text) } : {}) })
+      // A cancelled command exits with ABORTED_CODE; say what happened instead of the exit code.
+      const ev: TaskEvent = abort.signal.aborted && e.kind === 'error' ? { ...e, text: 'Đã huỷ' } : e
+      push('task:event', { ...ev, taskId, ...(ev.text !== undefined ? { text: redact(ev.text) } : {}) })
     }
-    const abort = new AbortController()
     const p = (async () => {
       try {
         await body(taskId, emit, abort.signal)
@@ -497,7 +502,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         push('components:changed', null)
       }
     })()
-    running.set(key, { done: p, label: resolved.busyText || taskLabel(key), abort })
+    running.set(key, { done: p, label: resolved.busyText || taskLabel(key), abort, taskId })
     return taskId
   }
   /** Quit-dialog label of a task without busyText, e.g. "Thao tác squarel:register-mcp". */
@@ -713,6 +718,9 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'action:run': async (ref) => {
       const { actx, secrets } = await actionCtx()
       return startTask(resolveAction(ref, actx), secrets)
+    },
+    'action:cancel': async ({ taskId }) => {
+      for (const t of running.values()) if (t.taskId === taskId) t.abort.abort()
     },
     'updates:check': () => checkUpdates(),
     'updates:apply': async () => {

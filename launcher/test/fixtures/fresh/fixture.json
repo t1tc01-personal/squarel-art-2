@@ -36,9 +36,12 @@
     },
     "pnpm aseprite:build -- --src {local}\\tools\\aseprite --json-progress": {
       "code": 0,
+      "lineDelayMs": 1500,
       "lines": [
-        "@@progress {\"step\":1,\"total\":6,\"label\":\"Build tools\",\"percent\":10}",
-        "@@progress {\"step\":6,\"total\":6,\"label\":\"Install\",\"percent\":100}"
+        "@@progress {\"total\":6,\"step\":1,\"label\":\"Build tools\",\"overall\":0,\"plan\":[\"Build tools\",\"Aseprite source\",\"Skia\",\"Configure\",\"Build\",\"Check and configure\"]}",
+        "@@progress {\"total\":6,\"step\":5,\"label\":\"Build\",\"percent\":100,\"overall\":95,\"detail\":\"1430/1430\",\"plan\":[\"Build tools\",\"Aseprite source\",\"Skia\",\"Configure\",\"Build\",\"Check and configure\"]}",
+        "[1430/1430] Linking CXX executable bin\\aseprite.exe",
+        "@@progress {\"total\":6,\"step\":6,\"label\":\"Check and configure\",\"overall\":95,\"plan\":[\"Build tools\",\"Aseprite source\",\"Skia\",\"Configure\",\"Build\",\"Check and configure\"]}"
       ]
     },
     "claude mcp remove squarel-launcher-check --scope user": { "code": 1, "lines": ["No MCP server named squarel-launcher-check"] },

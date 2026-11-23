@@ -3,7 +3,11 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  BUILD_STEPS,
+  BUILD_WEIGHTS,
   cmakeConfigureArgs,
+  counterTracker,
+  overallPercent,
   parseBuildArgs,
   parseNinjaProgress,
   parseSetOutput,
@@ -111,6 +115,24 @@ describe('aseprite:build helpers', () => {
   it('progressTracker never goes backwards and ignores noise', () => {
     const t = progressTracker()
     expect(['[10/100] a', 'warning: x', '[5/100] b', '[50/100] c'].map(t)).toEqual([10, undefined, 10, 50])
+  })
+
+  it('counterTracker reports the file counter with the percent', () => {
+    const t = counterTracker()
+    expect(t('[812/1430] Building CXX object a.obj')).toEqual({ percent: 56, detail: '812/1430' })
+    expect(t('noise')).toBeUndefined()
+  })
+
+  it('overallPercent weights the steps so the whole build only moves forward', () => {
+    expect(BUILD_WEIGHTS.reduce((a, b) => a + b, 0)).toBe(100)
+    expect(BUILD_STEPS).toHaveLength(6)
+    expect(overallPercent(1)).toBe(0)
+    expect(overallPercent(5)).toBe(30)
+    expect(overallPercent(5, 50)).toBe(63)
+    expect(overallPercent(6)).toBe(95)
+    expect(overallPercent(6, 100)).toBe(100)
+    const seq = [overallPercent(4), overallPercent(5, 0), overallPercent(5, 1), overallPercent(6)]
+    expect([...seq].sort((a, b) => a - b)).toEqual(seq)
   })
 
   it('installs only the components Aseprite needs', () => {

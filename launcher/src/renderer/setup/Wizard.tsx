@@ -9,11 +9,11 @@ import { api } from '../api'
 import { errorText, Toasts, useTasks } from '../app-context'
 import { Icon } from '../components/Icon'
 import { TitleBar } from '../layout/TitleBar'
+import type { TaskLog } from '../task-log'
 import { Step1 } from './Step1'
 import { Step2 } from './Step2'
 import { Step3 } from './Step3'
 import { Step4 } from './Step4'
-import { type TaskLog, useTaskLog } from './task-log'
 import './wizard.css'
 
 export type StepNo = 1 | 2 | 3 | 4
@@ -97,8 +97,7 @@ export function Wizard({
   state: LauncherStateView | null
   reload(refresh?: boolean): Promise<void>
 }) {
-  const log = useTaskLog()
-  const { notify } = useTasks()
+  const { notify, log } = useTasks()
   const [builds, setBuilds] = useState<Record<string, string>>({})
   const setBuild = useCallback((id: string, taskId: string) => setBuilds((b) => ({ ...b, [id]: taskId })), [])
 

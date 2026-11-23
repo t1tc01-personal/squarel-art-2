@@ -176,13 +176,34 @@ function selectedIntegration(ctx: ActionCtx, id: string): LoadedIntegration | st
   return i
 }
 
-/** Turns `@@progress {json}` output lines into progress events. */
-function withProgress(emit: Emit): Emit {
+/**
+ * Turns `@@progress {json}` output lines into progress events. The percent is for the whole task:
+ * the script's weighted `overall` when it sends one, otherwise each step counts the same. It never
+ * goes down, so a step that restarts its own counter does not move the bar back.
+ */
+export function withProgress(emit: Emit): Emit {
+  let best = 0
   return (e) => {
     const p = e.kind === 'line' && e.text ? parseProgressLine(e.text) : undefined
     if (!p) return emit(e)
-    const percent = p.percent ?? (p.total > 0 ? Math.round((p.step / p.total) * 100) : undefined)
-    emit({ taskId: e.taskId, kind: 'progress', text: p.label, ...(percent !== undefined ? { percent } : {}) })
+    const clamp = (n: number) => Math.min(100, Math.max(0, n))
+    const total = Math.max(1, Math.round(p.total))
+    const step = Math.min(total, Math.max(1, Math.round(p.step)))
+    const raw = p.overall ?? ((step - 1 + clamp(p.percent ?? 0) / 100) / total) * 100
+    best = Math.max(best, Math.round(clamp(raw)))
+    emit({
+      taskId: e.taskId,
+      kind: 'progress',
+      text: p.label,
+      percent: best,
+      step: {
+        step,
+        total,
+        label: p.label,
+        ...(p.detail ? { detail: p.detail } : {}),
+        ...(p.plan ? { plan: p.plan } : {}),
+      },
+    })
   }
 }
 

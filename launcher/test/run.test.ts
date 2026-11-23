@@ -344,6 +344,25 @@ describe('parseProgressLine', () => {
     expect(parseProgressLine('  @@progress {"step":1,"total":6,"label":"x"}')).toBeUndefined()
     expect(parseProgressLine('')).toBeUndefined()
   })
+
+  it('reads the optional overall percent, counter and step plan, dropping bad values', () => {
+    const line =
+      '@@progress {"step":5,"total":6,"label":"Build","percent":56,"overall":66,"detail":"812/1430","plan":["a","b"]}'
+    expect(parseProgressLine(line)).toEqual({
+      step: 5,
+      total: 6,
+      label: 'Build',
+      percent: 56,
+      overall: 66,
+      detail: '812/1430',
+      plan: ['a', 'b'],
+    })
+    expect(
+      parseProgressLine(
+        '@@progress {"step":1,"total":6,"label":"x","overall":"9","detail":3,"plan":["a",1]}',
+      ),
+    ).toEqual({ step: 1, total: 6, label: 'x' })
+  })
 })
 
 describe('isProcessRunning', () => {

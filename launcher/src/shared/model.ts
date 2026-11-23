@@ -61,10 +61,22 @@ export interface PresenceGroup {
   label: string
   items: PresenceItem[]
 }
+/** Where a multi-step task is (e.g. the Aseprite build): step 1-based, its label as printed. */
+export interface TaskStep {
+  step: number
+  total: number
+  label: string
+  /** Counter inside the step, e.g. "812/1430" compiled files. */
+  detail?: string
+  /** Labels of all steps, when the tool announces them. */
+  plan?: string[]
+}
 export interface TaskEvent {
   taskId: string
   kind: 'line' | 'progress' | 'done' | 'error'
   text?: string
+  /** Overall percent of the whole task (0-100); never lower than an earlier event of the task. */
   percent?: number
   code?: number
+  step?: TaskStep
 }

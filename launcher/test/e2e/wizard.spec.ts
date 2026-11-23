@@ -111,7 +111,24 @@ test('fresh mode walks steps 1→4 with fake deps and ends on Home', async () =>
     // The build runs in the background; the wizard can go on.
     await ase.getByRole('button', { name: 'Bắt đầu build' }).click()
     await consent(page, /aseprite:build -- --src .+ --json-progress$/)
-    await expect(ase.getByTestId('build-status')).toContainText(/100%|Xong/)
+    const progress = ase.getByTestId('install-progress')
+    // Running: the card replaces the choice; cancelling asks first, then the task ends "Đã huỷ".
+    await expect(progress).toContainText('Đang build Aseprite')
+    await expect(ase.getByRole('radio', { name: /Tự build từ source/ })).toBeHidden()
+    await expect(progress).toContainText('Bước 5/6 · Biên dịch')
+    await progress.screenshot({ path: resolve(SHOTS, 'install-progress-running.png') })
+    await progress.getByRole('button', { name: 'Huỷ build' }).click()
+    await expect(progress).toContainText('Dừng và huỷ?')
+    await progress.getByRole('button', { name: 'Huỷ build' }).click()
+    await expect(progress).toContainText('Đã huỷ build Aseprite')
+    // Thử lại runs the same command again (consent again) and this time it finishes.
+    await progress.getByRole('button', { name: 'Thử lại' }).click()
+    await consent(page, /aseprite:build -- --src .+ --json-progress$/)
+    await expect(progress).toContainText('Đã build xong Aseprite', { timeout: 15_000 })
+    await expect(progress.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+    await expect(progress.getByRole('listitem')).toHaveCount(6)
+    await progress.getByRole('button', { name: 'Xem log' }).click()
+    await expect(progress.getByTestId('install-log')).toContainText('Linking CXX executable')
     await shot(page, 3)
     await wizard(page).getByRole('button', { name: 'Lưu & tiếp tục' }).click()
 

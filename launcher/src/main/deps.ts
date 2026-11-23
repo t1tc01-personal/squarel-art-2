@@ -2,7 +2,14 @@
 import { spawn } from 'node:child_process'
 import * as nodeFs from 'node:fs/promises'
 import { WebSocket } from 'ws'
-import { isProcessRunning, type RunSpec, resolveExecutable, runCommand, spawnDetached } from './run'
+import {
+  ABORTED_CODE,
+  isProcessRunning,
+  type RunSpec,
+  resolveExecutable,
+  runCommand,
+  spawnDetached,
+} from './run'
 
 export type DetachedSpec = Omit<RunSpec, 'onLine' | 'signal'>
 
@@ -49,7 +56,11 @@ export interface Deps {
 
 export interface Fixtures {
   /** Key: argv joined by a single space. Unknown commands exit 127. `files` are written when it runs. */
-  run?: Record<string, { code: number; lines?: string[]; files?: Record<string, string> }>
+  /** `lineDelayMs` spaces the lines out (a slow build in e2e); the run signal stops it with ABORTED_CODE. */
+  run?: Record<
+    string,
+    { code: number; lines?: string[]; files?: Record<string, string>; lineDelayMs?: number }
+  >
   /** Key: exact URL. Unknown URLs reject like a network failure. */
   fetch?: Record<string, { status: number; headers?: Record<string, string>; body?: string }>
   /** realpath results by path (symlink / 8.3 simulation); other existing files resolve to themselves. */
@@ -181,7 +192,21 @@ function createFake(fx: Fixtures): Deps {
       const hit = fx.run?.[spec.argv.join(' ')]
       if (!hit) return { code: 127 }
       for (const [path, data] of Object.entries(hit.files ?? {})) await fs.writeFile(path, data)
-      for (const l of hit.lines ?? []) spec.onLine?.(l, 'stdout')
+      for (const l of hit.lines ?? []) {
+        if (hit.lineDelayMs) {
+          const ms = hit.lineDelayMs
+          await new Promise<void>((r) => {
+            const t = setTimeout(r, ms)
+            const stop = () => {
+              clearTimeout(t)
+              r()
+            }
+            spec.signal?.addEventListener('abort', stop, { once: true })
+          })
+        }
+        if (spec.signal?.aborted) return { code: ABORTED_CODE }
+        spec.onLine?.(l, 'stdout')
+      }
       return { code: hit.code }
     },
     async spawnDetached(spec) {

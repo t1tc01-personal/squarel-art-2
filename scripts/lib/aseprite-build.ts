@@ -174,8 +174,35 @@ export interface BuildProgress {
   step: number
   total: 6
   label: string
+  /** Percent of this step (only the compile step counts). */
   percent?: number
+  /** Percent of the whole build, weighted by how long each step usually takes. */
+  overall?: number
+  /** Counter inside the step, e.g. "812/1430" compiled files. */
+  detail?: string
+  /** Labels of the six steps, so the launcher can list the ones still to come. */
+  plan?: string[]
   message?: string
+}
+
+/** The six steps, in order (labels as printed in the `== n/6 …` headings). */
+export const BUILD_STEPS = [
+  'Build tools',
+  'Aseprite source',
+  'Skia',
+  'Configure',
+  'Build',
+  'Check and configure',
+]
+/** Share of a typical first build per step (sums to 100): compiling dominates. */
+export const BUILD_WEIGHTS = [2, 15, 8, 5, 65, 5]
+
+/** Whole-build percent at `stepPercent` (0-100) through step `step` (1-6). */
+export function overallPercent(step: number, stepPercent = 0): number {
+  const i = Math.min(BUILD_WEIGHTS.length, Math.max(1, Math.round(step))) - 1
+  const before = BUILD_WEIGHTS.slice(0, i).reduce((a, b) => a + b, 0)
+  const p = Math.min(100, Math.max(0, stepPercent))
+  return Math.round(before + (BUILD_WEIGHTS[i] * p) / 100)
 }
 
 /** Recognise ninja's `[1000/1575] Building CXX ...` counter. */
@@ -189,11 +216,17 @@ export function parseNinjaProgress(line: string): { done: number; total: number 
 
 /** Feed build output lines; returns a percent (0-100) for ninja lines, never lower than before. Noise gives undefined. */
 export function progressTracker(): (line: string) => number | undefined {
+  const track = counterTracker()
+  return (line) => track(line)?.percent
+}
+
+/** Like progressTracker, with ninja's file counter as `detail` ("812/1430"). */
+export function counterTracker(): (line: string) => { percent: number; detail: string } | undefined {
   let best = 0
   return (line) => {
     const p = parseNinjaProgress(line)
     if (!p) return undefined
     best = Math.max(best, Math.min(100, Math.floor((p.done / p.total) * 100)))
-    return best
+    return { percent: best, detail: `${p.done}/${p.total}` }
   }
 }

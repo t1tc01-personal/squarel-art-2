@@ -10,6 +10,7 @@ import { errorText, report, useData, useTasks } from '../app-context'
 import { Banner } from '../components/Banner'
 import { Button } from '../components/Button'
 import { Icon, type IconName, ModelIcon } from '../components/Icon'
+import { InstallProgress, type InstallVerb } from '../components/InstallProgress'
 import { LaunchButton } from '../components/LaunchButton'
 import { RowCheck } from '../components/RowCheck'
 import { StatusPill } from '../components/StatusPill'
@@ -110,10 +111,23 @@ function ProjectPicker({ onPick, onClose }: { onPick(slug: string): void; onClos
 
 function Overview({ c, checks, checked }: { c: ComponentView; checks: CheckResult[]; checked: boolean }) {
   const { presence } = useData()
-  const { run } = useTasks()
+  const { run, active, log } = useTasks()
   const { go } = useNav()
   const [picking, setPicking] = useState<ActionRef | null>(null)
+  const [hidden, setHidden] = useState<string | null>(null)
   const launches = c.actions.filter((a) => a.kind === 'launch')
+  // An install/update started from this window: its progress replaces the launch button while it
+  // runs, and stays (with Thử lại) after a failure until closed.
+  const job = active[c.id]
+  const jobEnd = log.final(job?.taskId)
+  const showJob = !!job && job.taskId !== hidden && jobEnd?.kind !== 'done'
+  const jobRunning = !!job && !jobEnd
+  const verb: InstallVerb =
+    job?.ref.kind === 'update'
+      ? 'cập nhật'
+      : /build/i.test(`${job?.ref.id} ${job?.ref.label}`)
+        ? 'build'
+        : 'cài'
   const [main, ...more] = launches
   const tool = presence
     .filter((g) => g.id === 'tools')
@@ -129,15 +143,26 @@ function Overview({ c, checks, checked }: { c: ComponentView; checks: CheckResul
   return (
     <>
       <Banner className="int-banner">
-        {connected ? (
+        {jobRunning ? (
+          <span className="banner-pill">Đang {verb} · mở được khi xong</span>
+        ) : connected ? (
           <span className="banner-pill is-ok">Đã kết nối · {tool.subtitle}</span>
         ) : (
           <span className="banner-pill is-idle">{c.installed ? 'Chưa kết nối bridge' : c.levelLabel}</span>
         )}
         <h2 className="banner-title">{c.name}</h2>
-        <p className="banner-text">{c.description}</p>
+        {!showJob && <p className="banner-text">{c.description}</p>}
         <div className="banner-launch">
-          {c.installed && main ? (
+          {showJob && job ? (
+            <InstallProgress
+              compact
+              taskId={job.taskId}
+              name={c.name}
+              verb={verb}
+              onRetry={() => void run(job.ref)}
+              onDismiss={() => setHidden(job.taskId)}
+            />
+          ) : c.installed && main ? (
             <LaunchButton
               label={main.label}
               onLaunch={() => start(main)}
@@ -160,19 +185,23 @@ function Overview({ c, checks, checked }: { c: ComponentView; checks: CheckResul
           testId="card-update"
           icon="refresh"
           caption="Cập nhật"
-          level={c.level}
-          levelLabel={c.levelLabel}
+          level={jobRunning ? 'running' : c.level}
+          levelLabel={jobRunning ? 'Đang chạy' : c.levelLabel}
           title={`${c.name} ${(newer ? c.latest : c.version) ?? ''}`.trim()}
           sub={
-            newer
-              ? `Đang dùng ${c.version ?? '–'}`
-              : c.latestError
-                ? 'Không kiểm tra được bản mới'
-                : c.version
-                  ? 'Đang dùng bản mới nhất'
-                  : undefined
+            jobRunning
+              ? `Đang ${verb}, xem tiến trình phía trên`
+              : newer
+                ? `Đang dùng ${c.version ?? '–'}`
+                : c.latestError
+                  ? 'Không kiểm tra được bản mới'
+                  : c.version
+                    ? 'Đang dùng bản mới nhất'
+                    : undefined
           }
-          action={update ? { label: update.label, onClick: () => void run(update) } : undefined}
+          action={
+            update && !jobRunning ? { label: update.label, onClick: () => void run(update) } : undefined
+          }
         />
         <InfoCard
           testId="card-extension"

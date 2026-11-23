@@ -25,12 +25,14 @@ import { pipeline } from 'node:stream/promises'
 import { REPO_ROOT } from '../src/config.ts'
 import {
   ASEPRITE_GIT,
+  BUILD_STEPS,
   type BuildProgress,
   cmakeConfigureArgs,
+  counterTracker,
+  overallPercent,
   parseBuildArgs,
   parseSetOutput,
   pickLatestStableTag,
-  progressTracker,
   skiaAsset,
   upsertEnv,
   VC_TOOLS_COMPONENT,
@@ -62,11 +64,19 @@ const HELP = `Usage: pnpm aseprite:build [-- options]
 Aseprite's EULA allows compiling it for your own use only: do not share the source checkout or the build.`
 
 let jsonProgress = false
-function emitProgress(p: Omit<BuildProgress, 'total'>) {
-  if (jsonProgress)
-    console.log(
-      `@@progress ${JSON.stringify({ step: p.step, total: 6, label: p.label, percent: p.percent, message: p.message })}`,
-    )
+function emitProgress(p: Omit<BuildProgress, 'total' | 'overall' | 'plan'>) {
+  if (!jsonProgress) return
+  const record: BuildProgress = {
+    step: p.step,
+    total: 6,
+    label: p.label,
+    percent: p.percent,
+    overall: overallPercent(p.step, p.percent),
+    detail: p.detail,
+    plan: BUILD_STEPS,
+    message: p.message,
+  }
+  console.log(`@@progress ${JSON.stringify(record)}`)
 }
 const step = (title: string) => {
   console.log(`\n== ${title}`)
@@ -96,15 +106,18 @@ function runWithProgress(
   console.log(`$ ${cmd} ${args.join(' ')}`)
   return new Promise<void>((done) => {
     const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'inherit'], env: opts.env })
-    const track = progressTracker()
-    let last: number | undefined
+    const track = counterTracker()
+    let last: string | undefined
     let buf = ''
     const onLine = (line: string) => {
       console.log(line)
-      const pct = track(line)
-      if (pct !== undefined && pct !== last) {
-        last = pct
-        emitProgress({ step: stepNo, label, percent: pct })
+      const p = track(line)
+      // One record per compiled file would flood the launcher: report when the counter
+      // moves by a percent or every 10 files.
+      const key = p && `${p.percent}:${Math.floor(Number(p.detail.split('/')[0]) / 10)}`
+      if (p && key !== last) {
+        last = key
+        emitProgress({ step: stepNo, label, percent: p.percent, detail: p.detail })
       }
     }
     child.stdout.setEncoding('utf8')

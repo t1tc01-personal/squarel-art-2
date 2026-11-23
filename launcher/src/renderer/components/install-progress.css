@@ -1,0 +1,212 @@
+/* InstallProgress (Figma "InstallProgress"): full card in the wizard, compact in a tool banner. */
+.install-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  min-width: 0;
+}
+.install-progress.is-compact {
+  width: min(520px, 100%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+.ip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ip-icon {
+  flex: none;
+  color: var(--accent-primary);
+}
+.is-done .ip-icon {
+  color: var(--status-ok);
+}
+.is-error .ip-icon {
+  color: var(--status-error);
+}
+.ip-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 20px;
+}
+.ip-elapsed {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ip-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ip-percent {
+  font-size: 26px;
+  line-height: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ip-summary-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+.ip-line1 {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.ip-line2 {
+  color: var(--text-muted);
+}
+.ip-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.ip-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  transition: width 0.4s ease;
+}
+.is-done .ip-bar > span {
+  background: var(--status-ok);
+}
+.is-error .ip-bar > span {
+  background: var(--status-error);
+}
+.ip-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ip-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+.ip-step.is-done {
+  color: var(--text-secondary);
+}
+.ip-step.is-active {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.ip-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  font-size: 10px;
+  font-weight: 500;
+}
+.is-done > .ip-badge {
+  border-color: transparent;
+  background: var(--status-ok-soft);
+  color: var(--status-ok);
+}
+.is-active > .ip-badge {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-soft);
+}
+.is-error > .ip-badge {
+  border-color: var(--status-error);
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+.ip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  animation: ip-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ip-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ip-dot {
+    animation: none;
+  }
+  .ip-bar > span {
+    transition: none;
+  }
+}
+.ip-step-name {
+  flex: 1;
+  min-width: 0;
+}
+.ip-step-meta {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.ip-step.is-active .ip-step-meta {
+  color: var(--accent-primary);
+}
+.ip-step.is-error .ip-step-meta {
+  color: var(--status-error);
+}
+.ip-logline {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-error .ip-logline {
+  color: var(--status-error);
+}
+.ip-log {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ip-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+.ip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ip-spacer {
+  flex: 1;
+}
+.ip-confirm {
+  font-size: 12px;
+  color: var(--text-secondary);
+}

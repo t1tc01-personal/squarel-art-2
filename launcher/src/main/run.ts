@@ -317,10 +317,24 @@ export async function spawnDetached(spec: Omit<RunSpec, 'onLine' | 'signal'>): P
   })
 }
 
-/** Parses a `@@progress {json}` line printed by `pnpm aseprite:build -- --json-progress`. */
-export function parseProgressLine(
-  line: string,
-): { step: number; total: number; label: string; percent?: number } | undefined {
+/** One `@@progress {json}` record of `pnpm aseprite:build -- --json-progress` (older scripts send fewer fields). */
+export interface ProgressLine {
+  step: number
+  total: number
+  label: string
+  /** Percent of the current step. */
+  percent?: number
+  /** Percent of the whole run, weighted by the script. */
+  overall?: number
+  detail?: string
+  plan?: string[]
+}
+
+const shortText = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 200
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** Parses a `@@progress {json}` line; anything malformed gives undefined (shown as a plain log line). */
+export function parseProgressLine(line: string): ProgressLine | undefined {
   const prefix = '@@progress '
   if (!line.startsWith(prefix)) return undefined
   let data: unknown
@@ -330,11 +344,13 @@ export function parseProgressLine(
     return undefined
   }
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return undefined
-  const { step, total, label, percent } = data as Record<string, unknown>
-  if (typeof step !== 'number' || typeof total !== 'number' || typeof label !== 'string') return undefined
-  if (!Number.isFinite(step) || !Number.isFinite(total)) return undefined
-  const result: { step: number; total: number; label: string; percent?: number } = { step, total, label }
-  if (typeof percent === 'number' && Number.isFinite(percent)) result.percent = percent
+  const { step, total, label, percent, overall, detail, plan } = data as Record<string, unknown>
+  if (!finite(step) || !finite(total) || typeof label !== 'string') return undefined
+  const result: ProgressLine = { step, total, label }
+  if (finite(percent)) result.percent = percent
+  if (finite(overall)) result.overall = overall
+  if (shortText(detail)) result.detail = detail
+  if (Array.isArray(plan) && plan.length <= 100 && plan.every(shortText)) result.plan = plan
   return result
 }
 

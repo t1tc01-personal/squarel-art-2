@@ -40,7 +40,10 @@ interface FixtureFile {
   /** In-memory files copied from the repo, source relative to the fixture folder (.png as binary). */
   copy?: Record<string, string>
   /** Commands; `files` / `copy` (same format as above) are written when the command runs. */
-  run?: Record<string, { code: number; lines?: string[]; files?: FileMap; copy?: Record<string, string> }>
+  run?: Record<
+    string,
+    { code: number; lines?: string[]; files?: FileMap; copy?: Record<string, string>; lineDelayMs?: number }
+  >
   fetch?: Fixtures['fetch']
   /** Programs found on PATH (absolute paths, placeholders allowed). */
   which?: Record<string, string>

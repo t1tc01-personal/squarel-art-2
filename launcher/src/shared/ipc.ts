@@ -99,8 +99,17 @@ export const taskEventSchema = z.object({
   taskId: str(200),
   kind: z.enum(['line', 'progress', 'done', 'error']),
   text: str(20_000).optional(),
-  percent: z.number().optional(),
+  percent: z.number().min(0).max(100).optional(),
   code: z.number().optional(),
+  step: z
+    .strictObject({
+      step: z.number().int().min(1).max(100),
+      total: z.number().int().min(1).max(100),
+      label: str(200),
+      detail: str(200).optional(),
+      plan: z.array(str(200)).max(100).optional(),
+    })
+    .optional(),
 })
 
 /** Mirror of main/state.ts LauncherState (main checks both stay assignable to each other). */
@@ -306,6 +315,8 @@ export const CHANNELS = {
   'env:get': { input: none, output: envViewSchema },
   'env:set': { input: envSetSchema, output: envViewSchema },
   'action:run': { input: actionRefSchema, output: taskId },
+  /** Stops a running task (kills its process tree); unknown or finished ids do nothing. */
+  'action:cancel': { input: z.strictObject({ taskId }), output: none },
   'updates:check': { input: none, output: updatesInfoSchema },
   'updates:apply': { input: none, output: taskId },
   'dialog:pickFolder': { input: none, output: z.string().nullable() },
@@ -356,6 +367,7 @@ export interface SquarelApi {
   getEnv(): Promise<EnvView>
   setEnv(input: { key: EnvKey; value: string }): Promise<EnvView>
   runAction(ref: ActionRef): Promise<string>
+  cancelTask(input: { taskId: string }): Promise<void>
   checkUpdates(): Promise<UpdatesInfo>
   applyUpdates(): Promise<string>
   pickFolder(): Promise<string | null>

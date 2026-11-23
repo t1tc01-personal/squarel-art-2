@@ -26,6 +26,7 @@ const api: SquarelApi = {
   getEnv: () => call('env:get'),
   setEnv: (input) => call('env:set', input),
   runAction: (ref) => call('action:run', ref),
+  cancelTask: (input) => call('action:cancel', input),
   checkUpdates: () => call('updates:check'),
   applyUpdates: () => call('updates:apply'),
   pickFolder: () => call('dialog:pickFolder'),

@@ -18,6 +18,8 @@ import type { ActionRef, ComponentView, PresenceGroup, TaskEvent } from '../shar
 import { api } from './api'
 import { Button } from './components/Button'
 import { useNav } from './nav'
+import { progressLine } from './progress'
+import { type TaskLog, useTaskLog } from './task-log'
 
 export interface LauncherData {
   state: LauncherStateView | null
@@ -34,19 +36,35 @@ export interface Toast {
   label: string
   kind: 'running' | 'done' | 'error'
   text?: string
+  /** Overall percent of a running task that reports progress (draws a bar). */
+  percent?: number
+  /** Integration whose page a click on the toast opens. */
+  componentId?: string
+}
+
+/** The last install/update started for a component from this window, and its ActionRef (Thử lại). */
+export interface ActiveTask {
+  taskId: string
+  ref: ActionRef
 }
 
 interface Tasks {
   /** Runs an action; resolves with the task id, or undefined when nothing was started. */
   run(ref: ActionRef): Promise<string | undefined>
   /** Starts a task through another call (e.g. updates:apply) and follows it like `run`. */
-  track(label: string, start: () => Promise<string>): Promise<string | undefined>
+  track(label: string, start: () => Promise<string>, componentId?: string): Promise<string | undefined>
   /** Last event per task started from this window. */
   last: Record<string, TaskEvent>
   toasts: Toast[]
   dismiss(id: string): void
   /** Shows a message without a task (e.g. a refused IPC call). */
   notify(t: Omit<Toast, 'id'>): void
+  /** Events, progress and timing of every task seen by this window. */
+  log: TaskLog
+  /** Last install / update / extension task per component id. */
+  active: Record<string, ActiveTask>
+  /** Stops a running task (asks main to kill it); the task ends with "Đã huỷ". */
+  cancel(taskId: string): Promise<void>
 }
 
 const DataContext = createContext<LauncherData | null>(null)
@@ -111,6 +129,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   /** Finished tasks, also those that finished before action:run returned their id. */
   const finished = useRef(new Map<string, TaskEvent>())
   const seq = useRef(0)
+  const log = useTaskLog()
+  const [active, setActive] = useState<Record<string, ActiveTask>>({})
 
   useEffect(
     () =>
@@ -129,6 +149,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
                   ? { ...t, kind: 'error', text: e.text ?? 'Thất bại' }
                   : {
                       ...t,
+                      ...(e.kind === 'progress' && e.percent !== undefined ? { percent: e.percent } : {}),
                       text:
                         e.kind === 'progress' && e.percent !== undefined
                           ? `${e.text ? `${e.text} · ` : ''}${Math.round(e.percent)}%`
@@ -146,16 +167,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const track = useCallback(
-    async (label: string, start: () => Promise<string>): Promise<string | undefined> => {
+    async (
+      label: string,
+      start: () => Promise<string>,
+      componentId?: string,
+    ): Promise<string | undefined> => {
       try {
         const taskId = await start()
         labels.current.set(taskId, label)
         const end = finished.current.get(taskId)
+        const base = { id: taskId, label, ...(componentId ? { componentId } : {}) }
         const toast: Toast = !end
-          ? { id: taskId, label, kind: 'running', text: 'Đang chạy…' }
+          ? { ...base, kind: 'running', text: 'Đang chạy…' }
           : end.kind === 'done'
-            ? { id: taskId, label, kind: 'done', text: end.text ?? 'Xong' }
-            : { id: taskId, label, kind: 'error', text: end.text ?? 'Thất bại' }
+            ? { ...base, kind: 'done', text: end.text ?? 'Xong' }
+            : { ...base, kind: 'error', text: end.text ?? 'Thất bại' }
         setToasts((ts) => [...ts.slice(-2), toast])
         return taskId
       } catch (e) {
@@ -177,15 +203,29 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         setConsent(null)
         if (!ok) return undefined
       }
-      return track(ref.label, () => api.runAction(ref))
+      const long = ref.kind === 'install' || ref.kind === 'update' || ref.kind === 'extension'
+      const taskId = await track(ref.label, () => api.runAction(ref), long ? ref.componentId : undefined)
+      if (taskId && long) setActive((m) => ({ ...m, [ref.componentId]: { taskId, ref } }))
+      return taskId
     },
     [go, track],
   )
 
+  const cancel = useCallback(
+    async (taskId: string) => {
+      try {
+        await api.cancelTask({ taskId })
+      } catch (e) {
+        notify({ label: 'Huỷ', kind: 'error', text: errorText(e) })
+      }
+    },
+    [notify],
+  )
+
   const dismiss = useCallback((id: string) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
   const value = useMemo(
-    () => ({ run, track, last, toasts, dismiss, notify }),
-    [run, track, last, toasts, dismiss, notify],
+    () => ({ run, track, last, toasts, dismiss, notify, log, active, cancel }),
+    [run, track, last, toasts, dismiss, notify, log, active, cancel],
   )
   return (
     <TasksContext.Provider value={value}>
@@ -245,7 +285,9 @@ const DONE_TOAST_MS = 5000
 
 /** Bottom-right status of the actions started from this window; finished ones fade after 5 s. */
 export function Toasts({ errorsOnly = false }: { errorsOnly?: boolean }) {
-  const { toasts: all, dismiss } = useTasks()
+  const { toasts: all, dismiss, log } = useTasks()
+  const { components } = useData()
+  const { go } = useNav()
   const toasts = errorsOnly ? all.filter((t) => t.kind === 'error') : all
   const doneIds = toasts
     .filter((t) => t.kind === 'done')
@@ -260,17 +302,63 @@ export function Toasts({ errorsOnly = false }: { errorsOnly?: boolean }) {
   }, [doneIds, dismiss])
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) => (
-        <div key={t.id} className={`toast is-${t.kind}`} data-testid="toast">
-          <div className="toast-body">
-            <div className="toast-title">{t.label}</div>
-            {t.text && <div className="toast-text">{t.text}</div>}
+      {toasts.map((t) => {
+        const tr = t.kind === 'running' ? log.track(t.id) : undefined
+        const stepText = tr && progressLine(tr)
+        const page =
+          !errorsOnly &&
+          t.componentId &&
+          components.some((c) => c.kind === 'integration' && c.id === t.componentId)
+            ? t.componentId
+            : undefined
+        const body = (
+          <>
+            <div className="toast-top">
+              <span className="toast-title">{t.label}</span>
+              {t.kind === 'running' && t.percent !== undefined && (
+                <span className="toast-percent mono-small">{Math.round(t.percent)}%</span>
+              )}
+            </div>
+            {(stepText ?? t.text) && <div className="toast-text">{stepText ?? t.text}</div>}
+            {t.kind === 'running' && t.percent !== undefined && (
+              <span
+                className="toast-bar"
+                role="progressbar"
+                aria-label={t.label}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(t.percent)}
+              >
+                <span style={{ width: `${t.percent}%` }} />
+              </span>
+            )}
+          </>
+        )
+        return (
+          <div key={t.id} className={`toast is-${t.kind}`} data-testid="toast">
+            {page ? (
+              <button
+                type="button"
+                className="toast-body is-link"
+                title="Mở trang công cụ"
+                onClick={() => go({ integration: page, tab: 'overview' })}
+              >
+                {body}
+              </button>
+            ) : (
+              <div className="toast-body">{body}</div>
+            )}
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Ẩn thông báo"
+              onClick={() => dismiss(t.id)}
+            >
+              ×
+            </button>
           </div>
-          <button type="button" className="icon-btn" aria-label="Ẩn thông báo" onClick={() => dismiss(t.id)}>
-            ×
-          </button>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

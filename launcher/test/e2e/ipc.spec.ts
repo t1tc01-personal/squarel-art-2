@@ -26,6 +26,7 @@ test('window.squarel exposes only the typed API and main validates calls', async
         'readLogs',
         'writeClipboard',
         'applyUpdates',
+        'cancelTask',
         'checkUpdates',
         'closeWindow',
         'getEnv',
@@ -54,6 +55,18 @@ test('window.squarel exposes only the typed API and main validates calls', async
     expect(r.bad).toMatch(/không hợp lệ/)
     expect(r.hasIpc).toBe(false)
     expect(r.frozen).toBe(true)
+
+    // Cancelling an unknown task does nothing; a malformed call is refused by main.
+    const cancel = await page.evaluate(async () => {
+      const api = (window as any).squarel
+      const unknown = await api.cancelTask({ taskId: 'nope#1' })
+      const bad = await api.cancelTask({ taskId: 1 }).then(
+        () => 'accepted',
+        (e: Error) => e.message,
+      )
+      return { unknown: unknown ?? null, bad }
+    })
+    expect(cancel).toEqual({ unknown: null, bad: expect.stringMatching(/không hợp lệ/) })
 
     // State goes to the throwaway profile, never the real one.
     await page.evaluate(() => (window as any).squarel.setState({ closeToTray: false }))

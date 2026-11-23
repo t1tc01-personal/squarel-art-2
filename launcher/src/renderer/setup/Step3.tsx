@@ -6,6 +6,7 @@ import { errorText, report, useData, useTasks } from '../app-context'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { Icon } from '../components/Icon'
+import { InstallProgress } from '../components/InstallProgress'
 import { StatusPill } from '../components/StatusPill'
 import { StepFrame, type StepProps } from './Wizard'
 
@@ -251,7 +252,7 @@ function IntegrationCard({
   const opt = i.options.find((o) => o.id === choice)
   const buildTask = builds[i.id]
   const buildEnd = log.final(buildTask)
-  const percent = log.percent(buildTask)
+  const building = !!buildTask && !buildEnd
   const vs = info.tools.find((t) => t.id === 'vs-build-tools')
   const isAsepriteBuild = i.id === 'aseprite' && !!opt?.command
 
@@ -334,23 +335,26 @@ function IntegrationCard({
   return (
     <section className="card wiz-card" aria-label={i.name}>
       <h2 className="card-title">{i.name}</h2>
-      <fieldset className="wiz-options" aria-label={`Cách cài ${i.name}`}>
-        {options.map((o) => (
-          <label key={o.id} className={`wiz-option${choice === o.id ? ' is-selected' : ''}`}>
-            <input
-              type="radio"
-              className="wiz-radio"
-              name={`install-${i.id}`}
-              checked={choice === o.id}
-              onChange={() => void choose(o.id)}
-            />
-            <span className="wiz-option-text">
-              <span className="row-title">{o.label}</span>
-              {o.note && <span className="row-sub">{o.note}</span>}
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      {/* While the build runs the choice is fixed: the card shows only its progress. */}
+      {!building && (
+        <fieldset className="wiz-options" aria-label={`Cách cài ${i.name}`}>
+          {options.map((o) => (
+            <label key={o.id} className={`wiz-option${choice === o.id ? ' is-selected' : ''}`}>
+              <input
+                type="radio"
+                className="wiz-radio"
+                name={`install-${i.id}`}
+                checked={choice === o.id}
+                onChange={() => void choose(o.id)}
+              />
+              <span className="wiz-option-text">
+                <span className="row-title">{o.label}</span>
+                {o.note && <span className="row-sub">{o.note}</span>}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
 
       {isAsepriteBuild && (
         <>
@@ -364,52 +368,46 @@ function IntegrationCard({
               </a>
             </span>
           </p>
-          <div className="wiz-row is-sub">
-            <span className="wiz-row-text">
-              <span className="row-title">Visual Studio Build Tools</span>
-              <span className="row-sub">
-                Cần để build (~7 GB). Trình cài của Visual Studio mở cửa sổ riêng; bạn bấm Install ở đó.
+          {!building && (
+            <div className="wiz-row is-sub">
+              <span className="wiz-row-text">
+                <span className="row-title">Visual Studio Build Tools</span>
+                <span className="row-sub">
+                  Cần để build (~7 GB). Trình cài của Visual Studio mở cửa sổ riêng; bạn bấm Install ở đó.
+                </span>
               </span>
-            </span>
-            <StatusPill
-              level={vs?.installed ? 'ok' : 'idle'}
-              label={vs?.installed ? `Có sẵn ${vs.version ?? ''}`.trim() : 'Chưa cài'}
+              <StatusPill
+                level={vs?.installed ? 'ok' : 'idle'}
+                label={vs?.installed ? `Có sẵn ${vs.version ?? ''}`.trim() : 'Chưa cài'}
+              />
+              {vsAction && (
+                <Button type="secondary" onClick={() => void run(vsAction)}>
+                  Cài Build Tools
+                </Button>
+              )}
+            </div>
+          )}
+          {buildTask ? (
+            <InstallProgress
+              taskId={buildTask}
+              name={i.name}
+              verb="build"
+              runningNote="Lần đầu mất 15–40 phút. Bạn có thể sang bước 4 hoặc thu nhỏ launcher, build vẫn chạy nền."
+              retryNote="Các bước đã xong được giữ lại; thử lại sẽ chạy tiếp. Bấm Xem log để xem dòng lỗi."
+              doneNote="Đã ghi ASEPRITE_PATH vào .env"
+              onRetry={() => void startBuild()}
             />
-            {vsAction && (
-              <Button type="secondary" onClick={() => void run(vsAction)}>
-                Cài Build Tools
-              </Button>
-            )}
-          </div>
-          <div className="wiz-row is-sub" data-testid="build-status">
-            <span className="wiz-row-text">
-              <span className="row-title">Build Aseprite</span>
-              <span className="row-sub">
-                {!buildTask
-                  ? 'Chạy nền; bạn tiếp tục được sang bước 4.'
-                  : buildEnd?.kind === 'done'
-                    ? 'Xong'
-                    : buildEnd?.kind === 'error'
-                      ? (buildEnd.text ?? 'Build thất bại')
-                      : `${percent ?? 0}% · ${
-                          log
-                            .events(buildTask)
-                            .filter((e) => e.kind === 'progress')
-                            .at(-1)?.text ?? 'đang chạy'
-                        }`}
+          ) : (
+            <div className="wiz-row is-sub" data-testid="build-status">
+              <span className="wiz-row-text">
+                <span className="row-title">Build Aseprite</span>
+                <span className="row-sub">Chạy nền; bạn tiếp tục được sang bước 4.</span>
               </span>
-            </span>
-            {buildTask && !buildEnd && (
-              <span className="wiz-progress" role="progressbar" aria-valuenow={percent ?? 0}>
-                <span style={{ width: `${percent ?? 0}%` }} />
-              </span>
-            )}
-            {(!buildTask || buildEnd?.kind === 'error') && (
               <Button type="primary" onClick={() => void startBuild()}>
                 Bắt đầu build
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
 
