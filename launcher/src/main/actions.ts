@@ -3,19 +3,30 @@
  * launcher's own code or from the loaded manifest of a selected integration, never from the
  * ActionRef itself (its `label` / `needsConsent` are display-only and ignored here).
  *
- * Supported now: settings/fix/open-settings, squarel/fix/register-mcp, squarel/update/update,
+ * Supported: settings/fix/open-settings, squarel/fix/register-mcp, squarel/fix/copy-skills,
+ * squarel/update/update, squarel/install/clone, squarel/install/deps,
+ * <core>/(install|terminal)/winget (visible terminal), claude-code/terminal/terminal (visible
+ * PowerShell), <core|winget>/terminal/download (official page in the browser),
  * <integration>/extension/install, <integration>/update/update, <integration>/install/<option with run>,
  * <integration>/launch/<launch id>.
- * Not yet: core installs (winget / terminal) — T14 adds them here.
  */
-import { dirname } from 'node:path'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { substitute } from '@squarel/integration-schema'
 import type { ActionRef, TaskEvent } from '../shared/model'
-import { registerMcp } from './claude'
+import { copySkills, registerMcp } from './claude'
 import type { Deps } from './deps'
 import type { EnvDoc } from './env-store'
+import { CORE } from './registry/core'
 import { detectIntegration, type LoadedIntegration, type Registry } from './registry/registry'
 import { parseProgressLine } from './run'
+import {
+  checkCloneTarget,
+  claudeTerminalArgv,
+  cloneArgv,
+  OFFICIAL_DOWNLOADS,
+  wingetTerminalArgv,
+} from './setup'
 import type { LauncherState } from './state'
 import { applySquarelUpdate, planSquarelUpdate } from './updates/squarel'
 import {
@@ -48,7 +59,18 @@ export interface ActionCtx {
   bridgeTool(name: string, input: unknown): Promise<string>
   /** Opens a folder in the file manager (launch actions with `reveal`); refuses files. */
   openFolder(path: string): Promise<void>
+  /** Where "Cài mới" clones Squarel (%LOCALAPPDATA%\SquarelArt\app). */
+  defaultInstall?: string
+  /** The user's home folder (skills go to ~/.claude/skills). */
+  homeDir: string
+  /** Opens an https page in the browser (only the fixed OFFICIAL_DOWNLOADS pages). */
+  openExternal(url: string): Promise<void>
+  /** Persists launcher state set by main itself (e.g. the cloned Squarel folder). */
+  setState(patch: Partial<LauncherState>): Promise<void>
 }
+
+/** Never wait for credentials: a clone must fail instead of hanging. */
+const GIT_ENV = { GIT_TERMINAL_PROMPT: '0' }
 
 /**
  * `squarelDir: true` = the task runs in or changes the Squarel folder; at most one such task runs
@@ -201,9 +223,93 @@ async function runLaunch(
   return fail('Mục mở không hợp lệ')
 }
 
+/** Starts a fixed command in its own visible window; the user follows it there. */
+function terminalTask(key: string, argv: () => string[], what: string, ctx: ActionCtx): Resolved {
+  return {
+    key,
+    body: async (taskId, emit) => {
+      let a: string[]
+      try {
+        a = argv()
+      } catch (e) {
+        return emit({ taskId, kind: 'error', text: msg(e) })
+      }
+      await ctx.d.spawnDetached({ argv: a, cwd: tmpdir() })
+      emit({
+        taskId,
+        kind: 'done',
+        code: 0,
+        text: `Đã mở cửa sổ cài ${what}. Làm theo hướng dẫn trong cửa sổ đó, xong thì bấm "Kiểm tra lại".`,
+      })
+    },
+  }
+}
+
+/** Installs of the core tools (setup wizard / System page). */
+function resolveCoreInstall(ref: ActionRef, ctx: ActionCtx): Resolved | undefined {
+  const { componentId: cid, kind, id } = ref
+  if (kind === 'terminal' && id === 'download') {
+    const url = Object.hasOwn(OFFICIAL_DOWNLOADS, cid) ? OFFICIAL_DOWNLOADS[cid] : undefined
+    if (!url) return undefined
+    return {
+      key: `${cid}:download`,
+      body: async (taskId, emit) => {
+        await ctx.openExternal(url)
+        emit({ taskId, kind: 'done', code: 0, text: `Đã mở ${url}` })
+      },
+    }
+  }
+  const core = CORE.find((c) => c.id === cid)
+  if (!core) return undefined
+  if ((kind === 'install' || kind === 'terminal') && id === 'winget') {
+    const spec = core.install
+    if (!spec?.winget) return undefined
+    return terminalTask(`${cid}:install`, () => wingetTerminalArgv(ctx.d, spec), core.name, ctx)
+  }
+  if (kind === 'terminal' && id === 'terminal' && cid === 'claude-code')
+    return terminalTask(`${cid}:install`, () => claudeTerminalArgv(ctx.d), core.name, ctx)
+  return undefined
+}
+
+/** "Cài mới": shallow clone of the launcher's own tag into the default folder (empty or absent). */
+function cloneSquarel(ctx: ActionCtx): Resolved {
+  const target = ctx.defaultInstall
+  if (!target) return { error: 'Không xác định được thư mục cài' }
+  return {
+    key: 'squarel:clone',
+    squarelDir: true,
+    body: async (taskId, emit) => {
+      let argv: string[]
+      try {
+        argv = cloneArgv(ctx.launcherVersion, target)
+      } catch (e) {
+        return emit({ taskId, kind: 'error', text: msg(e) })
+      }
+      const problem = await checkCloneTarget(target, ctx.d)
+      if (problem) return emit({ taskId, kind: 'error', text: problem })
+      const parent = dirname(target)
+      await ctx.d.fs.mkdir(parent, { recursive: true })
+      const code = await runStep(taskId, argv, parent, emit, ctx.d, GIT_ENV)
+      if (code !== 0)
+        return emit({ taskId, kind: 'error', code, text: `Tải Squarel thất bại (mã thoát ${code})` })
+      try {
+        const pkg = JSON.parse(String(await ctx.d.fs.readFile(join(target, 'package.json'), 'utf8')))
+        if (pkg?.name !== 'squarel-art') throw new Error('not squarel')
+      } catch {
+        return emit({ taskId, kind: 'error', text: 'Bản tải về không phải Squarel (package.json)' })
+      }
+      await ctx.setState({ squarelDir: target, mode: 'fresh' })
+      emit({ taskId, kind: 'done', code: 0, text: `Đã tải Squarel vào ${target}` })
+    },
+  }
+}
+
 export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
   const { componentId: cid, kind, id } = ref
   const unsupported = { error: 'Thao tác không được hỗ trợ' }
+
+  const coreInstall = resolveCoreInstall(ref, ctx)
+  if (coreInstall) return coreInstall
 
   if (cid === 'settings') {
     if (kind === 'fix' && id === 'open-settings')
@@ -232,6 +338,35 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
       }
     }
     if (kind === 'update' && id === 'update') return squarelUpdate(ctx)
+    if (kind === 'install' && id === 'clone') return cloneSquarel(ctx)
+    const dir = ctx.state.squarelDir
+    if (kind === 'install' && id === 'deps') {
+      if (!dir) return { error: 'Chưa chọn thư mục Squarel' }
+      return {
+        key: 'squarel:deps',
+        squarelDir: true,
+        body: async (taskId, emit) => {
+          const code = await runStep(taskId, ['pnpm', 'install'], dir, emit, ctx.d)
+          emit(
+            code === 0
+              ? { taskId, kind: 'done', code: 0, text: 'Đã cài thư viện' }
+              : { taskId, kind: 'error', code, text: `pnpm install thất bại (mã thoát ${code})` },
+          )
+        },
+      }
+    }
+    if (kind === 'fix' && id === 'copy-skills') {
+      if (!dir) return { error: 'Chưa chọn thư mục Squarel' }
+      return {
+        key: 'squarel:skills',
+        body: async (taskId, emit) => {
+          const names = await copySkills(dir, ctx.homeDir, ctx.d)
+          if (names.length === 0)
+            return emit({ taskId, kind: 'error', text: 'Không tìm thấy skill nào trong Squarel' })
+          emit({ taskId, kind: 'done', code: 0, text: `Đã chép ${names.length} skill: ${names.join(', ')}` })
+        },
+      }
+    }
     return unsupported
   }
 

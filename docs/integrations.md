@@ -156,10 +156,10 @@ Check có sẵn:
   "latest": { "type": "git-tags", "repo": "https://github.com/aseprite/aseprite.git", "stable": true },
   "install": [
     { "id": "build", "label": "Tự build từ source", "note": "Miễn phí, dùng cá nhân. ~7GB Build Tools, ~6 phút build.",
-      "run": ["pnpm", "aseprite:build", "--", "--src", "{toolsDir}", "--install-deps"] },
+      "run": ["pnpm", "aseprite:build", "--", "--src", "{toolsDir}", "--json-progress"] },
     { "id": "existing", "label": "Đã có Aseprite", "pickFile": "aseprite.exe", "setEnv": "ASEPRITE_PATH" }
   ],
-  "update": { "run": ["pnpm", "aseprite:build", "--", "--src", "{toolsDir}", "--ref", "{version}"], "requiresClosed": "aseprite.exe" },
+  "update": { "run": ["pnpm", "aseprite:build", "--", "--src", "{toolsDir}", "--ref", "{version}", "--json-progress"], "requiresClosed": "aseprite.exe" },
   "extension": {
     "version": { "source": "integrations/aseprite/squarel/package.json", "installed": "%APPDATA%\\Aseprite\\extensions\\squarel\\package.json" },
     "install": { "run": ["pnpm", "aseprite:pack", "--", "--install"], "requiresClosed": "aseprite.exe" }

@@ -33,6 +33,7 @@ const str = (max: number) => z.string().max(max)
 const compId = z.string().regex(/^[a-z][a-z0-9-]{1,31}$/)
 const actionId = z.string().regex(/^[A-Za-z0-9][\w.-]{0,63}$/)
 const level = z.enum(['ok', 'warn', 'error', 'running', 'idle'])
+const setupStepSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal('done')])
 
 export const actionRefSchema = z.strictObject({
   componentId: compId,
@@ -107,7 +108,7 @@ export const launcherStateSchema = z.object({
   schema: z.literal(1),
   squarelDir: z.string().optional(),
   mode: z.enum(['fresh', 'clone']).optional(),
-  setupStep: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal('done')]),
+  setupStep: setupStepSchema,
   selected: z.array(z.string()),
   installChoice: z.record(z.string(), z.string()),
   closeToTray: z.boolean(),
@@ -243,6 +244,54 @@ export const catalogEntrySchema = z.object({
 })
 export type CatalogEntryView = z.infer<typeof catalogEntrySchema>
 
+/** Checks the setup wizard runs one at a time. */
+export const SETUP_CHECKS = [
+  'cloudflare-token',
+  'claude-installed',
+  'claude-sees-squarel',
+  'mcp-starts',
+] as const
+export type SetupCheckId = (typeof SETUP_CHECKS)[number]
+
+/** One way to install an integration (manifest `install[]`), for the wizard's choice list. */
+export const setupInstallOptionSchema = z.object({
+  id: str(64),
+  label: str(200),
+  note: str(1000).optional(),
+  /** Display form of the command (`run` options). */
+  command: str(4000).optional(),
+  /** File name to pick (`pickFile` options), stored in `setEnv`. */
+  pickFile: str(200).optional(),
+  setEnv: str(100).optional(),
+})
+
+export const setupInfoSchema = z.object({
+  /** The step to show (saved step, corrected by what is installed); 'done' = no wizard. */
+  step: setupStepSchema,
+  winget: z.boolean(),
+  launcherVersion: str(100),
+  /** The default install folder (%LOCALAPPDATA%, SquarelArt, app), null when unknown. */
+  defaultInstall: str(1000).nullable(),
+  /** Display form of the clone command for "Cài mới", null when the version is not a release tag. */
+  cloneCommand: str(2000).nullable(),
+  depsInstalled: z.boolean(),
+  /** Core components (detection only, no network). */
+  tools: z.array(componentViewSchema),
+  /** Missing base tools: each a terminal action (winget window, PowerShell, or download page). */
+  plan: z.array(actionRefSchema),
+  integrations: z.array(
+    z.object({
+      id: str(64),
+      name: str(200),
+      extension: z.boolean(),
+      options: z.array(setupInstallOptionSchema),
+    }),
+  ),
+  /** Fixed https link to the Aseprite EULA (self-build notice). */
+  asepriteEula: str(300),
+})
+export type SetupInfo = z.infer<typeof setupInfoSchema>
+
 const none = z.undefined()
 const taskId = str(200)
 
@@ -272,6 +321,9 @@ export const CHANNELS = {
   'license:open': { input: none, output: none },
   'app:about': { input: none, output: aboutSchema },
   'catalog:list': { input: none, output: z.array(catalogEntrySchema).max(100) },
+  /** `refresh` re-reads PATH first (after a tool was installed in another window). */
+  'setup:info': { input: z.strictObject({ refresh: z.boolean() }), output: setupInfoSchema },
+  'checks:runOne': { input: z.strictObject({ id: z.enum(SETUP_CHECKS) }), output: checkResultSchema },
   'window:minimize': { input: none, output: none },
   /** Hides the window when state.closeToTray, otherwise quits the app. */
   'window:close': { input: none, output: none },
@@ -314,6 +366,8 @@ export interface SquarelApi {
   openLicense(): Promise<void>
   about(): Promise<About>
   catalog(): Promise<CatalogEntryView[]>
+  setupInfo(input: { refresh: boolean }): Promise<SetupInfo>
+  runCheck(input: { id: SetupCheckId }): Promise<CheckResult>
   minimizeWindow(): Promise<void>
   closeWindow(): Promise<void>
   onPresenceChanged(cb: (groups: PresenceGroup[]) => void): Unsubscribe

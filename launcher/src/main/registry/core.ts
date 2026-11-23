@@ -20,7 +20,10 @@ export interface Ctx {
 }
 
 export interface InstallSpec {
+  /** winget package id; installed in a visible terminal where the user answers winget's prompts. */
   winget?: string
+  /** `--override` for the package's own installer (fixed text, never user input). */
+  override?: string
   terminal?: { command: string; url: string }
   sizeHint?: string
 }
@@ -168,6 +171,19 @@ export const CORE: CoreComponent[] = [
     description: 'Cần để tự build Aseprite từ source.',
     icon: 'gear',
     required: false,
+    // No --passive / --quiet: the Visual Studio Installer opens its own window and the user clicks
+    // Install there (its license terms are shown in that window).
+    install: {
+      winget: 'Microsoft.VisualStudio.2022.BuildTools',
+      override: [
+        '--wait --norestart',
+        '--add Microsoft.VisualStudio.Workload.VCTools',
+        '--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+        '--add Microsoft.VisualStudio.Component.Windows11SDK.26100',
+        '--add Microsoft.VisualStudio.Component.VC.CMake.Project',
+      ].join(' '),
+      sizeHint: '~7 GB',
+    },
     async detect(d) {
       const pf = Object.entries(d.env).find(([k]) => k.toUpperCase() === 'PROGRAMFILES(X86)')?.[1]
       if (!pf) return { installed: false }

@@ -255,7 +255,7 @@ async function startServices(): Promise<IpcHandlers> {
     d,
     launcherVersion: app.getVersion(),
     isDev: !app.isPackaged,
-    homeDir: homedir(),
+    homeDir: fake?.homeDir ?? homedir(),
     logsDir,
     isAppUrl,
     state: {
@@ -317,6 +317,12 @@ async function startServices(): Promise<IpcHandlers> {
       if (!sup) throw new Error('Bridge chưa chạy')
       return sup.sendTool(name, input)
     },
+    openExternal: async (url) => {
+      if (!url.startsWith('https://')) throw new Error('Chỉ mở trang https')
+      if (testSink) testSink.external.push(url)
+      else await shell.openExternal(url)
+    },
+    ...(fake?.smoke ? { smoke: fake.smoke } : {}),
     openFolder: async (p) => {
       if (testSink && fake) {
         testSink.folders.push(p)

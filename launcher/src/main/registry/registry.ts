@@ -7,7 +7,7 @@ import type { Deps } from '../deps'
 import { type EnvDoc, readVar } from '../env-store'
 import type { LauncherState } from '../state'
 import { compareVersions, type Latest, latestGitTag, satisfiesMin } from '../versions'
-import { CORE, type CoreComponent, type Ctx, type Detected, MIN_NODE } from './core'
+import { CORE, type CoreComponent, type Ctx, type Detected, type InstallSpec, MIN_NODE } from './core'
 import {
   type CatalogEntry,
   ICON_FILE,
@@ -210,6 +210,12 @@ async function loadIcon(
   }
 }
 
+/** Display form of the winget install the terminal runs (see setup.ts wingetTerminalArgv). */
+export function wingetCommand(spec: InstallSpec): string {
+  const base = `winget install --id ${spec.winget} -e`
+  return spec.override ? `${base} --override "${spec.override}"` : base
+}
+
 function shell(argv: string[]): string {
   return argv.map((a) => (/[\s"]/.test(a) ? `"${a}"` : a)).join(' ')
 }
@@ -262,7 +268,7 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
       id: 'winget',
       label: 'Cài',
       needsConsent: {
-        command: `winget install --id ${c.install.winget} -e`,
+        command: wingetCommand(c.install),
         ...(c.install.sizeHint ? { sizeHint: c.install.sizeHint } : {}),
       },
     })

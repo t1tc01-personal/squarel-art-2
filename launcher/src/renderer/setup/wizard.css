@@ -1,0 +1,407 @@
+/* First-run wizard (docs/launcher/screens/setup-*.png, without the old left step bar). */
+
+.wizard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-app);
+}
+
+.wiz-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 32px 16px;
+}
+
+.wiz-col {
+  width: 100%;
+  max-width: 864px;
+  margin: 0 auto;
+}
+
+.wiz-stepper {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+}
+.wiz-stepper-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font: 500 13px / 20px var(--font-ui);
+}
+.wiz-stepper-item.is-active {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+.wiz-stepper-item.is-done {
+  color: var(--text-secondary);
+}
+.wiz-stepper-num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  font: 500 12px / 16px var(--font-ui);
+}
+.wiz-stepper-item.is-active .wiz-stepper-num {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+.wiz-stepper-item.is-done .wiz-stepper-num {
+  background: var(--status-ok-soft);
+  color: var(--status-ok);
+}
+
+.wiz-label {
+  color: var(--accent-primary);
+  font: 500 11px / 14px var(--font-ui);
+  letter-spacing: 0.06em;
+}
+.wiz-title {
+  margin: 8px 0 0;
+  font: 600 28px / 36px var(--font-ui);
+  letter-spacing: -0.01em;
+}
+.wiz-intro {
+  margin: 8px 0 24px;
+  color: var(--text-secondary);
+  font: 400 13px / 20px var(--font-ui);
+}
+
+/* ---- step 1: mode cards ---------------------------------------------------------------- */
+
+.wiz-choices {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.wiz-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  cursor: pointer;
+}
+.wiz-choice.is-selected {
+  border: 2px solid var(--accent-primary);
+  padding: 19px;
+  background: var(--accent-primary-soft);
+}
+.wiz-choice-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wiz-choice-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  color: var(--accent-brand);
+}
+.wiz-choice-title {
+  flex: 1;
+  font: 600 15px / 22px var(--font-ui);
+}
+.wiz-choice-text {
+  color: var(--text-secondary);
+  font: 400 13px / 20px var(--font-ui);
+}
+.wiz-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.wiz-path-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiz-radio {
+  appearance: none;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.wiz-radio:checked {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  box-shadow: inset 0 0 0 3px var(--bg-surface);
+}
+
+.wiz-card {
+  margin-top: 16px;
+}
+.wiz-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wiz-card .subtabs {
+  display: flex;
+}
+.wiz-card .subtab {
+  flex: 1;
+}
+.wiz-card .subtab:disabled {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.wiz-card > * + * {
+  margin-top: 12px;
+}
+.wiz-error {
+  color: var(--status-error);
+  font: 400 13px / 20px var(--font-ui);
+}
+
+/* ---- rows (step 2 / 4) ------------------------------------------------------------------ */
+
+.wiz-list {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.wiz-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 10px 18px;
+}
+.wiz-list .wiz-row + .wiz-row {
+  border-top: 1px solid var(--border-default);
+}
+.wiz-row.is-sub {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 0;
+  min-height: 0;
+}
+.wiz-row-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+}
+.wiz-row.is-ok .wiz-row-tile,
+.wiz-row.is-pass .wiz-row-tile {
+  background: var(--status-ok-soft);
+  color: var(--status-ok);
+}
+.wiz-row.is-running .wiz-row-tile {
+  background: var(--accent-primary-soft);
+  color: var(--accent-primary);
+}
+.wiz-row.is-warn .wiz-row-tile {
+  background: var(--status-warn-soft);
+  color: var(--status-warn);
+}
+.wiz-row.is-error .wiz-row-tile,
+.wiz-row.is-fail .wiz-row-tile {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+.wiz-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.wiz-row.is-sub .wiz-row-text {
+  flex-basis: 100%;
+}
+.wiz-row-text .row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wiz-row-note {
+  color: var(--text-muted);
+}
+.wiz-row-detail {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.wiz-row-detail.is-warn {
+  color: var(--status-warn);
+}
+.wiz-progress {
+  flex: none;
+  width: 160px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-surface-2);
+  overflow: hidden;
+}
+.wiz-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-primary);
+}
+
+.wiz-log {
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* ---- step 3 ------------------------------------------------------------------------------ */
+
+.wiz-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.wiz-grid-col > .wiz-card:first-child {
+  margin-top: 0;
+}
+.wiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+.wiz-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.wiz-option .wiz-radio {
+  margin-top: 2px;
+}
+.wiz-option.is-selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-soft);
+}
+.wiz-option-text {
+  display: flex;
+  flex-direction: column;
+}
+.wiz-notice {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-primary-soft);
+  color: var(--text-primary);
+  font: 400 12px / 18px var(--font-ui);
+}
+.wiz-notice .icon {
+  color: var(--accent-brand);
+  margin-top: 1px;
+}
+.wiz-notice.is-warn {
+  background: var(--status-warn-soft);
+  color: var(--status-warn);
+}
+.wiz-notice.is-warn .icon {
+  color: var(--status-warn);
+}
+.wiz-check {
+  margin: 0;
+  font: 400 12px / 16px var(--font-ui);
+  color: var(--text-muted);
+}
+.wiz-check.is-pass {
+  color: var(--status-ok);
+}
+.wiz-check.is-warn {
+  color: var(--status-warn);
+}
+.wiz-check.is-fail {
+  color: var(--status-error);
+}
+
+/* ---- step 4 ------------------------------------------------------------------------------ */
+
+.wiz-try {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+.wiz-try-text {
+  flex: 1;
+  color: var(--accent-brand);
+}
+
+/* ---- footer ------------------------------------------------------------------------------ */
+
+.wiz-footer {
+  flex: none;
+  padding: 0 32px;
+}
+.wiz-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 0 24px;
+  border-top: 1px solid var(--border-default);
+}
+.wiz-footer-spacer {
+  flex: 1;
+}
+.wiz-footer-hint {
+  color: var(--text-muted);
+  font: 400 12px / 16px var(--font-ui);
+}
+
+.wizard .toasts {
+  right: 32px;
+  bottom: 96px;
+}

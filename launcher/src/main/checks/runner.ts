@@ -74,7 +74,13 @@ interface Def {
   run: () => Promise<B.Draft> | B.Draft
 }
 
-export async function runChecks(reg: Registry, ctx: B.CheckCtx, d: Deps): Promise<CheckResult[]> {
+/** `only`: run just these check ids (the setup wizard verifies one thing at a time). */
+export async function runChecks(
+  reg: Registry,
+  ctx: B.CheckCtx,
+  d: Deps,
+  only?: readonly string[],
+): Promise<CheckResult[]> {
   const smoke = ctx.smoke ?? realSmoke
   const defs: Def[] = [
     {
@@ -153,13 +159,24 @@ export async function runChecks(reg: Registry, ctx: B.CheckCtx, d: Deps): Promis
     },
   )
   return Promise.all(
-    defs.map(async ({ run, ...meta }): Promise<CheckResult> => {
-      try {
-        const r = await run()
-        return { ...meta, ...r, label: r.label ?? meta.label, description: r.description ?? meta.description }
-      } catch (e) {
-        return { ...meta, result: 'fail', detail: `Lỗi khi kiểm tra: ${String((e as Error)?.message ?? e)}` }
-      }
-    }),
+    defs
+      .filter((x) => !only || only.includes(x.id))
+      .map(async ({ run, ...meta }): Promise<CheckResult> => {
+        try {
+          const r = await run()
+          return {
+            ...meta,
+            ...r,
+            label: r.label ?? meta.label,
+            description: r.description ?? meta.description,
+          }
+        } catch (e) {
+          return {
+            ...meta,
+            result: 'fail',
+            detail: `Lỗi khi kiểm tra: ${String((e as Error)?.message ?? e)}`,
+          }
+        }
+      }),
   )
 }

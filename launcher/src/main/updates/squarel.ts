@@ -21,7 +21,7 @@ export type SquarelPlan =
  * Release tags only: `vX.Y.Z` with an optional `-prerelease`. `+build` metadata is rejected, so a
  * launcherVersion like "0.2.0+abc" makes planSquarelUpdate throw (the version is passed to git).
  */
-const RELEASE_TAG = /^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
+export const RELEASE_TAG = /^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
 /**
  * Marker inside the git dir (never shown by `git status`): written before the checkout/pull and
  * removed once install and every extension reinstall succeeded, so a half-finished update is
@@ -34,7 +34,7 @@ const STATUS = ['status', '--porcelain', '--untracked-files=no']
 const DIRTY_MSG = 'Thư mục Squarel có thay đổi chưa commit. Hãy commit hoặc bỏ các thay đổi rồi cập nhật lại.'
 
 /** `v<version>` after checking it is a plain release tag (it is passed to git). */
-function releaseTag(version: string): string {
+export function releaseTag(version: string): string {
   const tag = `v${version}`
   if (!RELEASE_TAG.test(tag)) throw new Error(`Phiên bản không hợp lệ cho tag: ${JSON.stringify(version)}`)
   return tag

@@ -95,6 +95,7 @@ function setup(fx: Fixtures = {}) {
       return 'ok'
     },
     openFolder: async (p) => void folders.push(p),
+    openExternal: async () => {},
   }
   return {
     h: createIpcHandlers(ctx),

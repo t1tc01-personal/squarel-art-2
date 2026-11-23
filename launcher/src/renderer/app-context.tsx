@@ -106,12 +106,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const [consent, setConsent] = useState<{ ref: ActionRef; resolve(ok: boolean): void } | null>(null)
   const labels = useRef(new Map<string, string>())
+  /** Finished tasks, also those that finished before action:run returned their id. */
+  const finished = useRef(new Map<string, TaskEvent>())
   const seq = useRef(0)
 
   useEffect(
     () =>
       api.onTaskEvent((e) => {
         setLast((l) => ({ ...l, [e.taskId]: e }))
+        if (e.kind === 'done' || e.kind === 'error') finished.current.set(e.taskId, e)
         const label = labels.current.get(e.taskId)
         if (!label) return
         setToasts((ts) =>
@@ -148,10 +151,13 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       try {
         const taskId = await api.runAction(ref)
         labels.current.set(taskId, ref.label)
-        setToasts((ts) => [
-          ...ts.slice(-2),
-          { id: taskId, label: ref.label, kind: 'running', text: 'Đang chạy…' },
-        ])
+        const end = finished.current.get(taskId)
+        const toast: Toast = !end
+          ? { id: taskId, label: ref.label, kind: 'running', text: 'Đang chạy…' }
+          : end.kind === 'done'
+            ? { id: taskId, label: ref.label, kind: 'done', text: end.text ?? 'Xong' }
+            : { id: taskId, label: ref.label, kind: 'error', text: end.text ?? 'Thất bại' }
+        setToasts((ts) => [...ts.slice(-2), toast])
         return taskId
       } catch (e) {
         notify({ label: ref.label, kind: 'error', text: errorText(e) })
@@ -195,7 +201,11 @@ function ConsentDialog({ ref_, onAnswer }: { ref_: ActionRef; onAnswer(ok: boole
         <h2 id="consent-title" className="modal-title">
           {ref_.label}
         </h2>
-        <p className="modal-text">Launcher sẽ chạy lệnh sau:</p>
+        <p className="modal-text">
+          {ref_.kind === 'terminal'
+            ? 'Launcher mở một cửa sổ riêng và chạy lệnh sau. Nếu Windows hỏi quyền admin hay trình cài hỏi điều khoản, bạn tự đọc và trả lời trong cửa sổ đó:'
+            : 'Launcher sẽ chạy lệnh sau:'}
+        </p>
         <pre className="modal-command mono-small">{ref_.needsConsent?.command}</pre>
         {ref_.needsConsent?.sizeHint && (
           <p className="modal-text">Dung lượng ước tính: {ref_.needsConsent.sizeHint}</p>
@@ -216,8 +226,9 @@ function ConsentDialog({ ref_, onAnswer }: { ref_: ActionRef; onAnswer(ok: boole
 const DONE_TOAST_MS = 5000
 
 /** Bottom-right status of the actions started from this window; finished ones fade after 5 s. */
-export function Toasts() {
-  const { toasts, dismiss } = useTasks()
+export function Toasts({ errorsOnly = false }: { errorsOnly?: boolean }) {
+  const { toasts: all, dismiss } = useTasks()
+  const toasts = errorsOnly ? all.filter((t) => t.kind === 'error') : all
   const doneIds = toasts
     .filter((t) => t.kind === 'done')
     .map((t) => t.id)

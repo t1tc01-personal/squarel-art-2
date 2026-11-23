@@ -7,6 +7,7 @@
 
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { gunzipSync } from 'node:zlib'
+import { substitute } from '@squarel/integration-schema'
 import type { z } from 'zod'
 import {
   CHANNELS,
@@ -23,6 +24,7 @@ import {
   type LauncherStateView,
   type RecentProject,
   SECRET_ENV_KEYS,
+  type SetupInfo,
   type UpdatesInfo,
 } from '../shared/ipc'
 import type { CheckResult, PresenceGroup, TaskEvent } from '../shared/model'
@@ -36,9 +38,18 @@ import { appPaths } from './paths'
 import { buildPresence } from './presence'
 import { redactText } from './redact'
 import { loadRegistry, type Registry, viewComponents } from './registry/registry'
+import {
+  ASEPRITE_EULA,
+  cloneArgv,
+  hasWinget,
+  installPlan,
+  nextSetupStep,
+  refreshPath,
+  setupFacts,
+} from './setup'
 import type { LauncherState } from './state'
 import { planSquarelUpdate } from './updates/squarel'
-import { maskCredentials } from './updates/tools'
+import { maskCredentials, showArgv } from './updates/tools'
 import type { Latest } from './versions'
 
 // Compile-time: shared/ipc.ts mirrors main/state.ts.
@@ -92,6 +103,8 @@ export interface IpcContext {
   bridgeTool(name: string, input: unknown): Promise<string>
   /** Opens a folder in the file manager; must refuse anything that is not a directory. */
   openFolder(path: string): Promise<void>
+  /** shell.openExternal for https URLs from main's own fixed tables (official download pages). */
+  openExternal(url: string): Promise<void>
   /** Test seam for the MCP smoke test of checks:run. */
   smoke?: CheckCtx['smoke']
 }
@@ -258,6 +271,97 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     )
   }
 
+  async function checkCtx(s: LauncherState, env: EnvDoc): Promise<CheckCtx> {
+    return {
+      squarelDir: s.squarelDir,
+      dataDir: dataDir(s, env),
+      env,
+      bridge: ctx.bridge(),
+      selected: s.selected,
+      ...(ctx.smoke ? { smoke: ctx.smoke } : {}),
+    }
+  }
+
+  async function exists(p: string): Promise<boolean> {
+    try {
+      await d.fs.stat(p)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Everything the setup wizard needs; detection only (no update checks over the network). */
+  async function setupInfo(refresh: boolean): Promise<SetupInfo> {
+    if (refresh) await refreshPath(d).catch(() => {})
+    const s = await getState()
+    const env = await readEnv(s)
+    const reg = await registry(s)
+    const coreOnly: Registry = {
+      ...reg,
+      core: reg.core.map(({ latest: _latest, ...c }) => c),
+      integrations: [],
+    }
+    const tools = await viewComponents(coreOnly, s, env, d, {
+      launcherVersion: ctx.launcherVersion,
+      isDev: ctx.isDev,
+    })
+    const depsInstalled = s.squarelDir
+      ? await exists(join(s.squarelDir, 'node_modules', '.modules.yaml'))
+      : false
+    const step = nextSetupStep(s, setupFacts(tools, depsInstalled))
+    if (step !== s.setupStep) await updateState((st) => ({ ...st, setupStep: step }))
+    let defaultInstall: string | null = null
+    try {
+      defaultInstall = appPaths(d.env).defaultInstall
+    } catch {}
+    let cloneCommand: string | null = null
+    try {
+      if (defaultInstall) cloneCommand = showArgv(cloneArgv(ctx.launcherVersion, defaultInstall))
+    } catch {}
+    // Only the wizard needs to know (spawning winget costs a moment at every start otherwise).
+    const winget = step === 'done' ? false : await hasWinget(d)
+    const p = paths()
+    const integrations = reg.integrations
+      .filter((i) => !i.incompatible)
+      .map((i) => {
+        const m = i.manifest
+        const vars = { toolsDir: p.toolsDir(m.id) }
+        const sub = (x: string) => {
+          try {
+            return substitute(x, vars)
+          } catch {
+            return x
+          }
+        }
+        return {
+          id: m.id,
+          name: m.name,
+          extension: !!m.extension?.install,
+          options: m.install.map((o) => ({
+            id: o.id,
+            label: sub(o.label),
+            ...(o.note ? { note: o.note } : {}),
+            ...(o.run ? { command: showArgv(o.run.map(sub)) } : {}),
+            ...(o.pickFile ? { pickFile: o.pickFile } : {}),
+            ...(o.setEnv ? { setEnv: o.setEnv } : {}),
+          })),
+        }
+      })
+    return {
+      step,
+      winget,
+      launcherVersion: ctx.launcherVersion,
+      defaultInstall,
+      cloneCommand,
+      depsInstalled,
+      tools,
+      plan: installPlan(tools, winget),
+      integrations,
+      asepriteEula: ASEPRITE_EULA,
+    }
+  }
+
   let lastChecks: ChecksSnapshot | null = null
   let checksInFlight: Promise<CheckResult[]> | undefined
   function runChecksOnce(): Promise<CheckResult[]> {
@@ -266,18 +370,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         const s = await getState()
         const env = await readEnv(s)
         const reg = await registry(s)
-        const results = await runChecks(
-          reg,
-          {
-            squarelDir: s.squarelDir,
-            dataDir: dataDir(s, env),
-            env,
-            bridge: ctx.bridge(),
-            selected: s.selected,
-            ...(ctx.smoke ? { smoke: ctx.smoke } : {}),
-          },
-          d,
-        )
+        const results = await runChecks(reg, await checkCtx(s, env), d)
         lastChecks = { at: d.now().toISOString(), results }
         push('checks:changed', lastChecks)
         return results
@@ -367,6 +460,15 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         projects: () => projectSlugs(s, env),
         bridgeTool: (name, input) => ctx.bridgeTool(name, input),
         openFolder: (path) => ctx.openFolder(path),
+        defaultInstall: p.defaultInstall,
+        homeDir: ctx.homeDir,
+        openExternal: async (url) => {
+          if (!url.startsWith('https://')) throw new Error('Chỉ mở trang https')
+          await ctx.openExternal(url)
+        },
+        setState: async (patch) => {
+          await updateState((st) => ({ ...st, ...patch }))
+        },
       },
       secrets: secretValues(env),
     }
@@ -586,6 +688,14 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       return { launcherVersion: ctx.launcherVersion, squarelVersion, repoUrl: ctx.repoUrl }
     },
     'catalog:list': async () => (await registry(await getState())).comingSoon,
+    'setup:info': ({ refresh }) => setupInfo(refresh),
+    'checks:runOne': async ({ id }) => {
+      const s = await getState()
+      const env = await readEnv(s)
+      const [r] = await runChecks(await registry(s), await checkCtx(s, env), d, [id])
+      if (!r) throw new IpcError('Không có kiểm tra này')
+      return r
+    },
     'window:minimize': async () => {
       ctx.window.minimize()
       return undefined

@@ -10,6 +10,7 @@
   },
   "files": {
     "{root}/squarel/package.json": { "name": "squarel-art", "version": "0.2.0" },
+    "{root}/squarel/node_modules/.modules.yaml": "layoutVersion: 5",
     "{root}/tools/aseprite/Aseprite.exe": "",
     "{root}/tools/demo/DemoTool.exe": "",
     "{root}/data/run/mcp-4101.json": {
@@ -52,6 +53,9 @@
     "{root}\\tools\\aseprite\\Aseprite.exe -b --version": { "code": 0, "lines": ["Aseprite 1.3.18.6-x64"] },
     "{root}\\tools\\demo\\DemoTool.exe --version": { "code": 0, "lines": ["DemoTool 2.0.1"] },
     "node --version": { "code": 0, "lines": ["v24.19.0"] },
+    "git --version": { "code": 0, "lines": ["git version 2.55.0.windows.1"] },
+    "pnpm -v": { "code": 0, "lines": ["10.20.0"] },
+    "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
     "git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git": {
       "code": 0,
       "lines": ["0000000000000000000000000000000000000000\trefs/tags/v0.2.0", "1111111111111111111111111111111111111111\trefs/tags/v0.2.1"]

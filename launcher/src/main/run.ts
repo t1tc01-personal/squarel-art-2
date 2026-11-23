@@ -13,7 +13,7 @@
  *   every metacharacter inside double quotes, where neither parse acts on it.
  */
 import { type ChildProcess, spawn } from 'node:child_process'
-import { statSync } from 'node:fs'
+import { lstatSync, statSync } from 'node:fs'
 import { extname, isAbsolute, join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 
@@ -41,8 +41,15 @@ function envGet(env: NodeJS.ProcessEnv, key: string): string | undefined {
 function isFile(p: string): boolean {
   try {
     return statSync(p).isFile()
-  } catch {
-    return false
+  } catch (e) {
+    // App execution aliases (e.g. %LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe) are reparse
+    // points stat() cannot follow (EACCES); CreateProcess starts them fine.
+    if (!IS_WIN || (e as NodeJS.ErrnoException).code !== 'EACCES') return false
+    try {
+      return lstatSync(p).isSymbolicLink() && /\\WindowsApps\\[^\\]+\.exe$/i.test(p)
+    } catch {
+      return false
+    }
   }
 }
 

@@ -46,8 +46,8 @@ export interface Deps {
 }
 
 export interface Fixtures {
-  /** Key: argv joined by a single space. Unknown commands exit 127. */
-  run?: Record<string, { code: number; lines?: string[] }>
+  /** Key: argv joined by a single space. Unknown commands exit 127. `files` are written when it runs. */
+  run?: Record<string, { code: number; lines?: string[]; files?: Record<string, string> }>
   /** Key: exact URL. Unknown URLs reject like a network failure. */
   fetch?: Record<string, { status: number; headers?: Record<string, string>; body?: string }>
   /** realpath results by path (symlink / 8.3 simulation); other existing files resolve to themselves. */
@@ -106,12 +106,15 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
     async writeFile(p: string, data: string) {
       store.set(norm(p), String(data))
     },
-    async readdir(p: string) {
+    async readdir(p: string, opts?: { withFileTypes?: boolean }) {
       const prefix = `${norm(p).replace(/\/+$/, '')}/`
-      const names = [...store.keys()]
-        .filter((k) => k.startsWith(prefix))
-        .map((k) => k.slice(prefix.length).split('/')[0] as string)
-      return [...new Set(names)]
+      const keys = [...store.keys()].filter((k) => k.startsWith(prefix))
+      const names = [...new Set(keys.map((k) => k.slice(prefix.length).split('/')[0] as string))]
+      if (!opts?.withFileTypes) return names
+      return names.map((name) => {
+        const dir = keys.some((k) => k.startsWith(`${prefix}${name}/`))
+        return { name, isDirectory: () => dir, isFile: () => !dir, isSymbolicLink: () => false }
+      })
     },
     async stat(p: string) {
       const v = store.get(norm(p))
@@ -141,13 +144,26 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
       return undefined
     },
     async rm(p: string) {
+      const prefix = `${norm(p).replace(/\/+$/, '')}/`
       store.delete(norm(p))
+      for (const k of [...store.keys()]) if (k.startsWith(prefix)) store.delete(k)
     },
     async rename(a: string, b: string) {
       const v = store.get(norm(a))
-      if (v === undefined) throw enoent(a)
-      store.delete(norm(a))
-      store.set(norm(b), v)
+      if (v !== undefined) {
+        store.delete(norm(a))
+        store.set(norm(b), v)
+        return
+      }
+      // A folder: move every file below it.
+      const from = `${norm(a).replace(/\/+$/, '')}/`
+      const to = `${norm(b).replace(/\/+$/, '')}/`
+      const keys = [...store.keys()].filter((k) => k.startsWith(from))
+      if (keys.length === 0) throw enoent(a)
+      for (const k of keys) {
+        store.set(to + k.slice(from.length), store.get(k) as string)
+        store.delete(k)
+      }
     },
   }
   return fs as unknown as FsApi
@@ -155,10 +171,12 @@ function fakeFs(files: Record<string, string>, realpaths: Record<string, string>
 
 function createFake(fx: Fixtures): Deps {
   const alive = new Set(fx.alivePids ?? [])
+  const fs = fakeFs(fx.files ?? {}, fx.realpaths)
   return {
     async run(spec) {
       const hit = fx.run?.[spec.argv.join(' ')]
       if (!hit) return { code: 127 }
+      for (const [path, data] of Object.entries(hit.files ?? {})) await fs.writeFile(path, data)
       for (const l of hit.lines ?? []) spec.onLine?.(l, 'stdout')
       return { code: hit.code }
     },
@@ -172,7 +190,7 @@ function createFake(fx: Fixtures): Deps {
       if (!hit) throw new TypeError(`fetch failed: no fixture for ${url}`)
       return new Response(hit.body ?? '', { status: hit.status, headers: hit.headers })
     }) as typeof fetch,
-    fs: fakeFs(fx.files ?? {}, fx.realpaths),
+    fs,
     now: () => fx.now ?? new Date('2026-01-01T00:00:00Z'),
     isPidAlive: (pid) => alive.has(pid),
     isProcessRunning: async (name) => (fx.running ?? []).some((r) => r.toLowerCase() === name.toLowerCase()),

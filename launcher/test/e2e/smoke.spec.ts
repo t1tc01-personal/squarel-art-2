@@ -5,7 +5,8 @@ test('launches a frameless 1280x800 window showing the shell', async () => {
   const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
-    await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
+    // A fresh profile has no Squarel yet: main shows the setup wizard under the same title bar.
+    await expect(page.getByRole('main', { name: 'Thiết lập lần đầu' })).toBeVisible()
     const size = await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0]
       return { bounds: win.getContentBounds() }
@@ -27,7 +28,8 @@ test('blocks new windows and navigation away from the app page', async () => {
   const { app, close } = await launchIsolated()
   try {
     const page = await app.firstWindow()
-    await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
+    // A fresh profile has no Squarel yet: main shows the setup wizard under the same title bar.
+    await expect(page.getByRole('main', { name: 'Thiết lập lần đầu' })).toBeVisible()
     // In test mode main records https links (globalThis.__squarelTest.external) instead of opening a browser.
     const appUrl = page.url()
 
