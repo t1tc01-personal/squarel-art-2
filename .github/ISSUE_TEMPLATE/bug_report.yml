@@ -1,0 +1,63 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please **do not** paste API keys, tokens or `.env` contents.
+        Security problems go through the private form in SECURITY.md, not here.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - MCP tools / Claude Code
+        - Aseprite extension / live sync
+        - Launcher (Windows app)
+        - Image providers (Cloudflare, Retro Diffusion, local-sd)
+        - Exports
+        - CLI
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Launcher version (Settings → About) or the commit you run from source.
+      placeholder: v0.2.0
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Windows version, Node.js version, Aseprite version if relevant.
+      placeholder: Windows 11 24H2, Node 24.11, Aseprite 1.3.18
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Relevant lines from DATA_DIR/logs or the launcher's Logs tab (its "Copy for Claude" button masks secrets).
+        Check that nothing sensitive is left before posting.
+      render: text

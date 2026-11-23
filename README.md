@@ -1,203 +1,153 @@
+<div align="center">
+
 # Squarel Art
 
-Bộ công cụ pixel art cắm vào **Claude Code**. Bạn chat để tạo, sửa và xuất ảnh pixel art, rồi vẽ tay trong **Aseprite**. Hai bên tự đồng bộ với nhau.
+**Pixel art you can talk to.** Create, edit and export real pixel art by chatting with Claude Code, then finish it by hand in Aseprite. Both sides stay in sync.
 
-- **Hơn 40 tool MCP:**
-  - vẽ trực tiếp;
-  - lệnh có quy tắc, miễn phí và chính xác: đổi màu, viền, palette, giảm màu, xoá nền, lật, xoay, cắt, scale;
-  - ảnh chụp → pixel art;
-  - AI tạo, sửa và làm animation;
-  - lịch sử và undo không mất dữ liệu;
-  - xuất file.
-- **Mọi ảnh AI đều qua bộ chuẩn hoá pixel:** dò lưới → mỗi ô lấy màu xuất hiện nhiều nhất → ép palette trong OKLab → nền trong suốt. Kết quả luôn là pixel art thật.
-- **AI không bao giờ ghi đè.** Kết quả AI là một đề xuất gồm các biến thể đánh số. Bạn chọn thì nó được thêm thành layer mới.
-- **Xuất file dùng ngay:**
-  - sprite sheet + JSON kiểu Aseprite, GIF;
-  - PNG in 300 DPI, SVG, PDF;
-  - avatar, emoji, sticker WebP;
-  - mẫu hạt Perler/Hama có đếm số hạt và chia theo bảng ghim.
-- **Chi phí:**
-  - Chat nằm trong gói Claude của bạn.
-  - Ảnh AI mặc định dùng Cloudflare Workers AI free tier, hoặc GPU của máy, hoặc `mock`.
-  - Retro Diffusion là dịch vụ trả phí: luôn báo giá và chờ bạn đồng ý, kèm trần chi phí mỗi ngày.
+[![CI](https://github.com/t1tc01-personal/squarel-art-2/actions/workflows/ci.yml/badge.svg)](https://github.com/t1tc01-personal/squarel-art-2/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/t1tc01-personal/squarel-art-2?include_prereleases&sort=semver)](https://github.com/t1tc01-personal/squarel-art-2/releases)
+[![License: PolyForm Shield 1.0.0](https://img.shields.io/badge/license-PolyForm%20Shield%201.0.0-blue)](LICENSE.md)
+![Node ≥ 22.18](https://img.shields.io/badge/node-%E2%89%A5%2022.18-339933?logo=node.js&logoColor=white)
+![Platform: Windows](https://img.shields.io/badge/launcher-Windows-0078D4?logo=windows&logoColor=white)
 
-## So với dùng MCP Aseprite trực tiếp
+**English** · [Tiếng Việt](README.vi.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [한국어](README.ko.md)
 
-Đã có nhiều MCP server cộng đồng cho Aseprite, ví dụ [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp), [rkdfx/aseprite-mcp](https://github.com/rkdfx/aseprite-mcp), [pixel-mcp](https://pkg.go.dev/github.com/willibrandon/pixel-mcp) và [aseprite-live-mcp](https://socket.dev/pypi/package/aseprite-live-mcp). Chúng cho **Claude điều khiển Aseprite**: tạo canvas, vẽ, xuất file qua script Lua.
+<img src="docs/launcher/screens/app-home.png" alt="Squarel Art Launcher: home screen with the connections panel" width="820">
 
-Squarel thì **lo cả quy trình làm ra sản phẩm**. Aseprite chỉ là nơi để bạn vẽ tay.
+</div>
 
-| | MCP Aseprite | Squarel |
-|---|---|---|
-| **Tạo hình** | Claude tự đặt từng pixel theo toạ độ. Ổn với hình đơn giản, khó ra một nhân vật đẹp | AI tạo/sửa ảnh, rồi tự **ép về lưới pixel thật và đúng palette**. Có cả ảnh chụp → pixel art |
-| **AI có ghi đè tác phẩm không** | Claude sửa thẳng vào file | AI chỉ đưa ra phương án, bạn chọn thì mới thêm thành **layer mới**. Mọi bước có version và undo được |
-| **Bạn và Claude cùng sửa** | Claude ghi file lúc bạn đang mở trong Aseprite thì dễ ghi đè lẫn nhau | Đồng bộ trực tiếp hai chiều. Sửa cùng lúc thì **gộp lại, không mất nét nào** |
-| **Xuất file thành phẩm** | Những gì Aseprite xuất được: PNG, GIF, sprite sheet | Thêm PNG in 300 DPI, **SVG vector, PDF, mẫu hạt Perler/Hama có đếm hạt**, sticker WebP, avatar/emoji đúng kích cỡ |
-| **Chi phí AI** | Không áp dụng | Báo giá trước, chờ bạn đồng ý, có trần chi phí mỗi ngày |
-| **Claude "nhìn" ảnh** | Tuỳ từng dự án | Ảnh xem trước phóng to, có lưới và số toạ độ, nên Claude chỉ đúng chỗ cần sửa |
-| **Không có Aseprite** | Không chạy được | Vẫn chạy với Claude Code hoặc dòng lệnh. Aseprite không bắt buộc |
+## Why Squarel
 
-**Squarel kém hơn ở đâu:**
-- **Chỉ dùng một phần tính năng Aseprite.** Squarel chỉ có màu indexed (tối đa 256 màu) và canvas tối đa 256×256. Nó không có layer nhóm, tilemap, tag animation, slice hay blend mode. MCP Aseprite cho Claude dùng hết các tính năng đó.
-- **Nhiều bộ phận hơn:** bridge, extension, kho lưu riêng.
-- **Hai bản dữ liệu:** kho Squarel là bản chính. Những gì Squarel không biểu diễn được (tag, slice…) mà bạn tạo trong Aseprite sẽ không được lưu.
-- **Dự án mới,** chưa được dùng thực tế nhiều bằng các MCP kia.
+- **40+ MCP tools for Claude Code.** Draw pixels directly, or use deterministic, free operations: recolor, outline, palettes, color reduction, background removal, flip, rotate, crop, scale. Turn photos into pixel art. Generate, edit and animate with AI.
+- **Real pixel art, every time.** Every AI image goes through a pixel normalizer: grid detection → the most common color per cell → palette snapping in OKLab → transparent background.
+- **AI never overwrites your work.** AI results arrive as numbered proposals. Only the variant you pick is added, as a new layer. Every step is versioned and undoable.
+- **Two-way live sync with Aseprite.** Claude's edits appear in Aseprite as a single undo step; your strokes flow back within half a second. Concurrent edits are merged without losing a stroke.
+- **Production-ready exports.** Sprite sheets with Aseprite-style JSON, GIF, 300 DPI print PNG, SVG, PDF, avatars, emoji, WebP stickers, and Perler/Hama bead patterns with bead counts and pegboard splits.
+- **Cost under control.** Chat runs on your Claude plan. AI images default to the Cloudflare Workers AI free tier, your own GPU, or an offline `mock`. Paid Retro Diffusion always quotes a price first, waits for your approval and respects a daily cap.
 
-**Nên chọn cái nào:**
-- Chỉ cần Claude **tự động hoá việc trong Aseprite** (xuất hàng loạt, đổi kích thước, đặt tag animation): MCP Aseprite đơn giản hơn.
-- Cần **chat để tạo, sửa rồi xuất pixel art thành sản phẩm** (in áo, sticker, mẫu hạt, asset game) mà AI không phá tác phẩm: dùng Squarel.
+## Quick start
 
-Hai cái dùng chung được: cài thêm một MCP Aseprite bên cạnh Squarel cho những việc Squarel không làm.
+### Option A: the Windows launcher (no terminal needed)
 
-## Launcher (Windows)
+1. Download `Squarel-Art-Launcher-Setup-X.Y.Z.exe` from [Releases](https://github.com/t1tc01-personal/squarel-art-2/releases).
+2. Run it. The installer is not code-signed yet: if SmartScreen stops it, choose **More info → Run anyway**.
+3. Follow the 4-step setup: install Git/Node/pnpm (via `winget`, in a visible window where you answer every prompt yourself), get Squarel, fill in `.env`, register with Claude Code.
 
-Không muốn gõ lệnh? **Squarel Art Launcher** là app Windows cài và chạy Squarel thay bạn:
-- wizard 4 bước: cài Git/Node/pnpm qua `winget`, clone Squarel, ghi `.env`, đăng ký với Claude Code;
-- giữ bridge, hiện Aseprite và phiên Claude Code nào đang kết nối;
-- mở Aseprite, cài extension, health check, xem nhật ký;
-- tự cập nhật từ GitHub Release, đưa Squarel lên cùng phiên bản.
+The launcher then keeps the bridge running, shows which Aseprite and Claude Code sessions are connected, opens Aseprite, runs health checks and updates everything from GitHub Releases. See [docs/launcher.md](docs/launcher.md).
 
-Tải `Squarel-Art-Launcher-Setup-X.Y.Z.exe` ở trang [Releases](https://github.com/t1tc01-personal/squarel-art-2/releases). Bộ cài chưa ký số: khi SmartScreen chặn, bấm **More info → Run anyway**.
+### Option B: from source
 
-Chi tiết: [docs/launcher.md](docs/launcher.md). Build và phát hành: [docs/release.md](docs/release.md).
-
-## Yêu cầu
-
-- Node.js ≥ 22.18 (đã thử với Node 24) và pnpm.
-- Claude Code.
-- Tuỳ chọn:
-  - Aseprite 1.3+ (để vẽ tay);
-  - tài khoản Cloudflare (tạo ảnh miễn phí);
-  - key Retro Diffusion;
-  - Python + GPU NVIDIA (cho [services/local-sd](services/local-sd/README.md)).
-
-## Cài đặt
-
-Lần đầu cài, hoặc cần lấy key Cloudflare / cài Aseprite: làm theo **[hướng dẫn từng bước](docs/setup.md)**. Tóm tắt:
+Requirements: Node.js ≥ 22.18 (tested on Node 24), pnpm, Claude Code. Optional: Aseprite 1.3+, a Cloudflare account, a Retro Diffusion key, Python + an NVIDIA GPU for [services/local-sd](services/local-sd/README.md).
 
 ```powershell
+git clone https://github.com/t1tc01-personal/squarel-art-2.git
+cd squarel-art-2
 pnpm install
-```
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Mở `.env` và điền các biến:
-
-| Biến | Ý nghĩa |
-|---|---|
-| `DATA_DIR` | Nơi lưu project. Ví dụ `D:\SquarelArt-data`. Nên để trong thư mục OneDrive hoặc Google Drive để được backup |
-| `IMAGE_PROVIDER` | `cloudflare` (mặc định), `local-sd` hoặc `mock` (không cần mạng, dùng để thử) |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Dashboard Cloudflare → AI → Workers AI → *Use REST API*. Token cần quyền Workers AI |
-| `RETRO_DIFFUSION_API_KEY` | Tuỳ chọn. Chỉ dùng khi bạn chọn `quality: "high"` |
-| `IMAGE_DAILY_BUDGET_USD` | Trần chi phí ảnh trả phí mỗi ngày (mặc định 1) |
-| `ASEPRITE_PATH` | Ví dụ `C:\Program Files\Aseprite\Aseprite.exe` |
-
-Kiểm tra mọi thứ:
-
-```powershell
+Copy-Item .env.example .env   # then edit .env
 pnpm check
 ```
 
-## Dùng với Claude Code
-
-Mở Claude Code **trong thư mục repo này**. File `.mcp.json` khai báo sẵn server `squarel`. Lần đầu, Claude Code sẽ hỏi bạn có cho phép server này không.
-
-Các skill trong `.claude/skills/` dạy Claude quy trình làm việc. Ví dụ những câu bạn có thể nói:
-
-- "/pixel-new một hiệp sĩ 32×32 cho game, palette PICO-8"
-- "thêm viền đen", "đổi áo sang xanh", "giảm còn 8 màu", "undo"
-- "/pixel-from-photo meo.jpg làm avatar 48px" (thả ảnh vào `DATA_DIR\inbox`)
-- "/pixel-export in lên áo khổ 30cm" hoặc "xuất mẫu hạt Hama"
-
-Muốn dùng server này ở dự án khác:
-
-```powershell
-claude mcp add squarel --scope user -- node D:\code\squarel-art-2\src\mcp\index.ts
-```
-
-## Vẽ tay trong Aseprite
-
-1. Đóng gói extension:
-
-   ```powershell
-   pnpm aseprite:pack
-   ```
-
-2. Nhấp đúp file `squarel.aseprite-extension` vừa tạo để cài vào Aseprite.
-3. Mở Claude Code. MCP server bật sẵn bridge ở `ws://127.0.0.1:4321/bridge`. Muốn vẽ mà không mở Claude Code thì chạy bridge riêng:
-
-   ```powershell
-   pnpm bridge
-   ```
-
-4. Trong Aseprite, dùng menu **File → Squarel → Open project…**, hoặc bảo Claude "mở trong Aseprite".
-
-Claude sửa gì cũng hiện ngay trong Aseprite, gộp thành một bước undo. Bạn vẽ gì sẽ được gửi về sau 0,5 giây và Claude thấy được. Khi hai bên sửa cùng lúc, hệ thống gộp lại và không mất nét nào. Chi tiết ở [docs/aseprite.md](docs/aseprite.md).
-
-## CLI
-
-```powershell
-pnpm cli tools
-```
-
-```powershell
-pnpm cli project_create --name "Test" --width 32 --height 32
-```
-
-```powershell
-pnpm cli export --project test --preset print-png --options '{\"widthMm\":200}'
-```
-
-## Lệnh phát triển
-
-| Lệnh | Việc |
+| Variable | Meaning |
 |---|---|
-| `pnpm test` | Toàn bộ test (vitest): lõi, store đa tiến trình, provider, tool, MCP qua stdio, bridge WebSocket, extension Lua trên fengari |
-| `pnpm typecheck` / `pnpm lint` | TypeScript / Biome |
-| `pnpm check` | Cả ba lệnh trên |
-| `pnpm mcp` | Chạy MCP server bằng tay (để debug) |
-| `pnpm eval -- --provider mock` | Đánh giá chất lượng ảnh AI. Với provider thật cần `--yes` |
-| `pnpm aseprite:build` | Tự build Aseprite từ source vào `vendor/` (dùng cá nhân) và ghi `ASEPRITE_PATH`. Thêm `-- --check` để chỉ kiểm tra công cụ, `-- --install-deps` để mở winget và Visual Studio Installer cài VS Build Tools (bạn tự đồng ý điều khoản và bấm Install) |
-| `pnpm aseprite:test` | Thử chuyển đổi thật qua Aseprite CLI (cần `ASEPRITE_PATH`) |
-| `pnpm docs:tools` | Sinh lại [docs/tools.md](docs/tools.md) |
+| `DATA_DIR` | Where projects are stored. A OneDrive or Google Drive folder gives you backups for free |
+| `IMAGE_PROVIDER` | `cloudflare` (default), `local-sd`, or `mock` (offline, for trying things out) |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → AI → Workers AI → *Use REST API*. The token needs Workers AI access |
+| `RETRO_DIFFUSION_API_KEY` | Optional. Used only for `quality: "high"` |
+| `IMAGE_DAILY_BUDGET_USD` | Daily cap for paid images (default 1) |
+| `ASEPRITE_PATH` | Path to `Aseprite.exe` |
 
-## Tài liệu
+The full step-by-step guide (Cloudflare keys, building Aseprite, troubleshooting) is in [docs/setup.md](docs/setup.md).
 
-- [Cài đặt từng bước](docs/setup.md) · [Kiến trúc](docs/architecture.md) · [Kế hoạch](docs/plans/2026-11-22-personal-tool-plan.md) · [Kế hoạch SaaS (để dành)](docs/plans/2026-11-22-saas-plan.md)
-- [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md) · [Viết tích hợp](docs/integrations.md)
-- [Launcher](docs/launcher.md) · [Build và phát hành](docs/release.md)
+## Using it with Claude Code
 
-## Giấy phép
+Open Claude Code **in this repository**. `.mcp.json` already declares the `squarel` server, and Claude Code asks once whether to allow it. The skills in `.claude/skills/` teach Claude the workflow. Things you can say:
 
-Squarel Art dùng giấy phép **[PolyForm Shield 1.0.0](LICENSE.md)**.
+- `/pixel-new a 32×32 knight for a game, PICO-8 palette`
+- "add a black outline", "make the shirt blue", "reduce to 8 colors", "undo"
+- `/pixel-from-photo cat.jpg as a 48px avatar` (drop the photo into `DATA_DIR\inbox`)
+- `/pixel-export print on a 30 cm t-shirt`, or "export a Hama bead pattern"
 
-**Được làm:**
-- dùng miễn phí cho cá nhân, công việc hay công ty;
-- bán sản phẩm làm ra bằng nó (sprite cho game, áo in, sticker…);
-- sửa code cho mình dùng;
-- chia sẻ lại, miễn là kèm giấy phép này.
+To use the server from any project:
 
-**Không được làm:** dùng code này để làm hoặc cung cấp một sản phẩm **cạnh tranh** với Squarel Art, dù bán hay cho miễn phí. Ví dụ: đổi tên rồi phát hành lại, hoặc dựng một dịch vụ tạo pixel art bằng AI dựa trên code này.
+```powershell
+claude mcp add squarel --scope user -- node <repo>\src\mcp\index.ts
+```
 
-**Lưu ý:**
-- Giấy phép bảo vệ **code và tài liệu**, không bảo vệ được **ý tưởng**. Người khác vẫn có thể tự viết một công cụ tương tự từ đầu.
-- Đây không phải giấy phép "open source" theo định nghĩa OSI. Nó là giấy phép "source-available": công khai code nhưng có giới hạn.
-- Thư viện bên thứ ba vẫn theo giấy phép riêng của chúng. Aseprite theo EULA riêng: chỉ tự build để dùng cá nhân.
-- Phần này chỉ là tóm tắt, không phải tư vấn pháp lý. Văn bản trong [LICENSE.md](LICENSE.md) là bản có hiệu lực.
+## Drawing by hand in Aseprite
 
-## Cấu trúc
+```powershell
+pnpm aseprite:pack   # builds squarel.aseprite-extension; double-click it to install
+```
+
+Claude Code starts the bridge at `ws://127.0.0.1:4321/bridge`. To draw without Claude Code open, run `pnpm bridge`. In Aseprite, use **File → Squarel → Open project…**, or just ask Claude to "open it in Aseprite". Don't own Aseprite? `pnpm aseprite:build` builds it from source for personal use (the Aseprite EULA forbids redistributing that build). Details: [docs/aseprite.md](docs/aseprite.md).
+
+## Squarel vs. Aseprite MCP servers
+
+Community MCP servers such as [diivi/aseprite-mcp](https://github.com/diivi/aseprite-mcp) and [willibrandon/pixel-mcp](https://pkg.go.dev/github.com/willibrandon/pixel-mcp) let **Claude drive Aseprite**. Squarel owns **the whole path from idea to finished file**, and Aseprite is where you draw by hand.
+
+| | Aseprite MCP | Squarel |
+|---|---|---|
+| Making images | Claude places pixels by coordinate | AI drafts snapped to a real pixel grid and palette; photo → pixel art |
+| Safety of your work | Claude edits the file directly | Proposals only; picked variants become new layers; full version history |
+| Editing together | Easy to overwrite each other | Live two-way sync with stroke-level merging |
+| Exports | What Aseprite exports | Plus print PNG, SVG, PDF, bead patterns, stickers |
+| Without Aseprite | Doesn't work | Works with Claude Code or the CLI alone |
+
+**Where Squarel is weaker:** indexed color only (≤ 256 colors), canvas ≤ 256×256, no group layers, tilemaps, tags, slices or blend modes. If you only need Claude to automate Aseprite, an Aseprite MCP is simpler. The two can be used side by side.
+
+## Documentation
+
+The detailed docs are currently written in Vietnamese.
+
+| Topic | Link |
+|---|---|
+| Step-by-step setup | [docs/setup.md](docs/setup.md) |
+| Launcher | [docs/launcher.md](docs/launcher.md) |
+| Architecture | [docs/architecture.md](docs/architecture.md) |
+| Tool reference | [docs/tools.md](docs/tools.md) |
+| Aseprite sync | [docs/aseprite.md](docs/aseprite.md) |
+| Image providers | [docs/providers.md](docs/providers.md) |
+| Pixel normalizer | [docs/pixel-pipeline.md](docs/pixel-pipeline.md) |
+| Export presets | [docs/export-presets.md](docs/export-presets.md) |
+| Writing an integration | [docs/integrations.md](docs/integrations.md) |
+| Building and releasing | [docs/release.md](docs/release.md) |
+
+## Project layout
 
 ```
-src/core        thuật toán pixel (TS thuần, không I/O)
-src/store       lưu project/version/proposal trên file, khoá giữa các tiến trình
-src/providers   Cloudflare · Retro Diffusion · local-sd · mock, router + ngân sách
-src/tools       ~41 tool dùng chung (MCP, CLI, bridge)
-src/mcp         MCP server stdio
-src/bridge      WebSocket bridge + theo dõi file cho Aseprite
-src/cli         CLI
-integrations/aseprite   extension Lua + script batch
-services/local-sd       service Python (tuỳ chọn)
-.claude/skills          skill cho Claude Code
+src/core        pixel algorithms (pure TypeScript, no I/O)
+src/store       file-based projects, versions and proposals, with cross-process locks
+src/providers   Cloudflare · Retro Diffusion · local-sd · mock, router + budget
+src/tools       ~41 tools shared by MCP, CLI and bridge
+src/mcp         MCP stdio server
+src/bridge      WebSocket bridge + file watcher for Aseprite
+src/cli         command-line interface
+launcher/       Windows launcher (Electron)
+integrations/   Aseprite Lua extension + integration manifests
+services/       optional local Stable Diffusion service (Python)
+.claude/skills  Claude Code skills
 ```
+
+## Development
+
+| Command | What it does |
+|---|---|
+| `pnpm check` | Typecheck + lint (Biome) + tests (Vitest) |
+| `pnpm --dir launcher check` | The same for the launcher |
+| `pnpm --dir launcher build` then `pnpm --dir launcher e2e` | Launcher end-to-end tests (Playwright) |
+| `pnpm mcp` / `pnpm bridge` / `pnpm cli tools` | Run the MCP server, the bridge or the CLI by hand |
+| `pnpm eval -- --provider mock` | Evaluate AI image quality (real providers need `--yes`) |
+| `pnpm docs:tools` | Regenerate [docs/tools.md](docs/tools.md) |
+
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first. Report security issues privately as described in [SECURITY.md](SECURITY.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Squarel Art is **source-available** under the [PolyForm Shield 1.0.0](LICENSE.md) license.
+
+- **You may** use it for free (personally, at work, in a company), sell what you make with it (game sprites, printed shirts, stickers…), modify it, and share it with the license attached.
+- **You may not** use this code to build or offer a product that **competes** with Squarel Art, paid or free (for example, rebranding and republishing it, or running an AI pixel-art service on top of it).
+
+Third-party libraries keep their own licenses. Aseprite is covered by its own EULA. This summary is not legal advice; [LICENSE.md](LICENSE.md) is the binding text.

@@ -1,0 +1,39 @@
+# CI: typecheck, lint and unit tests for Squarel and the launcher on every push to main and every
+# pull request. Launcher e2e tests (Electron + Playwright) run locally, see CONTRIBUTING.md.
+# Actions are pinned by full commit SHA (same pins as release.yml). Read-only token.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24 # engines: >=22.18
+      - name: Squarel check
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+      - name: Launcher check
+        run: |
+          pnpm --dir launcher install --frozen-lockfile
+          pnpm --dir launcher check

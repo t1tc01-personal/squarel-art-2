@@ -1,0 +1,52 @@
+# Changelog
+
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+
+- Project README in English, Vietnamese, Japanese, Simplified Chinese and Korean.
+- `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates.
+- CI workflow that runs the Squarel and launcher checks on every push to `main` and every pull request.
+
+## [0.2.0] - 2026-11-24
+
+### Added
+
+- **Squarel Art Launcher**, a Windows desktop app (Electron):
+  - 4-step first-run setup: install Git, Node.js and pnpm through `winget` in a visible window, get Squarel (fresh clone or an existing checkout), fill in `.env`, register the MCP server and skills with Claude Code;
+  - connections panel showing Claude Code sessions, Aseprite, the bridge and AI services;
+  - pages for Home, Library, each integration (built from its manifest), System (components, health checks, logs) and Settings;
+  - updates for the launcher (GitHub Releases), Squarel (moves to the tag matching the launcher) and tools such as Aseprite;
+  - tray icon, single instance, optional start with Windows, graceful shutdown of the bridge it owns.
+- Integration manifests (`integrations/<id>/integration.json`) with a shared schema, so new tools can be added without launcher code changes.
+- Bridge `status` message listing connected clients; MCP presence files for the launcher.
+- `--json-progress` output for `pnpm aseprite:build`.
+- Release workflow that builds the installer on a `v*` tag and uploads it to a draft GitHub Release.
+
+### Changed
+
+- License set to PolyForm Shield 1.0.0.
+- `pnpm aseprite:build -- --install-deps` no longer installs Visual Studio Build Tools with `--passive`; the Visual Studio Installer window asks you to accept its terms.
+
+### Security
+
+- The bridge accepts only local, non-browser WebSocket clients.
+- The launcher masks secrets in the UI and logs, validates every path and command it runs, and never installs anything without an explicit click.
+
+## [0.1.0] - 2026-11-22
+
+### Added
+
+- MCP server with 41 pixel-art tools for Claude Code: drawing, deterministic edits, photo to pixel art, AI generation, editing and animation as proposals, version history with undo, exports.
+- Pixel normalizer for AI images (grid detection, per-cell majority color, OKLab palette snapping, transparency).
+- Image providers: Cloudflare Workers AI, Retro Diffusion (with price quotes and a daily budget), local Stable Diffusion, mock.
+- Export presets: sprite sheets with JSON, GIF, 300 DPI print PNG, SVG, PDF, avatars, emoji, WebP stickers, Perler/Hama bead patterns.
+- Aseprite extension with two-way live sync over a local WebSocket bridge, merge of concurrent edits, and a heartbeat for reconnects.
+- `pnpm aseprite:build` to build Aseprite from source for personal use.
+- CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
+
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/t1tc01-personal/squarel-art-2/releases/tag/v0.2.0
+[0.1.0]: https://github.com/t1tc01-personal/squarel-art-2/commits/main
