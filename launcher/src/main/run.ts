@@ -259,6 +259,44 @@ export async function runCommand(spec: RunSpec): Promise<{ code: number }> {
   })
 }
 
+/**
+ * Starts argv[0] detached (GUI tools: the launcher must not wait for them or keep them as
+ * children). Same resolution and quoting rules as runCommand; resolves once the process started.
+ */
+export async function spawnDetached(spec: Omit<RunSpec, 'onLine' | 'signal'>): Promise<{ pid?: number }> {
+  const [program, ...args] = spec.argv
+  if (program === undefined || program === '') throw new Error('Lệnh rỗng: thiếu tên chương trình')
+  const env = mergeEnv(spec.env)
+  const resolved = resolveExecutable(program, env)
+  if (!resolved) throw new Error(`Không tìm thấy chương trình "${program}" (ENOENT)`)
+  let isDir = false
+  try {
+    isDir = statSync(spec.cwd).isDirectory()
+  } catch {}
+  if (!isDir) throw new Error(`Thư mục chạy lệnh không tồn tại: ${spec.cwd}`)
+  const cmd = resolved.kind === 'cmd'
+  const file = cmd ? systemExe('cmd.exe') : resolved.path
+  const fileArgs = cmd ? cmdShimArgs(resolved.path, args) : args
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(file, fileArgs, {
+      cwd: spec.cwd,
+      env,
+      shell: false,
+      detached: true,
+      windowsHide: cmd,
+      windowsVerbatimArguments: cmd,
+      stdio: 'ignore',
+    })
+    child.once('error', (e: NodeJS.ErrnoException) =>
+      reject(new Error(`Không chạy được "${program}": ${e.code ?? e.message}`, { cause: e })),
+    )
+    child.once('spawn', () => {
+      child.unref()
+      resolvePromise({ pid: child.pid })
+    })
+  })
+}
+
 /** Parses a `@@progress {json}` line printed by `pnpm aseprite:build -- --json-progress`. */
 export function parseProgressLine(
   line: string,

@@ -28,14 +28,7 @@ test('blocks new windows and navigation away from the app page', async () => {
   try {
     const page = await app.firstWindow()
     await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible()
-    // Record shell.openExternal instead of opening a real browser.
-    await app.evaluate(({ shell }) => {
-      const opened: string[] = []
-      ;(globalThis as any).__opened = opened
-      ;(shell as any).openExternal = async (url: string) => {
-        opened.push(url)
-      }
-    })
+    // In test mode main records https links (globalThis.__squarelTest.external) instead of opening a browser.
     const appUrl = page.url()
 
     await page.evaluate(() => {
@@ -44,7 +37,9 @@ test('blocks new windows and navigation away from the app page', async () => {
     await page.waitForTimeout(500)
     expect(app.windows()).toHaveLength(1)
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
-    expect(await app.evaluate(() => (globalThis as any).__opened)).toEqual(['https://example.com/'])
+    expect(await app.evaluate(() => (globalThis as any).__squarelTest.external)).toEqual([
+      'https://example.com/',
+    ])
 
     await page.evaluate(() => {
       location.href = 'https://example.com'

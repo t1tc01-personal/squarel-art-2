@@ -31,8 +31,10 @@ import type { BridgeState } from './bridge/types'
 import { type CheckCtx, runChecks } from './checks/runner'
 import type { Deps } from './deps'
 import { type EnvDoc, maskSecret, parseEnv, readVar, serializeEnv, setVar } from './env-store'
+import { readLogs } from './logs'
 import { appPaths } from './paths'
 import { buildPresence } from './presence'
+import { redactText } from './redact'
 import { loadRegistry, type Registry, viewComponents } from './registry/registry'
 import type { LauncherState } from './state'
 import { planSquarelUpdate } from './updates/squarel'
@@ -79,6 +81,17 @@ export interface IpcContext {
   onEnvChanged?(key: EnvKey): void
   /** Diagnostics; messages never contain .env values. */
   log?(message: string): void
+  /** Fixed path of the bundled LICENSE.md (dev: repo root; packaged: resources). */
+  licensePath: string
+  /** Public repository page (About section). */
+  repoUrl: string
+  /** shell.openPath; only ever called with licensePath. Resolves to an error text ('' = ok). */
+  openPath(path: string): Promise<string>
+  clipboard: { writeText(text: string): void }
+  /** Tool call over the launcher's bridge connection; rejects when the bridge is not running. */
+  bridgeTool(name: string, input: unknown): Promise<string>
+  /** Opens a folder in the file manager; must refuse anything that is not a directory. */
+  openFolder(path: string): Promise<void>
   /** Test seam for the MCP smoke test of checks:run. */
   smoke?: CheckCtx['smoke']
 }
@@ -340,6 +353,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     const s = await getState()
     const env = await readEnv(s)
     const p = paths()
+    const recent = (await recentProjects())[0]?.slug
     return {
       actx: {
         d,
@@ -348,6 +362,11 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         launcherVersion: ctx.launcherVersion,
         isDev: ctx.isDev,
         toolsDir: p.toolsDir,
+        env,
+        ...(recent ? { recentProject: recent } : {}),
+        projects: () => projectSlugs(s, env),
+        bridgeTool: (name, input) => ctx.bridgeTool(name, input),
+        openFolder: (path) => ctx.openFolder(path),
       },
       secrets: secretValues(env),
     }
@@ -394,6 +413,25 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   }
 
   // ---- projects:recent ----------------------------------------------------------------------
+  /** Project folders of DATA_DIR that have a project.json. */
+  async function projectSlugs(s: LauncherState, env: EnvDoc): Promise<string[]> {
+    const projects = join(dataDir(s, env), 'projects')
+    let names: string[]
+    try {
+      names = (await d.fs.readdir(projects)).map(String).filter((n) => SLUG.test(n))
+    } catch {
+      return []
+    }
+    const out: string[] = []
+    for (const n of names) {
+      try {
+        await d.fs.stat(join(projects, n, 'project.json'))
+        out.push(n)
+      } catch {}
+    }
+    return out
+  }
+
   async function recentProjects(): Promise<RecentProject[]> {
     const s = await getState()
     const projects = join(dataDir(s, await readEnv(s)), 'projects')
@@ -454,9 +492,11 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'components:list': async () => {
       const s = await getState()
       const env = await readEnv(s)
+      const recent = (await recentProjects())[0]?.slug
       return viewComponents(await registry(s), s, env, d, {
         launcherVersion: ctx.launcherVersion,
         isDev: ctx.isDev,
+        ...(recent ? { recentProject: recent } : {}),
       })
     },
     'checks:run': () => runChecksOnce(),
@@ -497,6 +537,39 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       return undefined
     },
     'projects:recent': () => recentProjects(),
+    'logs:read': async (query) => {
+      const s = await getState()
+      const env = await readEnv(s)
+      const dataLogs = join(dataDir(s, env), 'logs')
+      const secrets = secretValues(env)
+      const r = await readLogs([dataLogs, ctx.logsDir], query, (t) => redactText(t, secrets), d)
+      return { dir: dataLogs, ...r }
+    },
+    'clipboard:write': async ({ text }) => {
+      // The renderer sends lines main already redacted; redact again in case it did not.
+      const env = await readEnv(await getState())
+      ctx.clipboard.writeText(redactText(text, secretValues(env)))
+      return undefined
+    },
+    'license:open': async () => {
+      const err = await ctx.openPath(ctx.licensePath)
+      if (err) throw new IpcError('Không mở được LICENSE.md')
+      return undefined
+    },
+    'app:about': async () => {
+      const s = await getState()
+      let squarelVersion: string | null = null
+      if (s.squarelDir) {
+        try {
+          const pkg = JSON.parse(
+            String(await d.fs.readFile(join(s.squarelDir, 'package.json'), 'utf8')).replace(/^﻿/, ''),
+          )
+          if (typeof pkg?.version === 'string') squarelVersion = pkg.version.slice(0, 100)
+        } catch {}
+      }
+      return { launcherVersion: ctx.launcherVersion, squarelVersion, repoUrl: ctx.repoUrl }
+    },
+    'catalog:list': async () => (await registry(await getState())).comingSoon,
     'window:minimize': async () => {
       ctx.window.minimize()
       return undefined

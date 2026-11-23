@@ -2,7 +2,9 @@
 import { spawn } from 'node:child_process'
 import * as nodeFs from 'node:fs/promises'
 import { WebSocket } from 'ws'
-import { isProcessRunning, type RunSpec, runCommand } from './run'
+import { isProcessRunning, type RunSpec, runCommand, spawnDetached } from './run'
+
+export type DetachedSpec = Omit<RunSpec, 'onLine' | 'signal'>
 
 export interface BridgeChild {
   pid?: number
@@ -25,6 +27,8 @@ type FsApi = Pick<
 
 export interface Deps {
   run: (spec: RunSpec) => Promise<{ code: number }>
+  /** Starts a GUI tool detached (launch actions); never waits for it to exit. */
+  spawnDetached: (spec: DetachedSpec) => Promise<{ pid?: number }>
   fetch: typeof globalThis.fetch
   fs: FsApi
   now: () => Date
@@ -54,6 +58,8 @@ export interface Fixtures {
   alivePids?: number[]
   /** Running process image names (case-insensitive). */
   running?: string[]
+  /** spawnDetached calls are recorded here (the fake never starts anything). */
+  launched?: DetachedSpec[]
   freeBytes?: number
   platform?: NodeJS.Platform
   env?: NodeJS.ProcessEnv
@@ -156,6 +162,10 @@ function createFake(fx: Fixtures): Deps {
       for (const l of hit.lines ?? []) spec.onLine?.(l, 'stdout')
       return { code: hit.code }
     },
+    async spawnDetached(spec) {
+      fx.launched?.push(spec)
+      return { pid: 1 }
+    },
     fetch: (async (input: Parameters<typeof fetch>[0]) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const hit = fx.fetch?.[url]
@@ -179,6 +189,7 @@ function createFake(fx: Fixtures): Deps {
 function createReal(): Deps {
   return {
     run: runCommand,
+    spawnDetached,
     fetch: globalThis.fetch.bind(globalThis),
     fs: nodeFs,
     now: () => new Date(),

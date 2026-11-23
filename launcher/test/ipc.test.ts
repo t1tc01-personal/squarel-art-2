@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { createDeps, type Fixtures } from '../src/main/deps'
+import { createDeps, type DetachedSpec, type Fixtures } from '../src/main/deps'
 import { createIpcHandlers, type IpcContext, type SenderInfo } from '../src/main/ipc-handlers'
+import { redactText } from '../src/main/redact'
 import type { LauncherState } from '../src/main/state'
 
 const ROOT = resolve(tmpdir(), 'squarel-ipc-test')
@@ -12,6 +14,7 @@ const LOCAL = join(ROOT, 'local')
 const APPDATA = join(ROOT, 'roaming')
 const LOGS = join(APPDATA, 'SquarelArt Launcher', 'logs')
 const ELSEWHERE = join(ROOT, 'elsewhere')
+const LICENSE = join(ROOT, 'LICENSE.md')
 const APP_URL = 'file:///app/renderer/index.html'
 const APP: SenderInfo = { url: APP_URL, fromAppWindow: true }
 
@@ -37,7 +40,12 @@ function setup(fx: Fixtures = {}) {
     [join(ELSEWHERE, 'secret.txt')]: 'x',
     ...fx.files,
   }
-  const d = createDeps('fake', { ...fx, files, env: { APPDATA, LOCALAPPDATA: LOCAL, ...fx.env } })
+  const launched: DetachedSpec[] = []
+  const d = createDeps('fake', { launched, ...fx, files, env: { APPDATA, LOCALAPPDATA: LOCAL, ...fx.env } })
+  const opened: string[] = []
+  const clipboard: string[] = []
+  const bridgeTools: { name: string; input: unknown }[] = []
+  const folders: string[] = []
   let state: LauncherState = {
     schema: 1,
     squarelDir: SQ,
@@ -75,8 +83,34 @@ function setup(fx: Fixtures = {}) {
     launcherUpdater: { check: async () => ({ ok: true, version: '0.2.0' }) },
     emit: (event, payload) => void events.push({ event, payload }),
     log: (m) => void logs.push(m),
+    licensePath: LICENSE,
+    repoUrl: 'https://github.com/example/repo',
+    openPath: async (p) => {
+      opened.push(p)
+      return ''
+    },
+    clipboard: { writeText: (t) => void clipboard.push(t) },
+    bridgeTool: async (name, input) => {
+      bridgeTools.push({ name, input })
+      return 'ok'
+    },
+    openFolder: async (p) => void folders.push(p),
   }
-  return { h: createIpcHandlers(ctx), d, revealed, events, logs, picked, windowCalls, getState: () => state }
+  return {
+    h: createIpcHandlers(ctx),
+    d,
+    revealed,
+    events,
+    logs,
+    picked,
+    windowCalls,
+    opened,
+    clipboard,
+    bridgeTools,
+    folders,
+    launched,
+    getState: () => state,
+  }
 }
 
 describe('ipc handlers', () => {
@@ -338,5 +372,218 @@ describe('ipc handlers', () => {
     await expect(
       h.handle('window:close', { url: APP_URL, fromAppWindow: false }, undefined),
     ).rejects.toThrow()
+  })
+})
+
+const ASEPRITE_MANIFEST = readFileSync(
+  join(__dirname, '..', '..', 'integrations', 'aseprite', 'integration.json'),
+  'utf8',
+)
+const EXE = join(ROOT, 'tools', 'aseprite', 'Aseprite.exe')
+
+function withAseprite(fx: Fixtures = {}) {
+  return setup({
+    ...fx,
+    files: {
+      [join(SQ, 'integrations', 'aseprite', 'integration.json')]: ASEPRITE_MANIFEST,
+      [join(SQ, '.env')]: `CLOUDFLARE_API_TOKEN=${CF_TOKEN}\r\nDATA_DIR=${DATA}\r\nASEPRITE_PATH=${EXE}\r\n`,
+      [EXE]: '',
+      ...fx.files,
+    },
+    run: { [`${EXE} -b --version`]: { code: 0, lines: ['Aseprite 1.3.18.6-x64'] }, ...fx.run },
+  })
+}
+
+describe('launch actions (from the manifest only)', () => {
+  const ref = (id: string, extra: object = {}) => ({
+    componentId: 'aseprite',
+    kind: 'launch',
+    id,
+    label: 'ignored',
+    ...extra,
+  })
+
+  it('refuses launch actions of an unselected integration', async () => {
+    const { h, launched } = withAseprite()
+    await expect(h.handle('action:run', APP, ref('open'))).rejects.toThrow(/Chưa chọn/)
+    expect(launched).toEqual([])
+  })
+
+  it('runs the default action and "open without sync" with SQUAREL_NO_SYNC only there', async () => {
+    const { h, launched, events } = withAseprite()
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    await h.handle('action:run', APP, ref('open'))
+    await h.idle()
+    await h.handle('action:run', APP, ref('open-plain'))
+    await h.idle()
+    expect(launched).toEqual([
+      { argv: [EXE], cwd: SQ },
+      { argv: [EXE], cwd: SQ, env: { SQUAREL_NO_SYNC: '1' } },
+    ])
+    const done = events.filter(
+      (e) => e.event === 'task:event' && (e.payload as { kind?: string }).kind === 'done',
+    )
+    expect(done).toHaveLength(2)
+  })
+
+  it('bridge tools get the recent project from DATA_DIR, or a picked existing one', async () => {
+    const { h, bridgeTools, events } = withAseprite()
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    await h.handle('action:run', APP, ref('open-recent'))
+    await h.idle()
+    expect(bridgeTools).toEqual([{ name: 'open_in_editor', input: { project: 'cat' } }])
+
+    await h.handle('action:run', APP, ref('open-project', { project: 'nope' }))
+    await h.idle()
+    expect(bridgeTools).toHaveLength(1)
+    const ends = events
+      .filter((e) => e.event === 'task:event')
+      .map((e) => e.payload as { kind?: string })
+      .filter((p) => p.kind === 'done' || p.kind === 'error')
+    expect(ends.at(-1)?.kind).toBe('error')
+    await h.handle('action:run', APP, ref('open-project', { project: 'cat' }))
+    await h.idle()
+    expect(bridgeTools.at(-1)).toEqual({ name: 'open_in_editor', input: { project: 'cat' } })
+    // A path is never a valid project.
+    await expect(h.handle('action:run', APP, ref('open-project', { project: '..\\x' }))).rejects.toThrow(
+      /không hợp lệ/,
+    )
+  })
+
+  it('reveal opens the detected exe folder; labels substitute {recentProject}', async () => {
+    const { h, folders } = withAseprite()
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    await h.handle('action:run', APP, ref('folder'))
+    await h.idle()
+    expect(folders).toEqual([join(ROOT, 'tools', 'aseprite')])
+    const comps = (await h.handle('components:list', APP, undefined)) as {
+      id: string
+      actions: { kind: string; label: string }[]
+    }[]
+    const labels = comps.find((c) => c.id === 'aseprite')?.actions.filter((a) => a.kind === 'launch')
+    expect(labels?.map((a) => a.label)).toEqual([
+      'Mở Aseprite',
+      'Mở project…',
+      'Mở cat',
+      'Mở không đồng bộ',
+      'Mở thư mục cài đặt',
+    ])
+  })
+
+  it('hides {recentProject} actions while there is no project', async () => {
+    const { h, d } = withAseprite()
+    await d.fs.rm(join(DATA, 'projects', 'cat', 'project.json'))
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    const comps = (await h.handle('components:list', APP, undefined)) as {
+      id: string
+      actions: { kind: string; id: string }[]
+    }[]
+    const ids = comps.find((c) => c.id === 'aseprite')?.actions.filter((a) => a.kind === 'launch')
+    expect(ids?.map((a) => a.id)).toEqual(['open', 'open-project', 'open-plain', 'folder'])
+  })
+})
+
+describe('logs, clipboard, about, license', () => {
+  const LOGDIR = join(DATA, 'logs')
+  const line = (o: object) => `${JSON.stringify(o)}\n`
+
+  function withLogs() {
+    return setup({
+      realpaths: { [join(LOGDIR, 'evil.log')]: join(ELSEWHERE, 'secret.txt') },
+      files: {
+        [join(LOGDIR, 'bridge-2026-01-01.log')]:
+          line({
+            ts: '2026-01-01T10:00:01Z',
+            level: 'info',
+            name: 'bridge',
+            msg: 'editor hello',
+            client: 'aseprite',
+          }) +
+          line({
+            ts: '2026-01-01T10:00:03Z',
+            level: 'warn',
+            name: 'bridge',
+            msg: `token ${CF_TOKEN} leaked`,
+          }),
+        [join(LOGDIR, 'mcp-2026-01-01.log')]:
+          line({ ts: '2026-01-01T10:00:02Z', level: 'error', name: 'mcp', msg: 'auth: Bearer abc.def-123' }) +
+          line({
+            ts: '2026-01-01T10:00:04Z',
+            level: 'info',
+            name: 'mcp',
+            msg: 'fetch https://u:p4ss@example.com/x?token=zzz',
+          }),
+        [join(LOGDIR, 'evil.log')]: `{"ts":"2026-01-01T09:00:00Z","msg":"outside"}`,
+        [join(LOGDIR, 'notes.txt')]: `raw ${CF_TOKEN}`,
+      },
+    })
+  }
+
+  it('logs:read merges, sorts, filters and redacts before leaving main', async () => {
+    const { h } = withLogs()
+    const all = (await h.handle('logs:read', APP, {})) as {
+      dir: string
+      sources: string[]
+      lines: { ts: string; level: string; source: string; text: string }[]
+    }
+    expect(all.dir).toBe(LOGDIR)
+    expect(all.sources).toEqual(expect.arrayContaining(['bridge', 'mcp', 'launcher']))
+    expect(JSON.stringify(all)).not.toContain('outside')
+    const data = all.lines.filter((l) => l.source !== 'launcher')
+    expect(data.map((l) => l.ts)).toEqual([
+      '2026-01-01T10:00:01Z',
+      '2026-01-01T10:00:02Z',
+      '2026-01-01T10:00:03Z',
+      '2026-01-01T10:00:04Z',
+    ])
+    const json = JSON.stringify(all)
+    expect(json).not.toContain(CF_TOKEN)
+    expect(json).not.toContain('abc.def-123')
+    expect(json).not.toContain('p4ss')
+    expect(json).not.toContain('zzz')
+    expect(json).toContain('••••6789')
+    expect(data[0]?.text).toBe('editor hello · client=aseprite')
+
+    const bridge = (await h.handle('logs:read', APP, { source: 'bridge' })) as { lines: { source: string }[] }
+    expect(bridge.lines.map((l) => l.source)).toEqual(['bridge', 'bridge'])
+    const errors = (await h.handle('logs:read', APP, { level: 'error' })) as { lines: { level: string }[] }
+    expect(errors.lines.map((l) => l.level)).toEqual(['error'])
+    const warn = (await h.handle('logs:read', APP, { level: 'warn' })) as { lines: { level: string }[] }
+    expect(warn.lines.map((l) => l.level)).toEqual(['error', 'warn'])
+
+    // No path input is accepted.
+    await expect(h.handle('logs:read', APP, { dir: ELSEWHERE })).rejects.toThrow(/không hợp lệ/)
+    await expect(h.handle('logs:read', APP, { source: '../x' })).rejects.toThrow(/không hợp lệ/)
+  })
+
+  it('clipboard:write redacts again in main', async () => {
+    const { h, clipboard } = setup()
+    await h.handle('clipboard:write', APP, { text: `a ${CF_TOKEN} b Bearer qqq.www` })
+    expect(clipboard).toEqual(['a ••••6789 b Bearer ••••'])
+    await expect(h.handle('clipboard:write', APP, { text: 1 })).rejects.toThrow(/không hợp lệ/)
+  })
+
+  it('license:open opens only the fixed bundled path; app:about reports versions', async () => {
+    const { h, opened } = setup()
+    await h.handle('license:open', APP, undefined)
+    await expect(h.handle('license:open', APP, { path: ELSEWHERE })).rejects.toThrow(/không hợp lệ/)
+    expect(opened).toEqual([LICENSE])
+    expect(await h.handle('app:about', APP, undefined)).toEqual({
+      launcherVersion: '0.2.0',
+      squarelVersion: null,
+      repoUrl: 'https://github.com/example/repo',
+    })
+  })
+})
+
+describe('redactText', () => {
+  it('masks .env secrets, URL credentials, Bearer tokens and token query params', () => {
+    expect(redactText('x secret-value-1234 y', ['secret-value-1234'])).toBe('x ••••1234 y')
+    expect(redactText('git https://user:pw@host/repo', [])).toBe('git https://***@host/repo')
+    expect(redactText('Authorization: Bearer eyJ.abc_d', [])).toBe('Authorization: Bearer ••••')
+    expect(redactText('ws://127.0.0.1:4321/bridge?token=abc&x=1', [])).toBe(
+      'ws://127.0.0.1:4321/bridge?token=••••&x=1',
+    )
+    expect(redactText('short abc', ['abc'])).toBe('short abc') // < 4 characters are never matched
   })
 })

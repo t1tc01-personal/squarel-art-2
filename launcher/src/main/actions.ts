@@ -4,14 +4,17 @@
  * ActionRef itself (its `label` / `needsConsent` are display-only and ignored here).
  *
  * Supported now: settings/fix/open-settings, squarel/fix/register-mcp, squarel/update/update,
- * <integration>/extension/install, <integration>/update/update, <integration>/install/<option with run>.
- * Not yet: core installs (winget / terminal) and launch actions — later tasks add them here.
+ * <integration>/extension/install, <integration>/update/update, <integration>/install/<option with run>,
+ * <integration>/launch/<launch id>.
+ * Not yet: core installs (winget / terminal) — T14 adds them here.
  */
+import { dirname } from 'node:path'
 import { substitute } from '@squarel/integration-schema'
 import type { ActionRef, TaskEvent } from '../shared/model'
 import { registerMcp } from './claude'
 import type { Deps } from './deps'
-import type { LoadedIntegration, Registry } from './registry/registry'
+import type { EnvDoc } from './env-store'
+import { detectIntegration, type LoadedIntegration, type Registry } from './registry/registry'
 import { parseProgressLine } from './run'
 import type { LauncherState } from './state'
 import { applySquarelUpdate, planSquarelUpdate } from './updates/squarel'
@@ -35,6 +38,16 @@ export interface ActionCtx {
   launcherVersion: string
   isDev: boolean
   toolsDir(id: string): string
+  /** The parsed Squarel `.env` (detection of integration executables). */
+  env: EnvDoc
+  /** Slug of the most recently updated project (resolved in main), for `{recentProject}`. */
+  recentProject?: string
+  /** Slugs of all projects in DATA_DIR (checks a `pickProject` choice). */
+  projects(): Promise<string[]>
+  /** Sends a tool call over the bridge (launch actions with `bridgeTool`). */
+  bridgeTool(name: string, input: unknown): Promise<string>
+  /** Opens a folder in the file manager (launch actions with `reveal`); refuses files. */
+  openFolder(path: string): Promise<void>
 }
 
 /**
@@ -124,6 +137,70 @@ async function runManifestCommand(
     })
 }
 
+type LaunchSpec = LoadedIntegration['manifest']['launch'][number]
+
+/**
+ * One entry of the manifest's `launch` list. The command, folder and tool name come only from the
+ * manifest; `{exe}` / `{exeDir}` from detection and `{recentProject}` from DATA_DIR, both in main.
+ * The renderer contributes at most a project slug for `pickProject`, checked against DATA_DIR.
+ */
+async function runLaunch(
+  taskId: string,
+  emit: Emit,
+  ctx: ActionCtx,
+  i: LoadedIntegration,
+  a: LaunchSpec,
+  project: string | undefined,
+): Promise<void> {
+  const m = i.manifest
+  const fail = (text: string) => emit({ taskId, kind: 'error', text })
+  const det = await detectIntegration(i, ctx.env, ctx.d)
+  if (!det.installed || !det.path) return fail(`Chưa cài ${m.name}`)
+  const vars = {
+    toolsDir: ctx.toolsDir(m.id),
+    exe: det.path,
+    exeDir: dirname(det.path),
+    ...(det.version ? { version: det.version } : {}),
+    ...(ctx.recentProject ? { recentProject: ctx.recentProject } : {}),
+  }
+  let label: string
+  try {
+    label = substitute(a.label, vars)
+  } catch {
+    label = a.label
+  }
+  try {
+    if (a.run) {
+      const argv = a.run.map((x) => substitute(x, vars))
+      // `env` is used only as the manifest declares it (e.g. SQUAREL_NO_SYNC=1 for "open without sync").
+      await ctx.d.spawnDetached({
+        argv,
+        cwd: manifestCwd(i, ctx.state.squarelDir ?? ''),
+        ...(a.env ? { env: { ...a.env } } : {}),
+      })
+      return emit({ taskId, kind: 'done', code: 0, text: `Đã mở: ${label}` })
+    }
+    if (a.bridgeTool) {
+      let slug = ctx.recentProject
+      if (a.pickProject) {
+        if (!project) return fail('Hãy chọn một project')
+        if (!(await ctx.projects()).includes(project)) return fail(`Không có project "${project}"`)
+        slug = project
+      }
+      if (!slug) return fail('Chưa có project nào')
+      const text = await ctx.bridgeTool(a.bridgeTool, { project: slug })
+      return emit({ taskId, kind: 'done', code: 0, text: text.trim() || `Đã mở ${slug}` })
+    }
+    if (a.reveal) {
+      await ctx.openFolder(substitute(a.reveal, vars))
+      return emit({ taskId, kind: 'done', code: 0, text: label })
+    }
+  } catch (e) {
+    return fail(`${label} thất bại: ${msg(e)}`)
+  }
+  return fail('Mục mở không hợp lệ')
+}
+
 export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
   const { componentId: cid, kind, id } = ref
   const unsupported = { error: 'Thao tác không được hỗ trợ' }
@@ -210,6 +287,17 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
         )
         if (r.blocked) emit({ taskId, kind: 'error', text: r.blocked })
       },
+    }
+  }
+
+  if (kind === 'launch') {
+    const a = m.launch.find((x) => x.id === id)
+    if (!a) return unsupported
+    const i = selectedIntegration(ctx, cid)
+    if (typeof i === 'string') return { error: i }
+    return {
+      key: `${cid}:launch:${id}`,
+      body: (taskId, emit) => runLaunch(taskId, emit, ctx, i, a, ref.project),
     }
   }
 

@@ -8,10 +8,15 @@ declare global {
 }
 
 export type {
+  About,
+  CatalogEntryView,
   ChecksSnapshot,
   EnvKey,
   EnvView,
   FileFilter,
+  LogLine,
+  LogsQuery,
+  LogsResult,
   RecentProject,
   SquarelApi,
   StatePatch,

@@ -1,7 +1,8 @@
+import { appendFile, mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import type { EventName, EventPayload } from '../shared/ipc'
 import { type BridgeSupervisor, createBridgeSupervisor } from './bridge/supervisor'
 import type { BridgeState } from './bridge/types'
@@ -55,6 +56,34 @@ export function isAppUrl(url: string): boolean {
   }
 }
 
+const REPO_URL = 'https://github.com/t1tc01-personal/squarel-art-2'
+
+/**
+ * Test mode only: side effects that would leave the app (open a file / URL, start a tool, write
+ * the clipboard, call the bridge) are recorded here instead, so e2e tests can assert on them via
+ * `app.evaluate(() => globalThis.__squarelTest)`.
+ */
+interface TestSink {
+  launched: unknown[]
+  bridgeTools: { name: string; input: unknown }[]
+  opened: string[]
+  folders: string[]
+  external: string[]
+  clipboard: string[]
+}
+const testSink: TestSink | undefined = TEST_MODE
+  ? { launched: [], bridgeTools: [], opened: [], folders: [], external: [], clipboard: [] }
+  : undefined
+if (testSink) (globalThis as { __squarelTest?: TestSink }).__squarelTest = testSink
+
+/** LICENSE.md shipped with the launcher: resources in a packaged build, repo root from source. */
+function licensePath(): string {
+  // TODO(T16): electron-builder `extraResources: [{ from: '../LICENSE.md', to: 'LICENSE.md' }]` (no builder config yet).
+  return app.isPackaged
+    ? join(process.resourcesPath, 'LICENSE.md')
+    : join(app.getAppPath(), '..', 'LICENSE.md')
+}
+
 let mainWindow: BrowserWindow | undefined
 
 function createWindow(): BrowserWindow {
@@ -75,7 +104,10 @@ function createWindow(): BrowserWindow {
   })
   // No network content: never open new windows, never navigate away from the app page.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url)
+    if (url.startsWith('https://')) {
+      if (testSink) testSink.external.push(url)
+      else void shell.openExternal(url)
+    }
     return { action: 'deny' }
   })
   const block = (event: { preventDefault: () => void }, url: string) => {
@@ -118,7 +150,28 @@ async function startServices(): Promise<IpcHandlers> {
   const d: Deps = fake?.deps ?? createDeps('real')
   const paths = appPaths(d.env)
   const logsDir = join(dirname(paths.stateFile), 'logs')
-  const log = (m: string) => console.warn(`[launcher] ${m}`)
+  /** Same JSON-lines format as Squarel's logger (src/log.ts); messages never carry .env values. */
+  const writeLog = (level: 'info' | 'warn', msg: string) => {
+    if (fake) return // the fake world has no real disk
+    const ts = new Date().toISOString()
+    const line = `${JSON.stringify({ ts, level, name: 'launcher', msg })}\n`
+    void mkdir(logsDir, { recursive: true })
+      .then(() => appendFile(join(logsDir, `launcher-${ts.slice(0, 10)}.log`), line))
+      .catch(() => {})
+  }
+  const log = (m: string) => {
+    console.warn(`[launcher] ${m}`)
+    writeLog('warn', m)
+  }
+  if (fake && testSink)
+    d.spawnDetached = async (spec) => {
+      testSink.launched.push(spec)
+      return { pid: 1 }
+    }
+  writeLog(
+    'info',
+    `Squarel Art Launcher ${app.getVersion()} khởi động · Electron ${process.versions.electron}`,
+  )
 
   let state: LauncherState = await loadState(paths.stateFile)
   if (fake) state = { ...state, ...fake.state }
@@ -241,6 +294,37 @@ async function startServices(): Promise<IpcHandlers> {
       if (key === 'BRIDGE_PORT') restartBridge()
     },
     log,
+    licensePath: licensePath(),
+    repoUrl: REPO_URL,
+    openPath: async (p) => {
+      if (!(await stat(p).catch(() => undefined))?.isFile()) return 'not found'
+      if (testSink) {
+        testSink.opened.push(p)
+        return ''
+      }
+      return shell.openPath(p)
+    },
+    clipboard: {
+      writeText: (t) => (testSink ? void testSink.clipboard.push(t) : clipboard.writeText(t)),
+    },
+    bridgeTool: async (name, input) => {
+      if (testSink && fake) {
+        testSink.bridgeTools.push({ name, input })
+        return ''
+      }
+      if (!sup) throw new Error('Bridge chưa chạy')
+      return sup.sendTool(name, input)
+    },
+    openFolder: async (p) => {
+      if (testSink && fake) {
+        testSink.folders.push(p)
+        return
+      }
+      const s = await stat(p).catch(() => undefined)
+      if (!s?.isDirectory()) throw new Error('Không phải thư mục')
+      const err = await shell.openPath(p)
+      if (err) throw new Error(err)
+    },
   })
 
   for (const channel of handlers.channels) {

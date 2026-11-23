@@ -20,6 +20,11 @@ test('window.squarel exposes only the typed API and main validates calls', async
     })
     expect(r.keys).toEqual(
       [
+        'about',
+        'catalog',
+        'openLicense',
+        'readLogs',
+        'writeClipboard',
         'applyUpdates',
         'checkUpdates',
         'closeWindow',

@@ -40,6 +40,11 @@ export const actionRefSchema = z.strictObject({
   id: actionId,
   label: str(200),
   needsConsent: z.strictObject({ command: str(4000), sizeHint: str(100).optional() }).optional(),
+  project: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+    .optional(),
+  pickProject: z.boolean().optional(),
 })
 
 export const componentViewSchema = z.object({
@@ -70,6 +75,7 @@ export const checkResultSchema = z.object({
   result: z.enum(['pass', 'warn', 'fail']),
   detail: str(4000),
   fix: actionRefSchema.optional(),
+  builtin: str(40).optional(),
 })
 
 export const presenceGroupSchema = z.object({
@@ -190,6 +196,53 @@ export const recentProjectSchema = z.object({
 })
 export type RecentProject = z.infer<typeof recentProjectSchema>
 
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
+export type LogLevel = (typeof LOG_LEVELS)[number]
+const logSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/)
+
+export const logLineSchema = z.object({
+  /** ISO time, '' when the line had none. */
+  ts: str(40),
+  level: z.enum(LOG_LEVELS),
+  source: logSource,
+  text: str(4000),
+})
+export type LogLine = z.infer<typeof logLineSchema>
+
+export const logsQuerySchema = z.strictObject({
+  source: logSource.optional(),
+  /** Minimum level; 'info' also includes debug lines. */
+  level: z.enum(['info', 'warn', 'error']).optional(),
+})
+export type LogsQuery = z.infer<typeof logsQuerySchema>
+
+export const logsResultSchema = z.object({
+  /** DATA_DIR\logs (display + "open folder"), null when unknown. */
+  dir: str(1000).nullable(),
+  /** Every source present before filtering. */
+  sources: z.array(logSource).max(50),
+  /** Last 500 matching lines, oldest first, already redacted. */
+  lines: z.array(logLineSchema).max(500),
+})
+export type LogsResult = z.infer<typeof logsResultSchema>
+
+export const aboutSchema = z.object({
+  launcherVersion: str(100),
+  squarelVersion: str(100).nullable(),
+  repoUrl: str(300),
+})
+export type About = z.infer<typeof aboutSchema>
+
+export const catalogEntrySchema = z.object({
+  id: str(64),
+  name: str(200),
+  description: str(2000),
+  icon: str(2),
+  accent: str(16),
+  status: z.literal('coming-soon'),
+})
+export type CatalogEntryView = z.infer<typeof catalogEntrySchema>
+
 const none = z.undefined()
 const taskId = str(200)
 
@@ -212,6 +265,13 @@ export const CHANNELS = {
   },
   'shell:reveal': { input: z.strictObject({ path: z.string().min(1).max(32_767) }), output: none },
   'projects:recent': { input: none, output: z.array(recentProjectSchema).max(3) },
+  'logs:read': { input: logsQuerySchema, output: logsResultSchema },
+  /** Main redacts the text again before it reaches the clipboard. */
+  'clipboard:write': { input: z.strictObject({ text: z.string().max(1_000_000) }), output: none },
+  /** Opens the bundled LICENSE.md (fixed path, never from the renderer). */
+  'license:open': { input: none, output: none },
+  'app:about': { input: none, output: aboutSchema },
+  'catalog:list': { input: none, output: z.array(catalogEntrySchema).max(100) },
   'window:minimize': { input: none, output: none },
   /** Hides the window when state.closeToTray, otherwise quits the app. */
   'window:close': { input: none, output: none },
@@ -249,6 +309,11 @@ export interface SquarelApi {
   pickFile(input: { filters: FileFilter[] }): Promise<string | null>
   reveal(input: { path: string }): Promise<void>
   recentProjects(): Promise<RecentProject[]>
+  readLogs(query: LogsQuery): Promise<LogsResult>
+  writeClipboard(input: { text: string }): Promise<void>
+  openLicense(): Promise<void>
+  about(): Promise<About>
+  catalog(): Promise<CatalogEntryView[]>
   minimizeWindow(): Promise<void>
   closeWindow(): Promise<void>
   onPresenceChanged(cb: (groups: PresenceGroup[]) => void): Unsubscribe

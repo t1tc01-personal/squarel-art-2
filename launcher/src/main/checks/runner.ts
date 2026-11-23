@@ -70,6 +70,7 @@ interface Def {
   group: string
   label: string
   description: string
+  builtin?: string
   run: () => Promise<B.Draft> | B.Draft
 }
 
@@ -113,6 +114,7 @@ export async function runChecks(reg: Registry, ctx: B.CheckCtx, d: Deps): Promis
         id: `integration:${i.manifest.id}:${c.id}`,
         group: `integration:${i.manifest.id}`,
         label: c.label,
+        ...(c.builtin ? { builtin: c.builtin } : {}),
         description:
           (c.builtin && B.BUILTIN_DESC[c.builtin]) ||
           `Chạy ${c.run?.join(' ') ?? c.id}, đạt khi mã thoát là 0.`,

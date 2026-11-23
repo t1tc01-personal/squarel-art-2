@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "demo-tool",
+  "name": "Demo Tool",
+  "description": "Tích hợp mẫu cho test: trang này dựng hoàn toàn từ file khai báo.",
+  "icon": "icon.png",
+  "accent": "#29ADFF",
+  "platforms": ["win32"],
+  "detect": {
+    "env": "DEMO_TOOL_PATH",
+    "version": { "args": ["--version"], "pattern": "DemoTool (\\S+)" }
+  },
+  "install": [],
+  "launch": [
+    { "id": "start", "label": "Mở Demo Tool", "default": true, "run": ["{exe}"] },
+    { "id": "safe", "label": "Chế độ an toàn", "run": ["{exe}", "--safe"] },
+    { "id": "where", "label": "Mở thư mục cài đặt", "reveal": "{exeDir}" }
+  ],
+  "checks": [{ "id": "installed", "label": "Demo Tool chạy được", "builtin": "detect" }]
+}

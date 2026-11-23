@@ -26,6 +26,13 @@ export interface ActionRef {
   id: string
   label: string
   needsConsent?: { command: string; sizeHint?: string }
+  /**
+   * Launch actions with `pickProject` only: the project slug the user chose. Main checks it is an
+   * existing project of DATA_DIR; it is never a path.
+   */
+  project?: string
+  /** Launch actions: the renderer asks the user for a project first (manifest `pickProject`). */
+  pickProject?: boolean
 }
 export interface CheckResult {
   id: string
@@ -35,6 +42,8 @@ export interface CheckResult {
   result: 'pass' | 'warn' | 'fail'
   detail: string
   fix?: ActionRef
+  /** Integration checks only: the manifest's `builtin` kind (e.g. 'extension-version'). */
+  builtin?: string
 }
 export interface PresenceItem {
   id: string

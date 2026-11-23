@@ -244,7 +244,17 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
     det.installed && c.latest ? await c.latest(d, ctx).catch((): undefined => undefined) : undefined
   const nodeOk =
     c.id === 'node' && det.installed && det.version ? satisfiesMin(det.version, MIN_NODE) : undefined
+  const lv = levelFor({
+    required: c.required,
+    installed: det.installed,
+    version: det.version,
+    latest,
+    nodeOk,
+  })
   const actions: ActionRef[] = []
+  // Squarel moves to the launcher's own tag (updates:apply / squarel:update); offered only when newer.
+  if (c.id === 'squarel' && lv.level === 'warn')
+    actions.push({ componentId: 'squarel', kind: 'update', id: 'update', label: 'Cập nhật' })
   if (!det.installed && c.install?.winget) {
     actions.push({
       componentId: c.id,
@@ -276,7 +286,7 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
     installed: det.installed,
     ...(det.version ? { version: det.version } : {}),
     ...latestFields(latest),
-    ...levelFor({ required: c.required, installed: det.installed, version: det.version, latest, nodeOk }),
+    ...lv,
     actions,
   }
 }
@@ -286,6 +296,7 @@ async function viewIntegration(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
+  recentProject?: string,
 ): Promise<ComponentView> {
   const m = i.manifest
   const { note: iconNote, ...iconPart } = await loadIcon(i, d)
@@ -322,6 +333,14 @@ async function viewIntegration(
     toolsDir: join(d.env.LOCALAPPDATA ?? tmpdir(), 'SquarelArt', 'tools', m.id),
     ...(det.path ? { exe: det.path, exeDir: dirname(det.path) } : {}),
     ...(latest?.ok ? { version: latest.version } : {}),
+    ...(recentProject ? { recentProject } : {}),
+  }
+  const subOrUndefined = (s: string) => {
+    try {
+      return substitute(s, vars)
+    } catch {
+      return undefined
+    }
   }
   const sub = (s: string) => {
     try {
@@ -343,8 +362,21 @@ async function viewIntegration(
         ...(o.run ? { needsConsent: { command: shell(o.run.map(sub)) } } : {}),
       })
   } else {
-    for (const a of m.launch)
-      actions.push({ componentId: m.id, kind: 'launch', id: a.id, label: sub(a.label) })
+    // The default action comes first: it is the big Open button, the rest form the ▾ menu.
+    for (const a of [...m.launch].sort((x, y) => Number(!!y.default) - Number(!!x.default))) {
+      // Hidden while it cannot run: a variable without value ({recentProject} with no project yet),
+      // or a bridge tool that needs the recent project when there is none.
+      const label = subOrUndefined(a.label)
+      if (label === undefined) continue
+      if (a.bridgeTool && !a.pickProject && !recentProject) continue
+      actions.push({
+        componentId: m.id,
+        kind: 'launch',
+        id: a.id,
+        label,
+        ...(a.pickProject ? { pickProject: true } : {}),
+      })
+    }
     if (lv.level === 'warn' && m.update)
       actions.push({
         componentId: m.id,
@@ -369,7 +401,7 @@ export async function viewComponents(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
-  ctx: Pick<Ctx, 'launcherVersion' | 'isDev'>,
+  ctx: Pick<Ctx, 'launcherVersion' | 'isDev'> & { recentProject?: string },
 ): Promise<ComponentView[]> {
   const full: Ctx = {
     squarelDir: state.squarelDir,
@@ -378,6 +410,8 @@ export async function viewComponents(
     env: envDoc,
   }
   const core = Promise.all(reg.core.map((c) => viewCore(c, full, d)))
-  const ints = Promise.all(reg.integrations.map((i) => viewIntegration(i, state, envDoc, d)))
+  const ints = Promise.all(
+    reg.integrations.map((i) => viewIntegration(i, state, envDoc, d, ctx.recentProject)),
+  )
   return [...(await core), ...(await ints)]
 }

@@ -1,7 +1,8 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 import { Icon, type IconName } from './Icon'
 
 export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
+  ref?: Ref<HTMLButtonElement>
   type?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'md' | 'lg'
   icon?: IconName

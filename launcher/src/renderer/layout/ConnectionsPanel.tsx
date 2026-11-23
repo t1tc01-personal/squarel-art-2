@@ -59,9 +59,12 @@ function Summary({ groups }: { groups: PresenceGroup[] }) {
 export function ConnectionsPanel({
   groups,
   components,
+  selected,
 }: {
   groups: PresenceGroup[]
   components: ComponentView[]
+  /** Selected integrations: the tip only talks about a tool the user chose. */
+  selected: readonly string[]
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [filter, setFilter] = useState<Filter>('all')
@@ -146,9 +149,11 @@ export function ConnectionsPanel({
           </section>
         ))}
       </div>
-      <div className="panel-tip">
+      <div className="panel-tip" data-testid="panel-tip">
         <div className="panel-tip-title">Mẹo</div>
-        Bảo Claude "mở trong Aseprite" để vẽ tay tiếp. Nét vẽ tự quay về Claude.
+        {selected.includes('aseprite')
+          ? 'Bảo Claude "mở trong Aseprite" để vẽ tay tiếp. Nét vẽ tự quay về Claude.'
+          : 'Gõ /pixel-new trong Claude Code để bắt đầu một hình mới.'}
       </div>
     </aside>
   )
