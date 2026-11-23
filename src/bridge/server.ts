@@ -10,12 +10,17 @@ import type { PixelDocJSON } from '../shared/types.ts'
 import { ConflictError } from '../store/store.ts'
 import { runTool } from '../tools/registry.ts'
 import type { EditorHost, ToolContext } from '../tools/types.ts'
+import { SQUAREL_VERSION } from '../version.ts'
 import { asepriteAvailable, CLI_SCRIPTS, launchAseprite, runAsepriteScript } from './aseprite-cli.ts'
-import { BRIDGE_PATH, type ClientMessage, type ServerMessage } from './protocol.ts'
+import { BRIDGE_PATH, type BridgeClientInfo, type ClientMessage, type ServerMessage } from './protocol.ts'
 
 interface Client {
   ws: WebSocket
   name: string
+  ext?: string
+  app?: string
+  connectedAt: string
+  lastSeen: string
   slug?: string
   /** Last version this client is known to have (sent to it, or committed by it). */
   version?: string
@@ -28,8 +33,6 @@ export interface BridgeOptions {
   token?: string
   watchFiles?: boolean
 }
-
-const VERSION = '0.1.1'
 
 /**
  * Who may connect: native clients only. No Origin (Node `ws`, most tools) or a `ws://` origin on this machine
@@ -115,12 +118,25 @@ export class BridgeServer implements EditorHost {
     if (c.ws.readyState === c.ws.OPEN) c.ws.send(JSON.stringify(m))
   }
 
+  private clientInfos(): BridgeClientInfo[] {
+    return [...this.clients].map((c) => ({
+      name: c.name,
+      ext: c.ext,
+      app: c.app,
+      slug: c.slug,
+      version: c.version,
+      connectedAt: c.connectedAt,
+      lastSeen: c.lastSeen,
+    }))
+  }
+
   private async projectList() {
     return (await this.ctx.store.listProjects()).map((p) => ({ slug: p.slug, name: p.name, head: p.head }))
   }
 
   private onConnection(ws: WebSocket) {
-    const client: Client = { ws, name: 'unknown' }
+    const now = new Date().toISOString()
+    const client: Client = { ws, name: 'unknown', connectedAt: now, lastSeen: now }
     this.clients.add(client)
     this.ctx.log.info('editor connected', { clients: this.clients.size })
     ws.on('close', () => {
@@ -128,6 +144,7 @@ export class BridgeServer implements EditorHost {
       this.ctx.log.info('editor disconnected', { client: client.name, clients: this.clients.size })
     })
     ws.on('message', async (raw) => {
+      client.lastSeen = new Date().toISOString()
       let msg: ClientMessage
       try {
         msg = JSON.parse(String(raw))
@@ -147,17 +164,21 @@ export class BridgeServer implements EditorHost {
     switch (m.type) {
       case 'hello':
         c.name = m.client
+        c.ext = m.ext
+        c.app = m.app ?? m.aseprite
         this.ctx.log.info('editor hello', { client: m.client })
         return this.send(c, {
           type: 'welcome',
           server: 'squarel-bridge',
-          version: VERSION,
+          version: SQUAREL_VERSION,
           projects: await this.projectList(),
         })
       case 'list':
         return this.send(c, { type: 'projects', projects: await this.projectList() })
       case 'ping':
         return this.send(c, { type: 'pong' })
+      case 'status':
+        return this.send(c, { type: 'status', version: SQUAREL_VERSION, clients: this.clientInfos() })
       case 'open': {
         const { versionId, doc } = await this.ctx.store.readHead(m.slug)
         c.slug = m.slug

@@ -324,7 +324,12 @@ local function setup(plugin)
   plugin:newCommand { id = 'SquarelDisconnect', title = 'Disconnect', group = group, onclick = disconnect }
 
   trace('init done, autoconnect=' .. tostring(plugin.preferences.autoconnect))
-  if plugin.preferences.autoconnect then connect() end
+  -- The launcher's "open without sync" starts Aseprite with SQUAREL_NO_SYNC=1: stay offline until the user clicks Connect.
+  if os.getenv('SQUAREL_NO_SYNC') == '1' then
+    trace('no-sync mode')
+  elseif plugin.preferences.autoconnect then
+    connect()
+  end
 end
 
 function init(plugin)

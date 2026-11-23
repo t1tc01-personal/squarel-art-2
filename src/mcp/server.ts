@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { ALL_TOOLS, runTool } from '../tools/registry.ts'
 import { type ToolContext, ToolError } from '../tools/types.ts'
+import { SQUAREL_VERSION } from '../version.ts'
 
 export const SERVER_INSTRUCTIONS = `Squarel Art: pixel-art toolkit.
 Workflow: project_list/project_open or project_create → canvas_view (look before and after changes) → edit → export.
@@ -23,8 +24,14 @@ export function toMcpResult(r: { text: string; images?: { png: Uint8Array }[] })
   }
 }
 
-export function createMcpServer(ctx: ToolContext, version = '0.1.0'): McpServer {
-  const server = new McpServer({ name: 'squarel', version }, { instructions: SERVER_INSTRUCTIONS })
+export function createMcpServer(
+  ctx: ToolContext,
+  opts: { version?: string; onToolCall?: (name: string) => void } = {},
+): McpServer {
+  const server = new McpServer(
+    { name: 'squarel', version: opts.version ?? SQUAREL_VERSION },
+    { instructions: SERVER_INSTRUCTIONS },
+  )
   for (const tool of ALL_TOOLS) {
     server.registerTool(
       tool.name,
@@ -57,8 +64,11 @@ export function createMcpServer(ctx: ToolContext, version = '0.1.0'): McpServer 
               : undefined,
         }
         try {
-          return toMcpResult(await runTool(tool.name, args, callCtx))
+          const result = toMcpResult(await runTool(tool.name, args, callCtx))
+          opts.onToolCall?.(tool.name)
+          return result
         } catch (e) {
+          opts.onToolCall?.(tool.name)
           const err = e instanceof ToolError ? e : new ToolError('INVALID', String(e))
           return {
             isError: true,

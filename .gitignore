@@ -9,3 +9,8 @@ evals/out/
 
 # Aseprite source + Skia + build (personal use only, never commit: Aseprite EULA)
 vendor/
+launcher/out/
+launcher/dist/
+launcher/build/
+launcher/test-results/
+launcher/playwright-report/

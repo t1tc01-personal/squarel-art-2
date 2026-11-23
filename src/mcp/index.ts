@@ -4,8 +4,11 @@
  * stdout carries the MCP protocol: never print to it — log via createLogger (stderr + file).
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { openViaBridge } from '../bridge/remote.ts'
 import { BridgeServer, readBridgeToken } from '../bridge/server.ts'
 import { createToolContext } from '../tools/context.ts'
+import { SQUAREL_VERSION as VERSION } from '../version.ts'
+import { bridgeMode, startPresence } from './presence.ts'
 import { createMcpServer } from './server.ts'
 
 async function main() {
@@ -15,10 +18,12 @@ async function main() {
     token: readBridgeToken(ctx.config.dataDir),
   })
   let bridgeUp = false
+  let startThrew = false
   if (process.env.SQUAREL_NO_BRIDGE !== '1') {
     try {
       bridgeUp = await bridge.start()
     } catch (e) {
+      startThrew = true
       ctx.log.warn('bridge failed to start', { error: String(e) })
     }
   }
@@ -29,15 +34,20 @@ async function main() {
     }
   } else {
     // Another process owns the port (e.g. `pnpm bridge`); it sees our commits through its file watcher.
-    ctx.editor = {
-      open: async (slug) =>
-        `Another Squarel bridge is running on port ${ctx.config.bridgePort}; it will show "${slug}" when Aseprite opens it from the Squarel menu.`,
-    }
+    const port = ctx.config.bridgePort
+    const token = readBridgeToken(ctx.config.dataDir)
+    ctx.editor = { open: (slug) => openViaBridge({ port, token, slug }) }
   }
-  const server = createMcpServer(ctx)
+  const presence = startPresence({
+    dataDir: ctx.config.dataDir,
+    version: VERSION,
+    bridge: bridgeMode({ disabled: process.env.SQUAREL_NO_BRIDGE === '1', up: bridgeUp, startThrew }),
+  })
+  const server = createMcpServer(ctx, { version: VERSION, onToolCall: (name) => presence.touch(name) })
   await server.connect(new StdioServerTransport())
   ctx.log.info('mcp server ready', { dataDir: ctx.config.dataDir, bridge: bridgeUp })
   const shutdown = async () => {
+    await presence.stop().catch(() => {})
     await bridge.stop().catch(() => {})
     process.exit(0)
   }

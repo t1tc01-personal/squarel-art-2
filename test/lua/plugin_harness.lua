@@ -34,6 +34,13 @@ function tick(seconds, interval)
   end
 end
 
+-- tests may set ENV_OVERRIDE = { NAME = 'value' } to fake environment variables
+local realGetenv = os.getenv
+os.getenv = function(name)
+  if ENV_OVERRIDE and ENV_OVERRIDE[name] ~= nil then return ENV_OVERRIDE[name] end
+  return realGetenv and realGetenv(name) or nil
+end
+
 ALERTS = {}
 app = {
   version = '1.3.18-test',

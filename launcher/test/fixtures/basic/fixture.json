@@ -1,0 +1,84 @@
+{
+  "now": "2026-01-01T12:00:00.000Z",
+  "state": { "setupStep": "done", "selected": ["aseprite"], "closeToTray": true },
+  "env": {
+    "DATA_DIR": "{root}\\data",
+    "ASEPRITE_PATH": "{root}\\tools\\aseprite\\Aseprite.exe",
+    "DEMO_TOOL_PATH": "{root}\\tools\\demo\\DemoTool.exe",
+    "BRIDGE_PORT": "4321",
+    "CLOUDFLARE_API_TOKEN": "fixture-placeholder-not-a-token"
+  },
+  "files": {
+    "{root}/squarel/package.json": { "name": "squarel-art", "version": "0.2.0" },
+    "{root}/squarel/node_modules/.modules.yaml": "layoutVersion: 5",
+    "{root}/tools/aseprite/Aseprite.exe": "",
+    "{root}/tools/demo/DemoTool.exe": "",
+    "{root}/data/run/mcp-4101.json": {
+      "pid": 4101,
+      "cwd": "{root}\\work\\game-dungeon",
+      "updatedAt": "2026-01-01T11:59:58.000Z",
+      "lastTool": "generate_image",
+      "lastToolAt": "2026-01-01T11:59:57.000Z"
+    },
+    "{root}/data/run/mcp-4102.json": {
+      "pid": 4102,
+      "cwd": "{root}\\work\\squarel-art-2",
+      "updatedAt": "2026-01-01T11:59:55.000Z"
+    },
+    "{root}/data/usage.jsonl": "{\"provider\":\"cloudflare\",\"unitKind\":\"neuron\",\"units\":860,\"ts\":\"2026-01-01T09:00:00.000Z\"}\n",
+    "{root}/data/projects/thu-sync/project.json": {
+      "slug": "thu-sync",
+      "name": "Thu sync",
+      "updatedAt": "2026-01-01T11:40:00.000Z",
+      "head": "v000002"
+    },
+    "{root}/data/projects/hiep-si/project.json": {
+      "slug": "hiep-si",
+      "name": "Hiệp sĩ dungeon",
+      "updatedAt": "2025-12-31T10:00:00.000Z",
+      "head": "v000014"
+    },
+    "{root}/data/logs/bridge-2026-01-01.log": "{\"ts\":\"2026-01-01T11:00:12.000Z\",\"level\":\"info\",\"name\":\"bridge\",\"msg\":\"editor hello\",\"client\":\"aseprite\"}\n{\"ts\":\"2026-01-01T11:00:21.000Z\",\"level\":\"warn\",\"name\":\"bridge\",\"msg\":\"send failed: WebSocket closed\"}\n",
+    "{root}/data/logs/mcp-2026-01-01.log": "{\"ts\":\"2026-01-01T11:00:15.000Z\",\"level\":\"info\",\"name\":\"mcp\",\"msg\":\"cloudflare request\",\"auth\":\"Bearer fixture-placeholder-not-a-token\"}\n{\"ts\":\"2026-01-01T11:00:16.000Z\",\"level\":\"error\",\"name\":\"mcp\",\"msg\":\"token fixture-placeholder-not-a-token rejected\"}\n"
+  },
+  "copy": {
+    "{root}/squarel/integrations/aseprite/integration.json": "../../../../integrations/aseprite/integration.json",
+    "{root}/squarel/integrations/aseprite/icon.png": "../../../../integrations/aseprite/icon.png",
+    "{root}/squarel/integrations/aseprite/squarel/package.json": "../../../../integrations/aseprite/squarel/package.json",
+    "{root}/squarel/integrations/catalog.json": "../../../../integrations/catalog.json",
+    "{root}/squarel/integrations/demo-tool/integration.json": "../demo-tool/integration.json",
+    "{root}/squarel/integrations/demo-tool/icon.png": "../demo-tool/icon.png"
+  },
+  "run": {
+    "{root}\\tools\\aseprite\\Aseprite.exe -b --version": { "code": 0, "lines": ["Aseprite 1.3.18.6-x64"] },
+    "{root}\\tools\\demo\\DemoTool.exe --version": { "code": 0, "lines": ["DemoTool 2.0.1"] },
+    "node --version": { "code": 0, "lines": ["v24.19.0"] },
+    "git --version": { "code": 0, "lines": ["git version 2.55.0.windows.1"] },
+    "pnpm -v": { "code": 0, "lines": ["10.20.0"] },
+    "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
+    "git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git": {
+      "code": 0,
+      "lines": ["0000000000000000000000000000000000000000\trefs/tags/v0.2.0", "1111111111111111111111111111111111111111\trefs/tags/v0.2.1"]
+    },
+    "git ls-remote --tags --refs https://github.com/aseprite/aseprite.git": {
+      "code": 0,
+      "lines": ["2222222222222222222222222222222222222222\trefs/tags/v1.3.19"]
+    }
+  },
+  "alivePids": [4101, 4102],
+  "bridge": {
+    "mode": "own",
+    "port": 4321,
+    "since": "2026-01-01T11:00:00.000Z",
+    "clients": [
+      {
+        "name": "aseprite",
+        "app": "1.3.18.6",
+        "slug": "thu-sync",
+        "version": "v000002",
+        "connectedAt": "2026-01-01T11:30:00.000Z",
+        "lastSeen": "2026-01-01T11:59:59.000Z"
+      }
+    ]
+  }
+}

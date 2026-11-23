@@ -7,7 +7,11 @@ import { join } from 'node:path'
 export const ASEPRITE_GIT = 'https://github.com/aseprite/aseprite.git'
 export const VC_TOOLS_COMPONENT = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
 
-/** winget command that installs the minimum MSVC toolchain Aseprite needs (C++ compiler, Win11 SDK, CMake+Ninja). */
+/**
+ * winget command that installs the minimum MSVC toolchain Aseprite needs (C++ compiler, Win11 SDK, CMake+Ninja).
+ * No --passive / --quiet / --accept-*: winget asks about its terms and the Visual Studio Installer opens its
+ * own window, where the user reads the licence and clicks Install.
+ */
 export const VS_BUILD_TOOLS_WINGET = [
   'install',
   '--id',
@@ -17,13 +21,25 @@ export const VS_BUILD_TOOLS_WINGET = [
   'winget',
   '--override',
   [
-    '--wait --passive --norestart',
+    '--wait --norestart',
     '--add Microsoft.VisualStudio.Workload.VCTools',
     `--add ${VC_TOOLS_COMPONENT}`,
     '--add Microsoft.VisualStudio.Component.Windows11SDK.26100',
     '--add Microsoft.VisualStudio.Component.VC.CMake.Project',
   ].join(' '),
 ]
+
+/** VS Installer `modify` that adds CMake + Ninja to an existing install; its window asks the user (no --passive). */
+export function vsModifyArgs(installPath: string): string[] {
+  return [
+    'modify',
+    '--installPath',
+    installPath,
+    '--add',
+    'Microsoft.VisualStudio.Component.VC.CMake.Project',
+    '--norestart',
+  ]
+}
 
 function versionKey(tag: string): number[] {
   return tag
@@ -121,13 +137,22 @@ export interface BuildArgs {
   installDeps: boolean
   clean: boolean
   writeEnv: boolean
+  jsonProgress: boolean
   help: boolean
 }
 
 export function parseBuildArgs(argv: string[]): BuildArgs {
-  const out: BuildArgs = { check: false, installDeps: false, clean: false, writeEnv: true, help: false }
+  const out: BuildArgs = {
+    check: false,
+    installDeps: false,
+    clean: false,
+    writeEnv: true,
+    jsonProgress: false,
+    help: false,
+  }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
+    if (a === '--') continue // pnpm forwards the separator
     if (a === '--src' || a === '--ref') {
       const v = argv[++i]
       if (!v || v.startsWith('--')) throw new Error(`${a} needs a value`)
@@ -137,8 +162,38 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
     else if (a === '--install-deps') out.installDeps = true
     else if (a === '--clean') out.clean = true
     else if (a === '--no-env') out.writeEnv = false
+    else if (a === '--json-progress') out.jsonProgress = true
     else if (a === '--help' || a === '-h') out.help = true
     else throw new Error(`unknown option "${a}" (see --help)`)
   }
   return out
+}
+
+/** One machine-readable progress record, printed as `@@progress {json}` on stdout for the launcher. */
+export interface BuildProgress {
+  step: number
+  total: 6
+  label: string
+  percent?: number
+  message?: string
+}
+
+/** Recognise ninja's `[1000/1575] Building CXX ...` counter. */
+export function parseNinjaProgress(line: string): { done: number; total: number } | undefined {
+  const m = /^\[(\d+)\/(\d+)\]/.exec(line)
+  if (!m) return undefined
+  const done = Number(m[1])
+  const total = Number(m[2])
+  return total > 0 ? { done, total } : undefined
+}
+
+/** Feed build output lines; returns a percent (0-100) for ninja lines, never lower than before. Noise gives undefined. */
+export function progressTracker(): (line: string) => number | undefined {
+  let best = 0
+  return (line) => {
+    const p = parseNinjaProgress(line)
+    if (!p) return undefined
+    best = Math.max(best, Math.min(100, Math.floor((p.done / p.total) * 100)))
+    return best
+  }
 }

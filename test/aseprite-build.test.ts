@@ -5,12 +5,15 @@ import { describe, expect, it } from 'vitest'
 import {
   cmakeConfigureArgs,
   parseBuildArgs,
+  parseNinjaProgress,
   parseSetOutput,
   pickLatestStableTag,
+  progressTracker,
   skiaAsset,
   upsertEnv,
   VS_BUILD_TOOLS_WINGET,
   vsDevEnvCommand,
+  vsModifyArgs,
 } from '../scripts/lib/aseprite-build.ts'
 import { tempDir } from './helpers.ts'
 
@@ -94,11 +97,34 @@ describe('aseprite:build helpers', () => {
     expect(() => parseBuildArgs(['--fast'])).toThrow(/unknown option/)
   })
 
+  it('parseBuildArgs accepts --json-progress', () => {
+    expect(parseBuildArgs([]).jsonProgress).toBe(false)
+    expect(parseBuildArgs(['--', '--json-progress']).jsonProgress).toBe(true) // pnpm forwards '--'
+    expect(parseBuildArgs(['--check', '--json-progress'])).toMatchObject({ check: true, jsonProgress: true })
+  })
+
+  it('parseNinjaProgress reads ninja counters', () => {
+    expect(parseNinjaProgress('[1000/1575] Building CXX object foo.obj')).toEqual({ done: 1000, total: 1575 })
+    expect(parseNinjaProgress('-- Looking for strerror')).toBeUndefined()
+  })
+
+  it('progressTracker never goes backwards and ignores noise', () => {
+    const t = progressTracker()
+    expect(['[10/100] a', 'warning: x', '[5/100] b', '[50/100] c'].map(t)).toEqual([10, undefined, 10, 50])
+  })
+
   it('installs only the components Aseprite needs', () => {
     const override = VS_BUILD_TOOLS_WINGET[VS_BUILD_TOOLS_WINGET.indexOf('--override') + 1]
     expect(override).toContain('Microsoft.VisualStudio.Workload.VCTools')
     expect(override).toContain('Microsoft.VisualStudio.Component.VC.CMake.Project')
     expect(VS_BUILD_TOOLS_WINGET).not.toContain('--accept-package-agreements') // the user accepts the licence
+  })
+
+  it('never accepts terms or hides the installer for the user', () => {
+    const forbidden = /--passive|--quiet|--accept-package-agreements|--accept-source-agreements/
+    expect(VS_BUILD_TOOLS_WINGET.join(' ')).not.toMatch(forbidden)
+    expect(vsModifyArgs('D:\\BuildTools').join(' ')).not.toMatch(forbidden)
+    expect(vsModifyArgs('D:\\BuildTools')).toContain('Microsoft.VisualStudio.Component.VC.CMake.Project')
   })
 
   it('script --help runs without building anything', () => {

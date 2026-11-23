@@ -1,8 +1,9 @@
 {
   "name": "squarel-art",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Pixel art toolkit plugged into Claude Code (MCP) with two-way Aseprite sync",
+  "license": "PolyForm-Shield-1.0.0",
   "type": "module",
   "engines": {
     "node": ">=22.18"
@@ -17,8 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check src test scripts",
-    "format": "biome format --write src test scripts",
+    "lint": "biome check src test scripts integrations/schema",
+    "format": "biome format --write src test scripts integrations/schema",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "aseprite:build": "node scripts/aseprite-build.ts",
     "aseprite:pack": "node scripts/pack-aseprite.ts",

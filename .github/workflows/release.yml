@@ -1,0 +1,107 @@
+# Release: on a pushed tag vX.Y.Z, check Squarel + launcher, then build the launcher installer and
+# upload it with latest.yml to a DRAFT GitHub Release of that tag; a person publishes the draft
+# (docs/release.md). Run by hand (workflow_dispatch) it is a dry run: check + build with
+# `--publish never`, read-only permissions, nothing uploaded.
+# Actions are pinned by full commit SHA. Only GITHUB_TOKEN is used. No code signing.
+# Never put ${{ }} expressions inside run scripts: pass values through env and read $env:NAME.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24 # engines: >=22.18
+      - name: Squarel check
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+      - name: Launcher check
+        run: |
+          pnpm --dir launcher install --frozen-lockfile
+          pnpm --dir launcher check
+
+  dry-run:
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24 # engines: >=22.18
+      - name: Build launcher
+        run: |
+          pnpm --dir launcher install --frozen-lockfile
+          pnpm --dir launcher build
+          pnpm --dir launcher icon
+      - name: Package (no publish)
+        working-directory: launcher
+        run: pnpm exec electron-builder --win --publish never
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: windows-latest
+    permissions:
+      contents: write # create the Release and upload the installer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24 # engines: >=22.18
+      - name: Tag matches package versions
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $tag = $env:TAG.TrimStart('v')
+          $root = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $launcher = (Get-Content launcher/package.json -Raw | ConvertFrom-Json).version
+          if ($root -ne $tag -or $launcher -ne $tag) {
+            Write-Error "tag $tag, package.json $root, launcher/package.json $launcher"
+            exit 1
+          }
+      - name: Build launcher
+        run: |
+          pnpm --dir launcher install --frozen-lockfile
+          pnpm --dir launcher build
+          pnpm --dir launcher icon
+      - name: Package and upload to a draft Release
+        working-directory: launcher
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec electron-builder --win --publish always

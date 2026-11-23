@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "paths": { "@squarel/integration-schema": ["../integrations/schema/integration.schema.ts"] }
+  },
+  "include": [
+    "electron.vite.config.ts",
+    "vitest.config.mts",
+    "playwright.config.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/shared/**/*",
+    "test/**/*"
+  ]
+}

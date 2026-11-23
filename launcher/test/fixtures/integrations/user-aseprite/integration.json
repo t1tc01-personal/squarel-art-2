@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "aseprite",
+  "name": "Aseprite (của tôi)",
+  "description": "Bản người dùng ghi đè.",
+  "icon": "icon.png",
+  "accent": "#FF77A8",
+  "platforms": ["win32"],
+  "detect": { "env": "ASEPRITE_PATH" },
+  "install": [],
+  "launch": [{ "id": "open", "label": "Mở", "default": true, "run": ["{exe}"] }],
+  "checks": []
+}

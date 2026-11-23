@@ -16,7 +16,27 @@ Làm lần lượt từ trên xuống. Mỗi bước có một lệnh kiểm tra
 
 Không có Cloudflare hay Aseprite thì vẫn dùng được: Claude vẫn vẽ, sửa, chuyển ảnh chụp thành pixel art và xuất file. Chỉ thiếu phần AI tạo ảnh và phần vẽ tay.
 
-Mọi lệnh bên dưới chạy trong **PowerShell**, tại thư mục repo `D:\code\squarel-art-2`, trừ khi có ghi khác.
+## Cách nhanh: dùng launcher
+
+Trên Windows, **Squarel Art Launcher** làm thay bạn phần lớn các bước dưới đây:
+
+| Bước trong hướng dẫn này | Launcher làm |
+|---|---|
+| 1. Node, pnpm, Git | Có: cài bằng `winget` (bạn tự bấm đồng ý) |
+| 2. Cài thư viện | Có: clone Squarel (hoặc dùng repo đã clone) và `pnpm install` |
+| 3. File `.env` | Có: màn hình Cấu hình và Cài đặt |
+| 4. Cắm vào Claude Code | Có: `claude mcp add`, chép skill, chạy thử MCP. Bạn vẫn tự đăng nhập `claude` |
+| 5. Cloudflare | Một phần: bạn tự lấy token (mục 5), launcher kiểm tra token |
+| 6. Aseprite | Có: build hoặc trỏ vào bản đã có, cài extension |
+| 7, 8 | Không: làm tay theo hướng dẫn |
+
+1. Tải `Squarel-Art-Launcher-Setup-X.Y.Z.exe` ở trang [Releases](https://github.com/t1tc01-personal/squarel-art-2/releases).
+2. Chạy file. SmartScreen chặn thì bấm **More info → Run anyway** (bộ cài chưa ký số).
+3. Đi hết wizard 4 bước.
+
+Chi tiết ở [docs/launcher.md](launcher.md). Muốn tự làm từng bước thì đọc tiếp bên dưới.
+
+Mọi lệnh bên dưới chạy trong **PowerShell**, tại thư mục repo (nơi bạn đã clone, viết là `<thư mục repo>` trong các lệnh; thay bằng đường dẫn thật), trừ khi có ghi khác.
 
 ---
 
@@ -57,7 +77,7 @@ git --version
 ## 2. Cài thư viện và chạy test
 
 ```powershell
-cd D:\code\squarel-art-2
+cd <thư mục repo>
 ```
 
 ```powershell
@@ -112,8 +132,8 @@ pnpm check
 Repo đã có sẵn `.mcp.json` khai báo server `squarel`, và 4 skill trong `.claude/skills/`. Không cần cài gì thêm cho Claude Code.
 
 1. Mở Claude Code **tại thư mục repo**:
-   - App Claude desktop: tab **Code** → chọn thư mục `D:\code\squarel-art-2`.
-   - Hoặc trong terminal: `cd D:\code\squarel-art-2` rồi gõ `claude`.
+   - App Claude desktop: tab **Code** → chọn thư mục `<thư mục repo>`.
+   - Hoặc trong terminal: `cd <thư mục repo>` rồi gõ `claude`.
 2. Lần đầu, Claude Code hỏi có cho phép MCP server `squarel` của project không. Chọn **cho phép**.
 3. Gõ vào ô chat:
 
@@ -199,7 +219,8 @@ Các bước:
 
 2. Nếu thiếu Visual Studio, CMake hoặc Ninja, cài bằng lệnh dưới. Nó gọi `winget` để cài **Visual Studio 2022 Build Tools**, chỉ gồm phần cần thiết: trình biên dịch C++, Windows 11 SDK, CMake và Ninja.
    - Windows sẽ hỏi quyền admin.
-   - winget hỏi bạn đồng ý điều khoản: gõ `Y`.
+   - winget hỏi bạn đồng ý điều khoản: tự đọc rồi gõ `Y`.
+   - Trình cài Visual Studio mở cửa sổ riêng với các mục đã chọn sẵn: bạn bấm **Install** (hoặc **Modify**) ở đó. Lệnh không tự đồng ý điều khoản và không cài ngầm.
    - Cài xong có thể phải khởi động lại máy.
 
    ```powershell
@@ -242,7 +263,7 @@ Tìm file `Aseprite.exe`:
 | Steam | `C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe` (Steam → chuột phải Aseprite → *Manage → Browse local files*) |
 | Bộ cài từ aseprite.org | `C:\Program Files\Aseprite\Aseprite.exe` |
 | itch.io | Thư mục bạn chọn |
-| Tự build bằng `pnpm aseprite:build` | `D:\code\squarel-art-2\vendor\aseprite\build\bin\aseprite.exe` (script tự ghi vào `.env`) |
+| Tự build bằng `pnpm aseprite:build` | `<thư mục repo>\vendor\aseprite\build\bin\aseprite.exe` (script tự ghi vào `.env`) |
 
 Ghi vào `.env`:
 
@@ -348,7 +369,7 @@ Service local-sd mới được kiểm tra cú pháp, chưa chạy thật. Nếu
 **Dùng Squarel khi mở Claude Code ở thư mục khác.** Lệnh dưới thêm server cho mọi project của bạn. `.env` vẫn được đọc từ thư mục repo này, nên không phải cấu hình lại:
 
 ```powershell
-claude mcp add squarel --scope user -- node D:\code\squarel-art-2\src\mcp\index.ts
+claude mcp add squarel --scope user -- node <thư mục repo>\src\mcp\index.ts
 ```
 
 Các skill `/pixel-new`, `/pixel-export`… nằm trong repo này nên chỉ có khi mở Claude Code ở đây. Muốn dùng mọi nơi, copy thư mục `.claude\skills\pixel-*` vào `C:\Users\<tên>\.claude\skills\`.
@@ -379,7 +400,7 @@ Các skill `/pixel-new`, `/pixel-export`… nằm trong repo này nên chỉ có
 | `cloudflare [not configured]` trong `usage_today` | Thiếu hoặc sai tên biến `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` trong `.env`. Sửa xong phải mở lại phiên Claude Code để server đọc lại `.env` |
 | Cloudflare lỗi `401` / `403` | Token sai, đã bị xoá, hoặc thiếu quyền Workers AI. Tạo token mới (bước 5) |
 | Cloudflare báo hết quota | Đã dùng hết 10.000 neuron hôm nay. Chờ đến 7:00 sáng, hoặc dùng `local-sd` / `mock` |
-| `pnpm aseprite:build` báo `missing: Visual Studio…` | Chạy `pnpm aseprite:build -- --install-deps --check` (bước 6.1a) |
+| `pnpm aseprite:build` báo `missing: Visual Studio…` | Chạy `pnpm aseprite:build -- --install-deps --check` (bước 6.1a), rồi bấm Install trong cửa sổ Visual Studio Installer |
 | Build Aseprite lỗi giữa chừng | Chạy lại với `--clean`. Nếu vẫn lỗi, gửi Claude phần cuối output |
 | Không có menu Squarel trong Aseprite | Đang dùng bản trial, Aseprite cũ hơn 1.3, hoặc chưa cài extension (bước 6.3) |
 | Aseprite không kết nối | Cần Claude Code đang mở ở repo hoặc `pnpm bridge` đang chạy. Xem thêm [aseprite.md](aseprite.md#xử-lý-sự-cố) |

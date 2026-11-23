@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { createServer, type Socket } from 'node:net'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { ServerMessage } from '../src/bridge/protocol.ts'
+import { openViaBridge } from '../src/bridge/remote.ts'
 import { BridgeServer, isLocalClientOrigin } from '../src/bridge/server.ts'
 import { celKey, deserializeDoc, serializeDoc } from '../src/core/index.ts'
 import { silentLogger } from '../src/log.ts'
@@ -9,6 +13,7 @@ import { Store } from '../src/store/store.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { runTool } from '../src/tools/registry.ts'
 import type { ToolContext } from '../src/tools/types.ts'
+import { SQUAREL_VERSION } from '../src/version.ts'
 import { tempDir } from './helpers.ts'
 
 let t: ReturnType<typeof tempDir>
@@ -182,8 +187,98 @@ describe('bridge', () => {
     expect((await c.next('error')).message).toContain('unknown message type')
   })
 
+  it('status lists connected clients with what they have open', async () => {
+    const c = await connect() // hello client=aseprite
+    c.send({ type: 'open', slug: 'bridge' })
+    await c.next('doc')
+    const probe = new TestClient(bridge.port)
+    await probe.opened()
+    probe.send({ type: 'status' })
+    const s = await probe.next('status')
+    expect(s.version).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(s.version).toBe(SQUAREL_VERSION)
+    expect(SQUAREL_VERSION).toBe(
+      JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')).version,
+    )
+    const ase = s.clients.find((x) => x.name === 'aseprite')!
+    expect(ase.slug).toBe('bridge')
+    expect(Date.parse(ase.lastSeen)).toBeGreaterThan(0)
+    expect(Date.parse(ase.connectedAt)).toBeGreaterThan(0)
+    expect(s.clients.some((x) => x.name === 'unknown')).toBe(true) // the probe never said hello
+  })
+
+  it('hello records ext and app (legacy aseprite field still accepted)', async () => {
+    const a = new TestClient(bridge.port)
+    await a.opened()
+    a.send({ type: 'hello', client: 'aseprite', ext: '0.1.1', app: '1.3.18.6' })
+    await a.next('welcome')
+    const b = new TestClient(bridge.port)
+    await b.opened()
+    b.send({ type: 'hello', client: 'legacy', aseprite: '1.3.0' })
+    await b.next('welcome')
+    const probe = new TestClient(bridge.port)
+    await probe.opened()
+    probe.send({ type: 'status' })
+    const s = await probe.next('status')
+    const ase = s.clients.find((x) => x.name === 'aseprite')!
+    expect(ase.ext).toBe('0.1.1')
+    expect(ase.app).toBe('1.3.18.6')
+    expect(s.clients.find((x) => x.name === 'legacy')!.app).toBe('1.3.0')
+  })
+
+  it('ping refreshes lastSeen', async () => {
+    const c = await connect()
+    const probe = new TestClient(bridge.port)
+    await probe.opened()
+    const lastSeen = async () => {
+      probe.send({ type: 'status' })
+      const s = await probe.next('status')
+      return Date.parse(s.clients.find((x) => x.name === 'aseprite')!.lastSeen)
+    }
+    const before = await lastSeen()
+    await new Promise((r) => setTimeout(r, 20))
+    c.send({ type: 'ping' })
+    await c.next('pong')
+    expect(await lastSeen()).toBeGreaterThan(before)
+  })
+
   it('explains setup when no Aseprite is connected', async () => {
     const r = await runTool('open_in_editor', { project: 'bridge' }, ctx)
     expect(r.text).toContain('ASEPRITE_PATH')
+  })
+  it('openViaBridge asks the running bridge to open the project in the connected editor', async () => {
+    const c = await connect()
+    const text = await openViaBridge({ port: bridge.port, slug: 'bridge' })
+    expect(text).toContain('live sync on')
+    expect((await c.next('open.request')).slug).toBe('bridge')
+  })
+
+  it('openViaBridge on a closed port says what to do', async () => {
+    const srv = createServer()
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r))
+    const port = (srv.address() as { port: number }).port
+    await new Promise((r) => srv.close(r))
+    const err = await openViaBridge({ port, slug: 'bridge' }).catch((e: Error) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toContain(`bridge on port ${port} did not answer`)
+    expect((err as Error).message).toContain('pnpm bridge')
+    expect((err as Error).message).toContain('restart this Claude Code session')
+  })
+
+  it('openViaBridge fails fast when something else holds the port', async () => {
+    const held: Socket[] = []
+    const srv = createServer((sock) => held.push(sock)) // accepts TCP, never speaks websocket
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r))
+    const port = (srv.address() as { port: number }).port
+    const started = Date.now()
+    try {
+      await expect(openViaBridge({ port, slug: 'bridge', timeoutMs: 300 })).rejects.toThrow(
+        `bridge on port ${port} did not answer`,
+      )
+      expect(Date.now() - started).toBeLessThan(800)
+    } finally {
+      for (const sock of held) sock.destroy()
+      await new Promise((r) => srv.close(r))
+    }
   })
 })

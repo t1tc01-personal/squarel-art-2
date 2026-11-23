@@ -9,7 +9,7 @@
  * Mirrors Aseprite's INSTALL.md / build.sh: MSVC x64 + CMake + Ninja + the prebuilt Skia named in laf/misc/skia-tag.txt.
  * Aseprite's EULA allows compiling for personal use only — vendor/ is git-ignored; never commit or share the build.
  */
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import {
   createWriteStream,
   existsSync,
@@ -25,15 +25,18 @@ import { pipeline } from 'node:stream/promises'
 import { REPO_ROOT } from '../src/config.ts'
 import {
   ASEPRITE_GIT,
+  type BuildProgress,
   cmakeConfigureArgs,
   parseBuildArgs,
   parseSetOutput,
   pickLatestStableTag,
+  progressTracker,
   skiaAsset,
   upsertEnv,
   VC_TOOLS_COMPONENT,
   VS_BUILD_TOOLS_WINGET,
   vsDevEnvCommand,
+  vsModifyArgs,
 } from './lib/aseprite-build.ts'
 
 const VS_INSTALLER_DIR = join(
@@ -54,10 +57,22 @@ const HELP = `Usage: pnpm aseprite:build [-- options]
   --src <dir>      keep the Aseprite source somewhere else (default: vendor/aseprite)
   --clean          delete the build folder and rebuild from scratch
   --no-env         do not touch .env
+  --json-progress  also print '@@progress {json}' lines on stdout (used by the launcher)
 
 Aseprite's EULA allows compiling it for your own use only: do not share the source checkout or the build.`
 
-const step = (title: string) => console.log(`\n== ${title}`)
+let jsonProgress = false
+function emitProgress(p: Omit<BuildProgress, 'total'>) {
+  if (jsonProgress)
+    console.log(
+      `@@progress ${JSON.stringify({ step: p.step, total: 6, label: p.label, percent: p.percent, message: p.message })}`,
+    )
+}
+const step = (title: string) => {
+  console.log(`\n== ${title}`)
+  const m = /^(\d+)\/6 (.*)$/.exec(title)
+  if (m) emitProgress({ step: Number(m[1]), label: m[2].replace(/ \(.*$/, '') })
+}
 function fail(msg: string): never {
   console.error(`\n✗ ${msg}`)
   process.exit(1)
@@ -68,6 +83,44 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<str
   const r = spawnSync(cmd, args, { stdio: 'inherit', cwd: opts.cwd, env: opts.env })
   if (r.error) fail(`${cmd}: ${r.error.message}`)
   if (r.status !== 0) fail(`${cmd} exited with code ${r.status}`)
+}
+
+/** Like run(), but forwards stdout line by line and prints @@progress lines for ninja's [n/total] counters. */
+function runWithProgress(
+  cmd: string,
+  args: string[],
+  opts: { env?: Record<string, string> },
+  stepNo: number,
+  label: string,
+) {
+  console.log(`$ ${cmd} ${args.join(' ')}`)
+  return new Promise<void>((done) => {
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'inherit'], env: opts.env })
+    const track = progressTracker()
+    let last: number | undefined
+    let buf = ''
+    const onLine = (line: string) => {
+      console.log(line)
+      const pct = track(line)
+      if (pct !== undefined && pct !== last) {
+        last = pct
+        emitProgress({ step: stepNo, label, percent: pct })
+      }
+    }
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => {
+      buf += chunk
+      const lines = buf.split(/\r?\n/)
+      buf = lines.pop() ?? ''
+      lines.forEach(onLine)
+    })
+    child.on('error', (e) => fail(`${cmd}: ${e.message}`))
+    child.on('close', (code) => {
+      if (buf) onLine(buf)
+      if (code !== 0) fail(`${cmd} exited with code ${code}`)
+      done()
+    })
+  })
 }
 
 function capture(
@@ -139,6 +192,7 @@ async function main() {
   } catch (e) {
     fail((e as Error).message)
   }
+  jsonProgress = args.jsonProgress
   if (args.help) {
     console.log(HELP)
     return
@@ -154,7 +208,9 @@ async function main() {
   step('1/6 Build tools')
   let vs = findVs()
   if (!vs && args.installDeps) {
-    console.log('Installing Visual Studio 2022 Build Tools (~7 GB; Windows will ask for admin rights)…')
+    console.log(
+      'Installing Visual Studio 2022 Build Tools (~7 GB). Answer the winget and Windows (admin) prompts, then click Install in the Visual Studio Installer window…',
+    )
     run('winget', VS_BUILD_TOOLS_WINGET)
     vs = findVs()
   }
@@ -163,15 +219,8 @@ async function main() {
   let ninja = env && firstLine(capture('ninja', ['--version'], { env }))
   if (vs && (!cmake || !ninja) && args.installDeps) {
     console.log('Adding the "C++ CMake tools" component (CMake + Ninja) to Visual Studio…')
-    run(join(VS_INSTALLER_DIR, 'setup.exe'), [
-      'modify',
-      '--installPath',
-      vs.path,
-      '--add',
-      'Microsoft.VisualStudio.Component.VC.CMake.Project',
-      '--passive',
-      '--norestart',
-    ])
+    console.log('The Visual Studio Installer opens its own window: click Modify there.')
+    run(join(VS_INSTALLER_DIR, 'setup.exe'), vsModifyArgs(vs.path))
     env = vsDevEnv(vs)
     cmake = firstLine(capture('cmake', ['--version'], { env }))
     ninja = firstLine(capture('ninja', ['--version'], { env }))
@@ -196,7 +245,7 @@ async function main() {
   if (missing.length) {
     const hint = !git
       ? 'Install Git: winget install Git.Git'
-      : 'Run again with --install-deps (installs VS 2022 Build Tools with the C++ workload, Windows 11 SDK, CMake and Ninja),\n  or install them yourself: see docs/setup.md, section 6.'
+      : 'Run again with --install-deps (opens winget and the Visual Studio Installer for VS 2022 Build Tools with the C++ workload, Windows 11 SDK, CMake and Ninja; you accept the terms and click Install there),\n  or install them yourself: see docs/setup.md, section 6.'
     fail(`missing: ${missing.join(', ')}.\n  ${hint}`)
   }
   if (args.check) {
@@ -257,7 +306,9 @@ async function main() {
 
   step('5/6 Build (first time takes 15–40 minutes)')
   const started = Date.now()
-  run('cmake', ['--build', buildDir, '--target', 'aseprite'], { env: buildEnv })
+  const buildArgs = ['--build', buildDir, '--target', 'aseprite']
+  if (args.jsonProgress) await runWithProgress('cmake', buildArgs, { env: buildEnv }, 5, 'Build')
+  else run('cmake', buildArgs, { env: buildEnv })
   console.log(`built in ${Math.round((Date.now() - started) / 60000)} min`)
 
   // ---------------------------------------------------------------- verify + .env

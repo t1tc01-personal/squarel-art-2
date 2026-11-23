@@ -1,0 +1,60 @@
+{
+  "now": "2026-01-01T12:00:00.000Z",
+  "squarel": false,
+  "state": { "setupStep": 1, "selected": [], "closeToTray": true },
+  "smoke": { "tools": 41, "ms": 312 },
+  "which": { "winget": "{root}\\WindowsApps\\winget.exe" },
+  "files": {
+    "{root}/not-squarel/package.json": { "name": "some-other-app", "version": "1.0.0" }
+  },
+  "run": {
+    "winget --version": { "code": 0, "lines": ["v1.9.25200"] },
+    "git --version": { "code": 0, "lines": ["git version 2.55.0.windows.1"] },
+    "node --version": { "code": 0, "lines": ["v24.19.0"] },
+    "pnpm -v": { "code": 0, "lines": ["10.20.0"] },
+    "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
+    "git clone --branch v0.2.0 --depth 1 -- https://github.com/t1tc01-personal/squarel-art-2.git {install}": {
+      "code": 0,
+      "lines": ["Cloning into 'app'...", "Note: switching to 'v0.2.0'."],
+      "files": {
+        "{install}/package.json": { "name": "squarel-art", "version": "0.2.0" },
+        "{install}/src/mcp/index.ts": "",
+        "{install}/.claude/skills/pixel-new/SKILL.md": "# pixel-new",
+        "{install}/.claude/skills/pixel-export/SKILL.md": "# pixel-export"
+      },
+      "copy": {
+        "{install}/integrations/aseprite/integration.json": "../../../../integrations/aseprite/integration.json",
+        "{install}/integrations/aseprite/icon.png": "../../../../integrations/aseprite/icon.png",
+        "{install}/integrations/aseprite/squarel/package.json": "../../../../integrations/aseprite/squarel/package.json",
+        "{install}/integrations/catalog.json": "../../../../integrations/catalog.json"
+      }
+    },
+    "pnpm install": {
+      "code": 0,
+      "lines": ["Packages: +312", "Done in 12.3s"],
+      "files": { "{install}/node_modules/.modules.yaml": "layoutVersion: 5" }
+    },
+    "pnpm aseprite:build -- --src {local}\\tools\\aseprite --json-progress": {
+      "code": 0,
+      "lines": [
+        "@@progress {\"step\":1,\"total\":6,\"label\":\"Build tools\",\"percent\":10}",
+        "@@progress {\"step\":6,\"total\":6,\"label\":\"Install\",\"percent\":100}"
+      ]
+    },
+    "claude mcp remove squarel-launcher-check --scope user": { "code": 1, "lines": ["No MCP server named squarel-launcher-check"] },
+    "claude mcp add squarel-launcher-check --scope user -- node {install}\\src\\mcp\\index.ts": { "code": 0 },
+    "claude mcp remove squarel --scope user": { "code": 1, "lines": ["No MCP server named squarel"] },
+    "claude mcp add squarel --scope user -- node {install}\\src\\mcp\\index.ts": {
+      "code": 0,
+      "lines": ["Added stdio MCP server squarel"]
+    },
+    "claude mcp list": { "code": 0, "lines": ["squarel: node index.ts - ✓ Connected"] }
+  },
+  "fetch": {
+    "https://api.cloudflare.com/client/v4/user/tokens/verify": {
+      "status": 200,
+      "body": "{\"success\":true,\"result\":{\"status\":\"active\"}}"
+    }
+  },
+  "bridge": { "mode": "down", "port": 4321, "since": "2026-01-01T11:00:00.000Z", "clients": [] }
+}

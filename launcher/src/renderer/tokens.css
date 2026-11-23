@@ -1,0 +1,61 @@
+:root {
+  --bg-app: #0d0e12;
+  --bg-sidebar: #111318;
+  --bg-surface: #171a21;
+  --bg-surface-2: #1f232c;
+  --bg-input: #0f1116;
+  --border-default: #2a2f3a;
+  --border-strong: #3a4150;
+  --text-primary: #eceef3;
+  --text-secondary: #9aa1b1;
+  --text-muted: #646b7a;
+  --text-on-accent: #0d0e12;
+  --accent-primary: #29adff;
+  --accent-primary-soft: #0f2a3d;
+  --accent-brand: #ffec27;
+  --status-ok: #00e436;
+  --status-ok-soft: #0b2a16;
+  --status-warn: #ffa300;
+  --status-warn-soft: #2e2109;
+  --status-error: #ff004d;
+  --status-error-soft: #33101c;
+  --status-idle: #646b7a;
+  --status-idle-soft: #1f232c;
+
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --font-ui: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-pixel: "Pixelify Sans", monospace;
+
+  --brand-launch-more: #3a3410;
+  --accent-aseprite: #ff77a8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: 400 13px / 20px var(--font-ui);
+  overflow: hidden;
+  user-select: none;
+}

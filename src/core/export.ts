@@ -22,7 +22,13 @@ export interface ExportPreset<S extends z.ZodTypeAny = z.ZodTypeAny> {
   purpose: Purpose
   label: string
   options: S
-  run(doc: PixelDoc, opts: z.infer<S>, baseName: string): Promise<ExportFile[]>
+  run(doc: PixelDoc, opts: z.infer<S>, baseName: string, info: ExportInfo): Promise<ExportFile[]>
+}
+
+/** Facts about the running app that go into exported metadata (core never reads files itself). */
+export interface ExportInfo {
+  /** Squarel version (SQUAREL_VERSION), written as `meta.version` of sprite sheet JSON. */
+  appVersion: string
 }
 
 const enc = new TextEncoder()
@@ -340,7 +346,13 @@ function beadCsv(plan: BeadPlan): string {
   ].join('\n')
 }
 
-function spriteSheet(doc: PixelDoc, scale: number, columns: number | undefined, baseName: string) {
+function spriteSheet(
+  doc: PixelDoc,
+  scale: number,
+  columns: number | undefined,
+  baseName: string,
+  appVersion: string,
+) {
   const n = doc.frames.length
   const cols = Math.max(1, Math.min(n, columns ?? n))
   const rows = Math.ceil(n / cols)
@@ -371,7 +383,7 @@ function spriteSheet(doc: PixelDoc, scale: number, columns: number | undefined, 
     frames,
     meta: {
       app: 'squarel-art',
-      version: '0.1.0',
+      version: appVersion,
       image: `${baseName}-sheet.png`,
       format: 'RGBA8888',
       size: { w: sheet.width, h: sheet.height },
@@ -408,8 +420,8 @@ export const PRESETS: ExportPreset<any>[] = [
     purpose: 'game',
     label: 'Sprite sheet PNG + Aseprite-style JSON (array)',
     options: z.object({ scale: scaleOpt.default(1), columns: z.number().int().min(1).optional() }),
-    async run(doc, o, base) {
-      const { sheet, json } = spriteSheet(doc, o.scale, o.columns, base)
+    async run(doc, o, base, info) {
+      const { sheet, json } = spriteSheet(doc, o.scale, o.columns, base, info.appVersion)
       return [
         { name: `${base}-sheet.png`, bytes: encodePng(sheet), mime: 'image/png' },
         {

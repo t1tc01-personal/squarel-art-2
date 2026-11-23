@@ -1,0 +1,19 @@
+<!--
+  Windows Sandbox for trying the launcher installer on a clean machine (docs/release.md).
+  Do not open this file directly: run open-sandbox.ps1, which fills in the absolute path of
+  launcher\dist (git-ignored) and opens the filled copy.
+  The sandbox has no winget, so this tests the "no winget" branch of the setup wizard.
+-->
+<Configuration>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>__LAUNCHER_DIST__</HostFolder>
+      <SandboxFolder>C:\SquarelDist</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <Networking>Enable</Networking>
+  <LogonCommand>
+    <Command>explorer.exe C:\SquarelDist</Command>
+  </LogonCommand>
+</Configuration>

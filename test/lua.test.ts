@@ -282,4 +282,29 @@ describe('Aseprite extension: plugin.lua (fake WebSocket, Timer and clock)', () 
     )
     expect(JSON.parse(out)).toEqual({ n: 2, connects: 1 })
   })
+
+  it('does not autoconnect when SQUAREL_NO_SYNC=1, but the menu is built and Connect works by hand', () => {
+    const out = runLua(
+      `dofile(MOCK)
+       dofile(HARNESS)
+       ENV_OVERRIDE = { SQUAREL_NO_SYNC = '1' }
+       dofile(SQUAREL_DIR .. '/plugin.lua')
+       local json = dofile(SQUAREL_DIR .. '/json.lua')
+       init(PLUGIN)
+       local afterInit = #SOCKETS
+       tick(5, 5); tick(30, 5)   -- the watchdog must not connect either
+       local afterWatchdog = #SOCKETS
+       PLUGIN.commands.SquarelConnect.onclick()
+       RESULT = json.encode({ afterInit = afterInit, afterWatchdog = afterWatchdog, afterClick = #SOCKETS,
+         hasConnect = PLUGIN.commands.SquarelConnect ~= nil, hasOpen = PLUGIN.commands.SquarelOpen ~= nil })`,
+      { MOCK, HARNESS },
+    )
+    expect(JSON.parse(out)).toEqual({
+      afterInit: 0,
+      afterWatchdog: 0,
+      afterClick: 1,
+      hasConnect: true,
+      hasOpen: true,
+    })
+  })
 })

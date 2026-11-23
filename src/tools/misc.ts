@@ -10,6 +10,7 @@ import { pasteIndexed } from '../core/ops.ts'
 import { decodePng, encodePng } from '../core/png.ts'
 import { renderRGBA } from '../core/preview.ts'
 import { MAX_SIDE, PURPOSES, type Purpose } from '../shared/types.ts'
+import { SQUAREL_VERSION } from '../version.ts'
 import { mutate, preview, previewArg, projectArg, projectSlug } from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
@@ -116,7 +117,7 @@ export const exportTools = [
       if (!parsed.success)
         throw new ToolError('INVALID', `bad options for ${preset.id}: ${parsed.error.message}`)
       const { versionId, doc } = await ctx.store.readHead(slug)
-      const files = await preset.run(doc, parsed.data, i.name ?? slug)
+      const files = await preset.run(doc, parsed.data, i.name ?? slug, { appVersion: SQUAREL_VERSION })
       const paths: string[] = []
       const notes: string[] = []
       let firstImage: Uint8Array | undefined

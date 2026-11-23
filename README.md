@@ -49,6 +49,18 @@ Squarel thì **lo cả quy trình làm ra sản phẩm**. Aseprite chỉ là nơ
 
 Hai cái dùng chung được: cài thêm một MCP Aseprite bên cạnh Squarel cho những việc Squarel không làm.
 
+## Launcher (Windows)
+
+Không muốn gõ lệnh? **Squarel Art Launcher** là app Windows cài và chạy Squarel thay bạn:
+- wizard 4 bước: cài Git/Node/pnpm qua `winget`, clone Squarel, ghi `.env`, đăng ký với Claude Code;
+- giữ bridge, hiện Aseprite và phiên Claude Code nào đang kết nối;
+- mở Aseprite, cài extension, health check, xem nhật ký;
+- tự cập nhật từ GitHub Release, đưa Squarel lên cùng phiên bản.
+
+Tải `Squarel-Art-Launcher-Setup-X.Y.Z.exe` ở trang [Releases](https://github.com/t1tc01-personal/squarel-art-2/releases). Bộ cài chưa ký số: khi SmartScreen chặn, bấm **More info → Run anyway**.
+
+Chi tiết: [docs/launcher.md](docs/launcher.md). Build và phát hành: [docs/release.md](docs/release.md).
+
 ## Yêu cầu
 
 - Node.js ≥ 22.18 (đã thử với Node 24) và pnpm.
@@ -147,14 +159,33 @@ pnpm cli export --project test --preset print-png --options '{\"widthMm\":200}'
 | `pnpm check` | Cả ba lệnh trên |
 | `pnpm mcp` | Chạy MCP server bằng tay (để debug) |
 | `pnpm eval -- --provider mock` | Đánh giá chất lượng ảnh AI. Với provider thật cần `--yes` |
-| `pnpm aseprite:build` | Tự build Aseprite từ source vào `vendor/` (dùng cá nhân) và ghi `ASEPRITE_PATH`. Thêm `-- --check` để chỉ kiểm tra công cụ, `-- --install-deps` để cài VS Build Tools |
+| `pnpm aseprite:build` | Tự build Aseprite từ source vào `vendor/` (dùng cá nhân) và ghi `ASEPRITE_PATH`. Thêm `-- --check` để chỉ kiểm tra công cụ, `-- --install-deps` để mở winget và Visual Studio Installer cài VS Build Tools (bạn tự đồng ý điều khoản và bấm Install) |
 | `pnpm aseprite:test` | Thử chuyển đổi thật qua Aseprite CLI (cần `ASEPRITE_PATH`) |
 | `pnpm docs:tools` | Sinh lại [docs/tools.md](docs/tools.md) |
 
 ## Tài liệu
 
 - [Cài đặt từng bước](docs/setup.md) · [Kiến trúc](docs/architecture.md) · [Kế hoạch](docs/plans/2026-11-22-personal-tool-plan.md) · [Kế hoạch SaaS (để dành)](docs/plans/2026-11-22-saas-plan.md)
-- [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md)
+- [Danh mục tool](docs/tools.md) · [Aseprite](docs/aseprite.md) · [Provider ảnh](docs/providers.md) · [Chuẩn hoá pixel](docs/pixel-pipeline.md) · [Preset xuất file](docs/export-presets.md) · [Viết tích hợp](docs/integrations.md)
+- [Launcher](docs/launcher.md) · [Build và phát hành](docs/release.md)
+
+## Giấy phép
+
+Squarel Art dùng giấy phép **[PolyForm Shield 1.0.0](LICENSE.md)**.
+
+**Được làm:**
+- dùng miễn phí cho cá nhân, công việc hay công ty;
+- bán sản phẩm làm ra bằng nó (sprite cho game, áo in, sticker…);
+- sửa code cho mình dùng;
+- chia sẻ lại, miễn là kèm giấy phép này.
+
+**Không được làm:** dùng code này để làm hoặc cung cấp một sản phẩm **cạnh tranh** với Squarel Art, dù bán hay cho miễn phí. Ví dụ: đổi tên rồi phát hành lại, hoặc dựng một dịch vụ tạo pixel art bằng AI dựa trên code này.
+
+**Lưu ý:**
+- Giấy phép bảo vệ **code và tài liệu**, không bảo vệ được **ý tưởng**. Người khác vẫn có thể tự viết một công cụ tương tự từ đầu.
+- Đây không phải giấy phép "open source" theo định nghĩa OSI. Nó là giấy phép "source-available": công khai code nhưng có giới hạn.
+- Thư viện bên thứ ba vẫn theo giấy phép riêng của chúng. Aseprite theo EULA riêng: chỉ tự build để dùng cá nhân.
+- Phần này chỉ là tóm tắt, không phải tư vấn pháp lý. Văn bản trong [LICENSE.md](LICENSE.md) là bản có hiệu lực.
 
 ## Cấu trúc
 
