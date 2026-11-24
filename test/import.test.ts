@@ -83,6 +83,66 @@ describe('importLegacyArt', () => {
     expect(existsSync(target.projectPath('hero'))).toBe(false)
   })
 
+  describe('failures keep the source', () => {
+    const real = () => import('node:fs/promises')
+    const gone = () => {
+      expect(existsSync(join(target.root, '.hero.importing'))).toBe(false)
+      expect(existsSync(target.projectPath('hero'))).toBe(false)
+    }
+
+    it('a rename that fails (not EXDEV)', async () => {
+      const r = await real()
+      const fs = {
+        cp: r.cp,
+        rm: r.rm,
+        rename: async () => {
+          throw Object.assign(new Error('denied'), { code: 'EPERM' })
+        },
+      }
+      await expect(importLegacyArt(legacy, target, 'hero', { fs })).rejects.toThrow('denied')
+      expect(await legacy.hasProject('hero')).toBe(true)
+      gone()
+    })
+
+    it('the cross-drive copy fails', async () => {
+      const r = await real()
+      let n = 0
+      const fs = {
+        rm: r.rm,
+        rename: async () => {
+          throw Object.assign(new Error('x'), { code: 'EXDEV' })
+        },
+        cp: async (...a: Parameters<typeof r.cp>) => {
+          await r.cp(...a)
+          if (n++ === 1) throw new Error('copy broke')
+        },
+      }
+      await expect(importLegacyArt(legacy, target, 'hero', { fs })).rejects.toThrow('copy broke')
+      expect(await legacy.hasProject('hero')).toBe(true)
+      gone()
+    })
+
+    it('a half-removed source keeps the imported copy and warns', async () => {
+      const r = await real()
+      const warns: string[] = []
+      const log = { ...silentLogger, warn: (m: string) => void warns.push(m) }
+      const fs = {
+        cp: r.cp,
+        rename: r.rename,
+        rm: async (path: Parameters<typeof r.rm>[0]) => {
+          if (String(path) === legacy.projectPath('hero')) {
+            await r.rm(legacy.projectPath('hero', 'thumb.png'), { force: true })
+            await r.rm(legacy.projectPath('hero', 'project.json'))
+            throw new Error('rm broke')
+          }
+        },
+      }
+      await expect(importLegacyArt(legacy, target, 'hero', { fs, log })).rejects.toThrow('rm broke')
+      expect(await target.hasProject('hero')).toBe(true)
+      expect(warns.length).toBe(1)
+    })
+  })
+
   it('works across drives', async () => {
     const real = await import('node:fs/promises')
     const fs = {

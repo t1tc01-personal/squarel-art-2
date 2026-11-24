@@ -45,7 +45,7 @@ export async function importLegacyArt(
     await target.init()
     const temp = join(target.root, `.${slug}.importing`)
     await rm(temp, { recursive: true, force: true }) // leftover of a crashed import
-    let copy = temp // whatever partial copy exists, so a failure can remove it
+    const partial = new Set([temp]) // every copy a failure must remove
     let final = slug
     try {
       await fs.cp(from, temp, { recursive: true, filter: (src) => !skip(basename(src)) })
@@ -60,11 +60,13 @@ export async function importLegacyArt(
         await fs.rename(temp, dest)
       } catch (e: any) {
         if (e?.code !== 'EXDEV') throw e
-        copy = dest
+        partial.add(dest)
         await fs.cp(temp, dest, { recursive: true })
+        if (!sameTree(before, await tree(dest))) throw new Error('copy does not match the source')
         await rm(temp, { recursive: true, force: true })
       }
-      copy = dest
+      partial.clear()
+      partial.add(dest)
       const info = await readJson<Record<string, unknown>>(join(dest, 'project.json'))
       delete info.workspace
       info.slug = final
@@ -75,13 +77,13 @@ export async function importLegacyArt(
       } catch (e) {
         // Never lose data: drop the copy only while the source is still whole.
         if (!(await exists(from)) || !sameTree(before, await tree(from).catch(() => new Map()))) {
-          copy = ''
+          partial.clear()
           o.log?.warn('art import: source only partly removed; the copy is kept', { slug, to: dest })
         }
         throw e
       }
     } catch (e) {
-      if (copy) await rm(copy, { recursive: true, force: true }).catch(() => {})
+      for (const p of partial) await rm(p, { recursive: true, force: true }).catch(() => {})
       throw e
     }
     return { slug: final, from, to: target.projectPath(final) }
