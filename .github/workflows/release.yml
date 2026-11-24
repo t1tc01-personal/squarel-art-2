@@ -100,6 +100,20 @@ jobs:
           pnpm --dir launcher install --frozen-lockfile
           pnpm --dir launcher build
           pnpm --dir launcher icon
+      # electron-builder uploads the .exe, .blockmap and latest.yml in parallel, and each upload
+      # creates the Release when it finds none: two drafts for one tag. Create the draft first.
+      - name: Create the draft Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:TAG --repo $env:GITHUB_REPOSITORY --draft --verify-tag --title $env:TAG.TrimStart('v') --notes $env:TAG
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          $global:LASTEXITCODE = 0
       - name: Package and upload to a draft Release
         working-directory: launcher
         env:

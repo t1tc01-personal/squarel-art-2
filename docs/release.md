@@ -77,7 +77,7 @@ Làm theo thứ tự:
    | Job | Quyền | Việc |
    |---|---|---|
    | `check` | `contents: read` | `pnpm install` → `pnpm check`; `pnpm --dir launcher install` → `pnpm --dir launcher check` |
-   | `release` | `contents: write` | So tag với hai `package.json`, build launcher, `electron-builder --publish always` bằng `GITHUB_TOKEN` → tải lên một Release **nháp** (`releaseType: draft`) |
+   | `release` | `contents: write` | So tag với hai `package.json`, build launcher, tạo sẵn Release nháp của tag (một bản duy nhất: electron-builder tải các file song song nên tự tạo sẽ ra hai bản nháp), `electron-builder --publish always` bằng `GITHUB_TOKEN` → tải lên một Release **nháp** (`releaseType: draft`) |
 
 6. Mở trang Releases, mở bản **nháp** của tag, kiểm tra có đủ:
    - `Squarel-Art-Launcher-Setup-X.Y.Z.exe`;
