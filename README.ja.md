@@ -49,7 +49,7 @@ pnpm check
 
 | 変数 | 説明 |
 |---|---|
-| `DATA_DIR` | プロジェクトの保存先。OneDrive や Google Drive のフォルダを指定すると、バックアップが自動で取れます |
+| `DATA_DIR` | ログ、使用量、旧アートの保存先。アート本体は各プロジェクトの `squarel_art/` フォルダにあります。プロジェクトフォルダ（例: git）をバックアップしてください |
 | `IMAGE_PROVIDER` | `cloudflare`（既定）、`local-sd`、または `mock`（オフライン、お試し用） |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare ダッシュボード → AI → Workers AI → *Use REST API*。トークンには Workers AI へのアクセス権が必要です |
 | `RETRO_DIFFUSION_API_KEY` | 任意。`quality: "high"` のときだけ使われます |
@@ -79,7 +79,7 @@ claude mcp add squarel --scope user -- node <repo>\src\mcp\index.ts
 pnpm aseprite:pack   # squarel.aseprite-extension をビルドします。ダブルクリックでインストールできます
 ```
 
-Claude Code がブリッジを `ws://127.0.0.1:4321/bridge` で起動します。Claude Code を開かずに描きたい場合は `pnpm bridge` を実行してください。Aseprite では **File → Squarel → Open project…** を選ぶか、Claude に「Aseprite で開いて」と頼むだけです。Aseprite をお持ちでない場合は、`pnpm aseprite:build` で個人利用向けにソースからビルドできます（Aseprite の EULA により、そのビルドを再配布することは禁止されています）。詳細: [docs/aseprite.md](docs/aseprite.md)
+Claude Code がブリッジを `ws://127.0.0.1:4321/bridge` で起動します。Claude Code を開かずに描きたい場合は `pnpm bridge` を実行してください。Aseprite では **File → Squarel → Open art…** を選ぶか、Claude に「Aseprite で開いて」と頼むだけです。Aseprite をお持ちでない場合は、`pnpm aseprite:build` で個人利用向けにソースからビルドできます（Aseprite の EULA により、そのビルドを再配布することは禁止されています）。詳細: [docs/aseprite.md](docs/aseprite.md)
 
 ## Squarel と Aseprite MCP サーバーの違い
 

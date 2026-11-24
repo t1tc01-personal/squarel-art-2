@@ -62,13 +62,13 @@ Dự án gom nhiều art cho cùng một mục đích (game, bộ sticker, bản
 | **Mở Claude** | Mở cửa sổ lệnh nhìn thấy được, chạy `claude.exe` (tìm trên PATH) trong thư mục dự án, thêm `--add-dir` cho mỗi repo ở ngoài. Đường dẫn có chữ tiếng Việt được, có ký tự đặc biệt của cmd (`& \| < > ^ % ! " ' ( ) ;`) thì bị từ chối |
 | Gỡ khỏi launcher | Chỉ xoá `DATA_DIR\workspaces\<id>.json`. Thư mục, các file trong đó và art vẫn còn |
 
-Art không thuộc dự án nào nằm ở mục **Chưa phân loại**. Panel **Kết nối** ghi "Phiên · tên dự án" cho phiên Claude Code đang ở trong một dự án.
+Art không thuộc dự án nào nằm ở mục **Art cũ**. Panel **Kết nối** ghi "Phiên · tên dự án" cho phiên Claude Code đang ở trong một dự án.
 
 ## Cài đặt
 
 | Mục | Ghi vào | Ghi chú |
 |---|---|---|
-| Thư mục dữ liệu | `DATA_DIR` trong `.env` | Project, lịch sử, log. Nên để trong OneDrive để tự backup |
+| Thư mục dữ liệu | `DATA_DIR` trong `.env` | Log, usage, art cũ. Art của dự án nằm trong `squarel_art/` của dự án đó, hãy backup thư mục dự án (ví dụ bằng git) |
 | Ảnh AI | `IMAGE_PROVIDER`, `CLOUDFLARE_*`, `LOCAL_SD_URL`, `RETRO_DIFFUSION_API_KEY`, `IMAGE_DAILY_BUDGET_USD` | Khoá hiện dạng che |
 | Aseprite | `ASEPRITE_PATH` | Chỉ hiện khi bật tích hợp Aseprite |
 | Cổng bridge | `BRIDGE_PORT` | Mặc định 4321. Đổi cổng thì launcher tự khởi động lại bridge |
@@ -87,7 +87,7 @@ Nút **Mở file .env** mở thư mục chứa `.env` để bạn sửa bằng t
 | `%LOCALAPPDATA%\SquarelArt\app` | Squarel khi chọn **Cài mới** |
 | `%LOCALAPPDATA%\SquarelArt\tools\<id>` | Source và bản build công cụ, ví dụ Aseprite |
 | `.env` trong thư mục Squarel | Cấu hình Squarel. Đây vẫn là nguồn sự thật duy nhất |
-| `DATA_DIR` | Project, version, log của Squarel |
+| `DATA_DIR` | Log, usage và art cũ của Squarel (art mới nằm trong `squarel_art/` của từng dự án) |
 | `DATA_DIR\workspaces\` | Chỉ mục các dự án launcher biết (tên, thư mục) |
 | `<thư mục dự án>\.squarel\` | Cấu hình dự án (`project.json`) và danh mục art (`arts.md`, Squarel tự sinh) |
 

@@ -1,6 +1,6 @@
 # Preset xuất file
 
-Bảng đầy đủ các tuỳ chọn nằm cuối [tools.md](tools.md) (tự sinh). File được ghi vào `DATA_DIR/projects/<slug>/exports/`.
+Bảng đầy đủ các tuỳ chọn nằm cuối [tools.md](tools.md) (tự sinh). File được ghi vào `<thư mục dự án>/squarel_art/<art>/exports/`.
 
 | Preset | Dùng cho | Ghi chú kỹ thuật |
 |---|---|---|

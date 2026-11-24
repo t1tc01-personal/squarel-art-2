@@ -105,7 +105,7 @@ pnpm check
    IMAGE_PROVIDER=mock
    ```
 
-   - `DATA_DIR` là nơi lưu mọi project, lịch sử, file xuất. Thư mục tự được tạo. Muốn có backup tự động thì đặt trong OneDrive hoặc Google Drive, ví dụ `C:\Users\<tên>\OneDrive\SquarelArt-data`.
+   - `DATA_DIR` giữ log, usage và art cũ (chưa chuyển vào dự án). Art mới nằm trong `squarel_art/` của từng dự án. Thư mục tự được tạo.
    - `mock` là provider giả: tạo ảnh mẫu ngay, không cần mạng, $0. Dùng để kiểm tra mọi thứ trước khi có key thật.
 
 3. Thử bằng CLI:
@@ -301,7 +301,7 @@ pnpm aseprite:test
    pnpm bridge
    ```
 
-2. Trong Aseprite: **File → Squarel → Open project…** → chọn `thu`. Hoặc bảo Claude: "mở project thu trong Aseprite".
+2. Trong Aseprite: **File → Squarel → Open art…** → chọn `thu`. Hoặc bảo Claude: "mở art thu trong Aseprite".
 3. Bảo Claude: "thêm viền đen". Viền phải hiện ngay trong Aseprite. Bấm **Ctrl+Z** trong Aseprite để hoàn tác bước đó.
 4. Vẽ vài nét trong Aseprite, chờ khoảng 1 giây, rồi hỏi Claude: "mình vừa vẽ gì?". Claude phải thấy nét vẽ của bạn.
 
@@ -374,7 +374,7 @@ claude mcp add squarel --scope user -- node <thư mục repo>\src\mcp\index.ts
 
 Các skill `/pixel-new`, `/pixel-export`… nằm trong repo này nên chỉ có khi mở Claude Code ở đây. Muốn dùng mọi nơi, copy thư mục `.claude\skills\pixel-*` vào `C:\Users\<tên>\.claude\skills\`.
 
-**Backup:** mọi thứ nằm trong `DATA_DIR`, gồm project, mọi version, đề xuất AI, file xuất và `usage.jsonl`. Đặt `DATA_DIR` trong OneDrive/Google Drive, hoặc copy thư mục đó định kỳ. Không cần backup gì khác.
+**Backup:** art nằm trong thư mục `squarel_art/` của từng dự án: backup thư mục dự án (ví dụ bằng git; `project.json` và `versions/` được git theo dõi, còn `proposals/`, `exports/`, thumbnail thì không). `DATA_DIR` chỉ giữ log, `usage.jsonl` và art cũ chưa chuyển; copy nó định kỳ nếu cần các thứ đó.
 
 ---
 

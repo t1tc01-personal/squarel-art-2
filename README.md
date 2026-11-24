@@ -49,7 +49,7 @@ pnpm check
 
 | Variable | Meaning |
 |---|---|
-| `DATA_DIR` | Where projects are stored. A OneDrive or Google Drive folder gives you backups for free |
+| `DATA_DIR` | Logs, usage and any older art. Art itself lives in each project's `squarel_art/` folder: back up the project folders (for example with git) |
 | `IMAGE_PROVIDER` | `cloudflare` (default), `local-sd`, or `mock` (offline, for trying things out) |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → AI → Workers AI → *Use REST API*. The token needs Workers AI access |
 | `RETRO_DIFFUSION_API_KEY` | Optional. Used only for `quality: "high"` |
@@ -79,7 +79,7 @@ claude mcp add squarel --scope user -- node <repo>\src\mcp\index.ts
 pnpm aseprite:pack   # builds squarel.aseprite-extension; double-click it to install
 ```
 
-Claude Code starts the bridge at `ws://127.0.0.1:4321/bridge`. To draw without Claude Code open, run `pnpm bridge`. In Aseprite, use **File → Squarel → Open project…**, or just ask Claude to "open it in Aseprite". Don't own Aseprite? `pnpm aseprite:build` builds it from source for personal use (the Aseprite EULA forbids redistributing that build). Details: [docs/aseprite.md](docs/aseprite.md).
+Claude Code starts the bridge at `ws://127.0.0.1:4321/bridge`. To draw without Claude Code open, run `pnpm bridge`. In Aseprite, use **File → Squarel → Open art…**, or just ask Claude to "open it in Aseprite". Don't own Aseprite? `pnpm aseprite:build` builds it from source for personal use (the Aseprite EULA forbids redistributing that build). Details: [docs/aseprite.md](docs/aseprite.md).
 
 ## Squarel vs. Aseprite MCP servers
 

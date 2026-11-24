@@ -11,7 +11,7 @@ You drive the `squarel` MCP tools. Talk to the user in their language (often Vie
 
 Art lives inside a project folder (`<project>/squarel_art/`), and every art tool needs one. If the tools answer `NO_PROJECT`, tell the user what the message says (create a project in Squarel Art Launcher, then open Claude Code in that folder) and stop. Do not look for the art elsewhere.
 
-If the server instructions name an **active workspace** (or `project_info` returns one), the user is working on that project: follow its brief (in `AGENTS.md`, also in `project_info`) and its defaults for new art. Don't ask again for what the brief or defaults already decide. `art_list` shows this project's arts; `art_list` with `legacy: true` shows older arts that still wait in DATA_DIR/projects, and `art_import` moves one in. The catalog of its art is `.squarel/arts.md`. Art tools take an `art` id; it defaults to the art opened with `art_open` / `art_create`.
+If the server instructions name an **active project** (or `project_info` returns one), the user is working on that project: follow its brief (in `AGENTS.md`, also in `project_info`) and its defaults for new art. Don't ask again for what the brief or defaults already decide. `art_list` shows this project's arts; `art_list` with `legacy: true` shows older arts that still wait in DATA_DIR/projects, and `art_import` moves one in. The catalog of its art is `.squarel/arts.md`. Art tools take an `art` id; it defaults to the art opened with `art_open` / `art_create`.
 
 ## Workflow
 

@@ -187,28 +187,29 @@ Bridge nghe `ws://127.0.0.1:4321/bridge` (cổng 4321, hoặc `BRIDGE_PORT`) (xe
 
 | Hướng | Tin nhắn | Ý nghĩa |
 |---|---|---|
-| client → bridge | `hello { client, ext?, app?, aseprite? }` | Bắt tay. `app` là phiên bản công cụ; `aseprite` là tên cũ của `app` |
-| bridge → client | `welcome { server, version, projects }` | Trả lời `hello` |
-| client → bridge | `list` | Xin danh sách project |
-| bridge → client | `projects { projects }` | Mỗi phần tử `{ slug, name, head }` |
-| client → bridge | `open { slug }` | Mở một project |
-| bridge → client | `doc { slug, versionId, doc }` | Toàn bộ PixelDoc |
-| client → bridge | `cels { slug, baseVersion, doc, label? }` | Trạng thái sau khi vẽ |
-| bridge → client | `ack { slug, versionId }` | Ghi thành công |
-| bridge → client | `rebased { slug, versionId, doc, warnings }` | Đã gộp với thay đổi mới hơn |
-| bridge → client | `doc.updated { slug, versionId, source, label, doc }` | Có version mới từ nơi khác |
-| bridge → client | `open.request { slug }` | `open_in_editor` yêu cầu mở project |
-| client → bridge | `tool { id, name, input?, slug? }` | Gọi một tool |
+| client → bridge | `hello { client, ext?, app?, aseprite?, protocol }` | Bắt tay. `protocol` phải là `2`. `app` là phiên bản công cụ; `aseprite` là tên cũ của `app` |
+| bridge → client | `welcome { server, version, protocol: 2, arts }` | Trả lời `hello`. `arts` là mảng `ArtEntry` |
+| bridge → client | `error { code: "extension-outdated", message }` | `hello` thiếu `protocol: 2`: bridge gửi lỗi này rồi đóng kết nối |
+| client → bridge | `list` | Xin danh sách art |
+| bridge → client | `arts { arts: ArtEntry[] }` | Mỗi phần tử `{ ref, project, projectName, art, name, head }`. `ref` là `<id dự án>/<id art>` và gom art của mọi dự án bridge biết |
+| client → bridge | `open { ref }` | Mở một art |
+| bridge → client | `doc { ref, versionId, doc }` | Toàn bộ PixelDoc |
+| client → bridge | `cels { ref, baseVersion, doc, label? }` | Trạng thái sau khi vẽ |
+| bridge → client | `ack { ref, versionId }` | Ghi thành công |
+| bridge → client | `rebased { ref, versionId, doc, warnings }` | Đã gộp với thay đổi mới hơn |
+| bridge → client | `doc.updated { ref, versionId, source, label, doc }` | Có version mới từ nơi khác |
+| bridge → client | `open.request { ref }` | `open_in_editor` yêu cầu mở art |
+| client → bridge | `tool { id, name, input?, ref? }` | Gọi một tool. Tool đụng tới art cần `ref` (chọn dự án và art); thiếu `ref` thì bị từ chối với `NO_PROJECT` |
 | bridge → client | `tool_result { id, ok, text, files? }` | Kết quả tool |
 | client → bridge | `ping` | Giữ kết nối |
 | bridge → client | `pong` | Trả lời `ping` |
 | client → bridge | `status` | Hỏi ai đang kết nối |
-| bridge → client | `status { version, clients }` | `clients` là mảng `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`. `name` là `client` trong `hello`. `version` của mỗi client là id version PixelDoc (ví dụ `v000002`) mà client nhận hoặc ghi gần nhất, không phải phiên bản công cụ (đó là `app`) |
+| bridge → client | `status { version, clients }` | `clients` là mảng `{ name, ext?, app?, ref?, version?, connectedAt, lastSeen }`. `name` là `client` trong `hello`. `version` của mỗi client là id version PixelDoc (ví dụ `v000002`) mà client nhận hoặc ghi gần nhất, không phải phiên bản công cụ (đó là `app`) |
 | bridge → client | `error { code, message }` | Lỗi |
 
 - Có thể gửi `status` mà không cần `hello` trước. Client chưa gửi `hello` có `name` là `unknown`.
-- `bridgeTool` trong `launch` gửi `tool`. Ví dụ `open_in_editor` với `input: { art: "<slug>" }`.
-- Chỉ thêm loại tin nhắn hoặc trường mới. Hình dạng tin nhắn đã có không đổi, để client cũ vẫn chạy.
+- `bridgeTool` trong `launch` gửi `tool`. Launcher đặt `ref` ở cấp trên cùng của tin nhắn và để `input: {}`. Ví dụ `open_in_editor` với `ref: "<id dự án>/<id art>"`.
+- Giao thức 2 (Squarel 0.4) đổi `slug` thành `ref`, nên client giao thức 1 không còn chạy. Từ giao thức 2 trở đi chỉ thêm loại tin nhắn hoặc trường mới, hình dạng tin nhắn đã có không đổi.
 - Bridge chỉ nghe `127.0.0.1` và chặn Origin của trang web (xem [aseprite.md](aseprite.md#bảo-mật)).
 
 ## File phiên MCP

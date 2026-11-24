@@ -121,18 +121,15 @@ interface AnimTag { name: string; from: number; to: number }   // ví dụ "walk
   - Các id là duy nhất.
   - Kích thước và số màu nằm trong giới hạn.
 
-### 3.2 Trên đĩa (`DATA_DIR`, mặc định `D:\SquarelArt-data`)
+### 3.2 Trên đĩa
+
+Art nằm trong thư mục của từng dự án; `DATA_DIR` (mặc định `D:\SquarelArt-data`) chỉ giữ log, usage, file phiên và art cũ.
 
 ```
-DATA_DIR/
-  config.json                         tuỳ chọn: ghi đè cấu hình mặc định
-  inbox/                              thả ảnh chụp / ảnh tham chiếu vào đây
-  logs/mcp.log  logs/bridge.log
-  usage.jsonl                         mỗi lần gọi provider ảnh 1 dòng
-  run/mcp-<pid>.json                  file phiên của từng tiến trình MCP (mục 8)
-  workspaces/<id>.json                chỉ mục dự án: { schema: 1, id, name, folder, createdAt } (mục 3.5)
-  projects/<slug>/
-    project.json                      { slug, name, purpose, createdAt, updatedAt, head: "v000042", workspace?: "<id>" }
+<thư mục dự án>/squarel_art/
+  .gitignore                          theo dõi project.json và versions/; bỏ qua .lock, *.tmp, .work-*.json, proposals/, exports/, work.aseprite, thumb.png, .*.importing/
+  <art id>/
+    project.json                      { slug, name, purpose, createdAt, updatedAt, head: "v000042" }
     thumb.png                         ảnh nhỏ frame 0 (cạnh dài ≤ 128), ghi lại sau mỗi lần tạo/commit
     versions/index.jsonl              mỗi version 1 dòng: { id, parent, ts, source, label, bytes }
     versions/v000042.json.gz          { id, parent, ts, source, label, doc: PixelDoc }
@@ -140,15 +137,25 @@ DATA_DIR/
     proposals/<pid>/raw-1.png …       ảnh gốc provider trả về
     proposals/<pid>/v1.json …         biến thể đã chuẩn hoá (pixels + palette + metrics)
     proposals/<pid>/sheet.png         ảnh ghép các biến thể, có đánh số
-    assets/                           ảnh tham chiếu đã sao chép vào project
+    assets/                           ảnh tham chiếu đã sao chép vào art
     exports/<preset>-<ts>.<ext>       file đã xuất
     work.aseprite                     file làm việc cho chế độ trao đổi qua file (sinh tự động)
     .lock                             khoá ghi (proper-lockfile)
+  .<art id>.importing/                thư mục tạm của art_import (dọn khi lỗi; .gitignore bỏ qua nếu tiến trình bị chết giữa chừng)
+
+DATA_DIR/
+  config.json                         tuỳ chọn: ghi đè cấu hình mặc định
+  inbox/                              thả ảnh chụp / ảnh tham chiếu vào đây
+  logs/mcp.log  logs/bridge.log
+  usage.jsonl                         mỗi lần gọi provider ảnh 1 dòng
+  run/mcp-<pid>.json                  file phiên của từng tiến trình MCP (mục 8)
+  workspaces/<id>.json                chỉ mục dự án: { schema: 1, id, name, folder, createdAt } (mục 3.5)
+  projects/<slug>/                    art cũ (chỉ đọc), cùng cấu trúc như <art id>/ ở trên; art_import chuyển vào dự án
 ```
 
-- **`slug`:** khớp `^[a-z0-9][a-z0-9-]{0,63}$`. Mọi đường dẫn được resolve và kiểm tra vẫn nằm trong `DATA_DIR`, để chặn path traversal.
+- **`slug` (id art):** khớp `^[a-z0-9][a-z0-9-]{0,63}$`. Mọi đường dẫn được resolve và kiểm tra vẫn nằm trong `squarel_art/` của dự án, để chặn path traversal. Tham chiếu một art là `ref` = `<id dự án>/<id art>`.
 - **`source`** của version là một trong: `claude` | `editor` | `ai` | `cli` | `import`. Extension Aseprite dùng giá trị này để đặt tên transaction (ví dụ "Claude: …") và hiện thông báo.
-- **`workspace`** trong `project.json` của art: id dự án chứa art. Không có trường này là art **Chưa phân loại**.
+- **Vị trí quyết định dự án:** art thuộc dự án chứa thư mục `squarel_art/` đó; `project.json` của art không có trường `workspace`. Art cũ trong `DATA_DIR/projects` hiện ở mục **Art cũ** của launcher cho tới khi được chuyển vào một dự án.
 - **`usage.jsonl`**, mỗi dòng: `{ ts, provider, model, op, units, unitKind: 'neuron'|'credit'|'none', usd, project, proposal, ok }`.
 
 ### 3.3 Proposal (đề xuất do AI tạo)
@@ -197,7 +204,7 @@ Trong code, "project" là **một art** (một canvas). Cấp gom nhiều art ch
 - **Nguồn sự thật** là `.squarel/project.json` (launcher ghi, Squarel chỉ đọc; trường lạ được giữ nguyên). Module: `src/store/workspace.ts` (đọc cấu hình, dò thư mục, chỉ mục, danh mục).
 - **Đọc dễ dãi:** file có thể bị sửa tay, nên chỉ bắt buộc `id` hợp lệ và `name` không rỗng (cắt còn 80 ký tự); thiếu `schema` thì coi là 1. Trường nào sai (`defaults.width: 0`, bảng màu lạ, `description` không phải chuỗi...) thì bỏ riêng trường đó và ghi log cảnh báo, không bỏ cả dự án. Tên bảng màu so không phân biệt hoa thường, bỏ qua `-` và `_` (`PICO-8` → `pico8`).
 - **Nhận dự án:** lúc MCP khởi động, dò ngược từ `CLAUDE_PROJECT_DIR` (không có thì `process.cwd()`) lên tối đa 32 cấp tới khi gặp `.squarel/project.json`. File hỏng (không đọc được, thiếu `id`/`name`) thì ghi log cảnh báo và coi như không có dự án. Việc nhận dự án không cần `DATA_DIR/workspaces/<id>.json`.
-- **Chỉ mục `DATA_DIR/workspaces/<id>.json`** do launcher quản lý (tạo khi thêm, xóa khi gỡ dự án). Squarel không bao giờ tạo mục thiếu, để dự án đã gỡ vẫn bị gỡ. Squarel chỉ sửa mục có sẵn khi thư mục mà mục đó trỏ tới không còn `.squarel/project.json` cùng `id` (thư mục đã bị chuyển); mục còn sống không bao giờ bị chuyển sang bản sao. CLI và `pnpm bridge` không dò dự án.
+- **Chỉ mục `DATA_DIR/workspaces/<id>.json`** do launcher quản lý (tạo khi thêm, xóa khi gỡ dự án). Squarel không bao giờ tạo mục thiếu, để dự án đã gỡ vẫn bị gỡ. Squarel chỉ sửa mục có sẵn khi thư mục mà mục đó trỏ tới không còn `.squarel/project.json` cùng `id` (thư mục đã bị chuyển); mục còn sống không bao giờ bị chuyển sang bản sao. CLI dò dự án từ `SQUAREL_PROJECT_DIR`, không có thì `INIT_CWD` (thư mục nơi chạy `pnpm`), rồi `process.cwd()`. `pnpm bridge` độc lập không có dự án nào: nó phục vụ art theo `ref` của các dự án trong chỉ mục `DATA_DIR/workspaces`.
 - **Mặc định:** `art_create` lấy `width`, `height`, `purpose`, `palette` từ `defaults` khi bỏ trống; không có dự án mà thiếu kích thước thì báo `INVALID`. Art mới (kể cả `photo_to_pixel` tạo art mới) thuộc dự án nhờ vị trí: nằm trong `<dự án>/squarel_art/`, `project.json` của art không còn trường `workspace`. Mỗi lần gọi tool, file cấu hình được đọc lại nên sửa trong launcher có hiệu lực ngay.
 - **Danh mục `.squarel/arts.md`:** sinh lại sau mỗi commit (kể cả từ bridge ở tiến trình khác, vì hook nằm trong `Store`), sau `art_import`, sau `export` và lúc MCP khởi động (chạy nền, không chờ trước khi kết nối, để thư viện lớn không làm chậm khởi động; phần hướng dẫn cho Claude chỉ đọc `project.json` của từng art). Ghi tạm + rename; lỗi chỉ ghi log, không làm hỏng commit.
 - **Xuất file:** art thuộc dự án có `exportDir` thì `export` chép thêm các file vào `<thư mục>/<exportDir>` (tự tạo thư mục). Quy tắc chung với launcher: `exportDir` phải là đường dẫn tương đối tới thư mục con nằm hẳn bên trong thư mục dự án; rỗng, `.`, đường dẫn tuyệt đối, `..` hoặc `../x` đều bị từ chối (thư mục tên `..assets` thì được). `exportDir` sai không làm hỏng lệnh `export`: file vẫn ghi vào `exports/`, bước chép bị bỏ qua và kết quả có dòng cảnh báo nêu lý do.
@@ -238,7 +245,7 @@ class ToolError extends Error {
 }
 ```
 
-- Mọi tool đều nhận tham số tuỳ chọn `project?: string`. Nếu bỏ trống thì dùng `session.activeProject`.
+- Tool đụng tới art nhận tham số tuỳ chọn `art?: string` (id art trong dự án hiện tại). Nếu bỏ trống thì dùng `session.activeProject`. Ngoài một dự án, các tool này báo `NO_PROJECT`.
 - Tool có sửa ảnh luôn nhận thêm `preview?: number`, mặc định 256px, đặt 0 để tắt preview.
 
 ### 4.2 Store (`src/store`)
@@ -246,8 +253,9 @@ class ToolError extends Error {
 ```ts
 interface Store {
   listProjects(): Promise<ProjectSummary[]>
-  createProject(p: { name: string; doc: PixelDoc; source: Source; workspace?: string }): Promise<ProjectSummary>
-  setWorkspace(slug: string, id: string | null): Promise<string | undefined>   // có khoá; trả về dự án cũ
+  createProject(p: { name: string; doc: PixelDoc; source: Source; slug?: string }): Promise<ProjectSummary>   // id trùng thì thêm -2, -3…
+  freeSlug(base: string): Promise<string>      // id chưa có thư mục trong store này (≤ 64 ký tự)
+  assertWritable(): void                       // ném lý do khi store chỉ đọc (art cũ, id dự án trùng)
   onCommit(fn: (e: { slug; versionId; doc }) => unknown): () => void          // hook sau commit
   readHead(slug: string): Promise<{ versionId: string; doc: PixelDoc }>
   commit(slug: string, c: { baseVersion: string; doc: PixelDoc; source: Source; label: string }): Promise<string>  // trả về versionId mới
@@ -571,23 +579,23 @@ Gọi thẳng `node` thay vì `pnpm`/`npx` để tránh phải bọc `cmd /c` tr
 | `frames[].durationMs` | `frame.duration` (đơn vị giây) |
 | `cels` | `cel.image` ở chế độ INDEXED. **Khi đọc:** chép ảnh vào bộ đệm cỡ toàn canvas tại `cel.position`. **Khi ghi:** dùng ảnh cỡ toàn canvas đặt tại (0,0) |
 | `meta.tags` | `sprite.tags` |
-| slug + `baseVersion` | `sprite.properties("squarel")` |
+| ref + `baseVersion` | `sprite.properties("squarel")` |
 
 ### 9.3 Giao thức bridge (JSON qua WebSocket)
 
 | Hướng | Tin nhắn | Ý nghĩa |
 |---|---|---|
-| extension → bridge | `hello { client:'aseprite', ext, aseprite }` | Bắt tay |
-| bridge → extension | `welcome { projects }` | Trả danh sách project |
-| extension → bridge | `open { slug }` | Mở một project |
-| bridge → extension | `doc { slug, versionId, doc }` | Toàn bộ PixelDoc (cel dạng RLE base64) |
-| extension → bridge | `cels { slug, baseVersion, doc, label? }` | Trạng thái hiện tại sau khi bạn vẽ |
-| bridge → extension | `ack { slug, versionId }` | Ghi thành công |
-| bridge → extension | `rebased { slug, versionId, doc, warnings }` | Đã gộp với một thay đổi mới hơn; extension áp lại doc này |
-| bridge → extension | `doc.updated { slug, versionId, source, label, doc }` | Claude, AI hoặc CLI vừa tạo version mới |
-| bridge → extension | `open.request { slug }` | `open_in_editor` yêu cầu mở project |
-| client → bridge | `status` | Hỏi ai đang kết nối. Bridge trả `status { version, clients }`, mỗi client là `{ name, ext?, app?, slug?, version?, connectedAt, lastSeen }`; `version` là id version PixelDoc client nhận hoặc ghi gần nhất, không phải phiên bản công cụ (đó là `app`). Launcher dùng để biết Aseprite đã kết nối chưa |
-| extension → bridge | `tool { id, name, input }` | Menu Xuất file, Lịch sử… gọi lại tool. Bridge trả `tool_result { id, ok, text, files? }` |
+| extension → bridge | `hello { client:'aseprite', ext, app, protocol: 2 }` | Bắt tay. Thiếu `protocol: 2` thì bridge gửi `error { code: 'extension-outdated' }` rồi đóng kết nối |
+| bridge → extension | `welcome { server, version, protocol: 2, arts }` | Trả danh sách art của mọi dự án (`arts`: `{ ref, project, projectName, art, name, head }[]`) |
+| extension → bridge | `open { ref }` | Mở một art; `ref` là `<id dự án>/<id art>` |
+| bridge → extension | `doc { ref, versionId, doc }` | Toàn bộ PixelDoc (cel dạng RLE base64) |
+| extension → bridge | `cels { ref, baseVersion, doc, label? }` | Trạng thái hiện tại sau khi bạn vẽ |
+| bridge → extension | `ack { ref, versionId }` | Ghi thành công |
+| bridge → extension | `rebased { ref, versionId, doc, warnings }` | Đã gộp với một thay đổi mới hơn; extension áp lại doc này |
+| bridge → extension | `doc.updated { ref, versionId, source, label, doc }` | Claude, AI hoặc CLI vừa tạo version mới |
+| bridge → extension | `open.request { ref }` | `open_in_editor` yêu cầu mở art |
+| client → bridge | `status` | Hỏi ai đang kết nối. Bridge trả `status { version, clients }`, mỗi client là `{ name, ext?, app?, ref?, version?, connectedAt, lastSeen }`; `version` là id version PixelDoc client nhận hoặc ghi gần nhất, không phải phiên bản công cụ (đó là `app`). Launcher dùng để biết Aseprite đã kết nối chưa |
+| extension → bridge | `tool { id, name, input, ref? }` | Menu Xuất file, Lịch sử… gọi lại tool; `ref` chọn dự án và art, thiếu thì bị từ chối với `NO_PROJECT`. Bridge trả `tool_result { id, ok, text, files? }` |
 | hai chiều | `error { code, message }` | Báo lỗi |
 
 **Quy tắc phía extension:**

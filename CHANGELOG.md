@@ -36,7 +36,6 @@ All notable changes to this project are documented here. The format follows [Kee
 - Duplicate project id guard: when two different folders (a copied folder or a second clone) declare the same id, the bridge refuses that id, MCP write tools are blocked and the instructions warn, and the launcher card shows a warning. Fix it by changing the id.
 - Launcher: Settings of a project can change its id, and the registry is updated.
 - Launcher Health checks that the Aseprite extension supports protocol 2, with an update button.
-
 - **Dự án (workspaces):** a project groups many arts and is tied to a folder. Open Claude Code in that folder, or in any subfolder, and Squarel recognises the project on its own.
   - The folder holds `AGENTS.md`, which carries the project's brief for every coding agent. It also holds `CLAUDE.md` with an `@AGENTS.md` import, `.squarel/project.json` (defaults, repos, export folder) and `.squarel/arts.md`, an art catalog Squarel keeps up to date.
   - Squarel's MCP server describes the project in its instructions.
@@ -58,7 +57,8 @@ All notable changes to this project are documented here. The format follows [Kee
 2. Create a project for your art in the launcher (Dự án → Dự án mới), or use an existing one.
 3. Move old art in. Either open the **Art cũ** card in the launcher and press **Chuyển vào dự án…** on each art, or open Claude in the project folder and ask it to run `art_import` with the art's slug (find slugs with `art_list { legacy: true }`).
 4. Update anything of yours that calls the old tool names or the `project` parameter, using the table above.
-5. Reopen sprites in Aseprite from the Squarel menu (Mở art…).
+5. Reopen sprites in Aseprite: in Aseprite use the Squarel menu **Open art…**, or in the launcher use the Aseprite page **Mở art…**.
+6. Backups: art now lives in each project's `squarel_art/`, so back up the project folders (for example with git: `project.json` and `versions/` are tracked). `DATA_DIR` keeps only logs, usage and legacy art that has not been moved yet; it no longer needs to hold your backup of finished art.
 
 ### Fixed
 

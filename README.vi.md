@@ -49,7 +49,7 @@ pnpm check
 
 | Biến | Ý nghĩa |
 |---|---|
-| `DATA_DIR` | Nơi lưu project. Để trong thư mục OneDrive hoặc Google Drive là có backup miễn phí |
+| `DATA_DIR` | Log, usage và art cũ. Art nằm trong thư mục `squarel_art/` của từng dự án: hãy backup thư mục dự án (ví dụ bằng git) |
 | `IMAGE_PROVIDER` | `cloudflare` (mặc định), `local-sd` hoặc `mock` (offline, dùng để thử) |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Dashboard Cloudflare → AI → Workers AI → *Use REST API*. Token cần quyền Workers AI |
 | `RETRO_DIFFUSION_API_KEY` | Tuỳ chọn. Chỉ dùng cho `quality: "high"` |
@@ -79,7 +79,7 @@ claude mcp add squarel --scope user -- node <repo>\src\mcp\index.ts
 pnpm aseprite:pack   # tạo squarel.aseprite-extension; nhấp đúp file này để cài
 ```
 
-Claude Code sẽ khởi động bridge ở `ws://127.0.0.1:4321/bridge`. Muốn vẽ mà không mở Claude Code, hãy chạy `pnpm bridge`. Trong Aseprite, dùng **File → Squarel → Open project…**, hoặc chỉ cần bảo Claude "mở trong Aseprite". Chưa có Aseprite? `pnpm aseprite:build` sẽ build nó từ source để dùng cá nhân (EULA của Aseprite cấm phân phối lại bản build đó). Chi tiết: [docs/aseprite.md](docs/aseprite.md).
+Claude Code sẽ khởi động bridge ở `ws://127.0.0.1:4321/bridge`. Muốn vẽ mà không mở Claude Code, hãy chạy `pnpm bridge`. Trong Aseprite, dùng **File → Squarel → Open art…**, hoặc chỉ cần bảo Claude "mở trong Aseprite". Chưa có Aseprite? `pnpm aseprite:build` sẽ build nó từ source để dùng cá nhân (EULA của Aseprite cấm phân phối lại bản build đó). Chi tiết: [docs/aseprite.md](docs/aseprite.md).
 
 ## Squarel và các MCP server Aseprite
 

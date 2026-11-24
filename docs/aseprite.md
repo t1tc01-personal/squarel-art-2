@@ -30,9 +30,9 @@ Aseprite không cho extension thêm menu riêng lên thanh menu, nên các mục
 | Mục | Việc |
 |---|---|
 | Connect / Disconnect | Kết nối tới bridge `ws://127.0.0.1:4321/bridge`. Mặc định tự kết nối khi mở Aseprite |
-| Open project… | Chọn project và mở thành sprite |
+| Open art… | Chọn art (của mọi dự án) và mở thành sprite |
 | Sync now | Gửi ngay trạng thái sprite hiện tại |
-| Export… | Gọi tool `export` qua bridge. File được ghi vào `DATA_DIR/projects/<slug>/exports` |
+| Export… | Gọi tool `export` qua bridge. File được ghi vào `<thư mục dự án>/squarel_art/<art>/exports` |
 | Settings… | Đổi cổng, token (tuỳ chọn), bật/tắt tự kết nối |
 
 ## Cách đồng bộ
@@ -58,7 +58,7 @@ Aseprite không cho extension thêm menu riêng lên thanh menu, nên các mục
 | palette (index 0 trong suốt) | palette của sprite, Indexed, `transparentColor = 0` |
 | layer (id cố định) | layer thường; id lưu trong `layer.properties.squarel_id` |
 | frame | frame (`duration` tính bằng giây); id lưu trong `sprite.properties.squarel_frames` |
-| slug / version gốc | `sprite.properties.squarel_slug` / `squarel_base` |
+| ref / version gốc | `sprite.properties.squarel_ref` (`<id dự án>/<id art>`) / `squarel_base` |
 
 **Giới hạn:**
 - Sprite phải ở chế độ **Indexed**.
@@ -77,7 +77,7 @@ $env:SQUAREL_NO_SYNC = "1"; & "<đường dẫn>aseprite.exe"
 
 1. Đặt `ASEPRITE_PATH` trong `.env`.
 2. Tool `open_in_editor`:
-   - gọi Aseprite CLI để tạo `projects/<slug>/work.aseprite`;
+   - gọi Aseprite CLI để tạo `<thư mục dự án>/squarel_art/<art>/work.aseprite`;
    - mở Aseprite với file đó.
 3. Mỗi lần bạn **Ctrl+S**, bridge đọc file qua CLI rồi tính diff, rebase và commit.
 

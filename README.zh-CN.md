@@ -49,7 +49,7 @@ pnpm check
 
 | 变量 | 含义 |
 |---|---|
-| `DATA_DIR` | 项目的存放位置。使用 OneDrive 或 Google Drive 文件夹即可免费获得备份 |
+| `DATA_DIR` | 存放日志、用量和旧作品。作品本身在各项目的 `squarel_art/` 文件夹中，请备份项目文件夹（例如用 git） |
 | `IMAGE_PROVIDER` | `cloudflare`（默认）、`local-sd` 或 `mock`（离线，用于试用） |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare 控制台 → AI → Workers AI → *Use REST API*。令牌需要具有 Workers AI 权限 |
 | `RETRO_DIFFUSION_API_KEY` | 可选。仅在 `quality: "high"` 时使用 |
@@ -79,7 +79,7 @@ claude mcp add squarel --scope user -- node <repo>\src\mcp\index.ts
 pnpm aseprite:pack   # 构建 squarel.aseprite-extension；双击即可安装
 ```
 
-Claude Code 会在 `ws://127.0.0.1:4321/bridge` 启动桥接服务。若想在不打开 Claude Code 的情况下绘制，请运行 `pnpm bridge`。在 Aseprite 中使用 **File → Squarel → Open project…**，或者直接让 Claude “在 Aseprite 中打开”。没有 Aseprite？`pnpm aseprite:build` 可以从源码构建，仅供个人使用（Aseprite 的 EULA 禁止再分发该构建版本）。详情：[docs/aseprite.md](docs/aseprite.md)。
+Claude Code 会在 `ws://127.0.0.1:4321/bridge` 启动桥接服务。若想在不打开 Claude Code 的情况下绘制，请运行 `pnpm bridge`。在 Aseprite 中使用 **File → Squarel → Open art…**，或者直接让 Claude “在 Aseprite 中打开”。没有 Aseprite？`pnpm aseprite:build` 可以从源码构建，仅供个人使用（Aseprite 的 EULA 禁止再分发该构建版本）。详情：[docs/aseprite.md](docs/aseprite.md)。
 
 ## Squarel 与 Aseprite MCP 服务器的对比
 
