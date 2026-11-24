@@ -304,6 +304,39 @@ RESULT = json.encode(s1.sent)`,
     expect(sent(r.sent)[1]).toMatchObject({ type: 'open', ref: 'p1/b' })
   })
 
+  it('colliding open dialog labels are made unique and each maps to its own ref', () => {
+    const out = runLua(
+      `${boot}
+       local shown, pick
+       function Dialog()
+         local d = { data = { ok = true } }
+         function d:combobox(o) shown = o; self.data[o.id] = o.options[pick] end
+         function d:button() end
+         function d:show() end
+         return d
+       end
+       local arts = json.encode({ type = 'arts', arts = {
+         { ref = 'game/hero', project = 'game', projectName = 'game', art = 'hero', name = 'Hero', head = 'v000001' },
+         { ref = 'game-2/hero', project = 'game-2', projectName = 'game', art = 'hero', name = 'Hero', head = 'v000001' },
+         { ref = 'x/idle', project = 'x', projectName = 'x', art = 'idle', name = 'Idle', head = 'v000001' } } })
+       local opened, options = {}, nil
+       for i = 1, 2 do
+         pick = i
+         s1.onreceive(WebSocketMessageType.TEXT, arts, '')
+         PLUGIN.commands.SquarelOpen.onclick()
+         s1.sent = {}
+         s1.onreceive(WebSocketMessageType.TEXT, arts, '')
+         options = shown.options
+         opened[i] = s1.sent[1]
+       end
+       RESULT = json.encode({ options = options, opened = opened })`,
+      { MOCK, HARNESS, DOC: JSON.stringify(serializeDoc(spriteDoc())) },
+    )
+    const r = JSON.parse(out)
+    expect(r.options).toEqual(['game / Hero (game/hero)', 'game / Hero (game-2/hero)', 'x / Idle'])
+    expect((r.opened as string[]).map((t) => JSON.parse(t).ref)).toEqual(['game/hero', 'game-2/hero'])
+  })
+
   it('an empty art list explains how to create one', () => {
     const out = runLua(
       `${boot}

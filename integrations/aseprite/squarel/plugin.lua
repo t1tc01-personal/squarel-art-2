@@ -135,9 +135,15 @@ local function pickArt()
     app.alert { title = 'Squarel', text = 'No art yet. Open Claude Code in a Squarel project and ask it to create one.' }
     return
   end
+  local labels, count = {}, {}
+  for i, a in ipairs(state.arts) do
+    labels[i] = (a.projectName or a.project) .. ' / ' .. (a.name or a.art)
+    count[labels[i]] = (count[labels[i]] or 0) + 1
+  end
   local names, refs = {}, {}
-  for _, a in ipairs(state.arts) do
-    local label = (a.projectName or a.project) .. ' / ' .. (a.name or a.art)
+  for i, a in ipairs(state.arts) do
+    local label = labels[i]
+    if count[label] > 1 then label = label .. ' (' .. a.ref .. ')' end
     names[#names + 1] = label
     refs[label] = a.ref
   end
