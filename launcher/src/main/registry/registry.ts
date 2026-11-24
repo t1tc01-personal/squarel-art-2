@@ -313,7 +313,7 @@ async function viewIntegration(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
-  recentProject?: string,
+  recentArt?: string,
 ): Promise<ComponentView> {
   const m = i.manifest
   const { note: iconNote, ...iconPart } = await loadIcon(i, d)
@@ -350,7 +350,7 @@ async function viewIntegration(
     toolsDir: join(d.env.LOCALAPPDATA ?? tmpdir(), 'SquarelArt', 'tools', m.id),
     ...(det.path ? { exe: det.path, exeDir: dirname(det.path) } : {}),
     ...(latest?.ok ? { version: latest.version } : {}),
-    ...(recentProject ? { recentProject } : {}),
+    ...(recentArt ? { recentProject: recentArt } : {}),
   }
   const subOrUndefined = (s: string) => {
     try {
@@ -381,11 +381,11 @@ async function viewIntegration(
   } else {
     // The default action comes first: it is the big Open button, the rest form the ▾ menu.
     for (const a of [...m.launch].sort((x, y) => Number(!!y.default) - Number(!!x.default))) {
-      // Hidden while it cannot run: a variable without value ({recentProject} with no project yet),
+      // Hidden while it cannot run: a variable without value ({recentProject} with no art yet),
       // or a bridge tool that needs the recent project when there is none.
       const label = subOrUndefined(a.label)
       if (label === undefined) continue
-      if (a.bridgeTool && !a.pickProject && !recentProject) continue
+      if (a.bridgeTool && !a.pickProject && !recentArt) continue
       actions.push({
         componentId: m.id,
         kind: 'launch',
@@ -418,7 +418,7 @@ export async function viewComponents(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
-  ctx: Pick<Ctx, 'launcherVersion' | 'isDev' | 'launcherUpdateReady'> & { recentProject?: string },
+  ctx: Pick<Ctx, 'launcherVersion' | 'isDev' | 'launcherUpdateReady'> & { recentArt?: string },
 ): Promise<ComponentView[]> {
   const full: Ctx = {
     squarelDir: state.squarelDir,
@@ -428,8 +428,6 @@ export async function viewComponents(
     ...(ctx.launcherUpdateReady ? { launcherUpdateReady: ctx.launcherUpdateReady } : {}),
   }
   const core = Promise.all(reg.core.map((c) => viewCore(c, full, d)))
-  const ints = Promise.all(
-    reg.integrations.map((i) => viewIntegration(i, state, envDoc, d, ctx.recentProject)),
-  )
+  const ints = Promise.all(reg.integrations.map((i) => viewIntegration(i, state, envDoc, d, ctx.recentArt)))
   return [...(await core), ...(await ints)]
 }

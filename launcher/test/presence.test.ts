@@ -111,31 +111,31 @@ describe('connections presence', () => {
     expect(items.map((i) => i.title)).toEqual(['Phiên · Game dungeon', 'Phiên · my-game', 'Phiên · my-game'])
   })
 
-  it('maps bridge clients to integrations by bridge.client; unknown clients are not shown', async () => {
+  it('presence subtitle shows the ref; maps bridge clients to integrations by bridge.client; unknown clients are not shown', async () => {
     const clients = [
-      { name: 'aseprite', slug: 'hero', app: '1.3.18', connectedAt: iso(9), lastSeen: iso(1) },
-      { name: 'mystery', slug: 'x', app: '9', connectedAt: iso(9), lastSeen: iso(1) },
+      { name: 'aseprite', ref: 'a/hero', app: '1.3.18', connectedAt: iso(9), lastSeen: iso(1) },
+      { name: 'mystery', ref: 'a/x', app: '9', connectedAt: iso(9), lastSeen: iso(1) },
     ]
     const g = await run({}, { b: bridge({ clients }), r: reg('aseprite') })
     expect(g[1]?.items.map((i) => [i.title, i.subtitle, i.status])).toEqual([
-      ['Aseprite', 'hero · 1.3.18', 'online'],
+      ['Aseprite', 'a/hero · 1.3.18', 'online'],
     ])
     expect(g[1]?.items[0]?.componentId).toBe('aseprite')
   })
 
-  it('two clients on the same slug get distinct ids', async () => {
+  it('two clients on the same ref get distinct ids', async () => {
     const clients = [
-      { name: 'aseprite', slug: 'hero', app: '1.3.18', connectedAt: iso(9), lastSeen: iso(1) },
-      { name: 'aseprite', slug: 'hero', app: '1.3.18', connectedAt: iso(5), lastSeen: iso(1) },
+      { name: 'aseprite', ref: 'a/hero', app: '1.3.18', connectedAt: iso(9), lastSeen: iso(1) },
+      { name: 'aseprite', ref: 'a/hero', app: '1.3.18', connectedAt: iso(5), lastSeen: iso(1) },
       { name: 'aseprite', connectedAt: iso(5), lastSeen: iso(1) },
       { name: 'aseprite', connectedAt: iso(4), lastSeen: iso(1) },
-      { name: 'aseprite', slug: 'hero~2', connectedAt: iso(3), lastSeen: iso(1) },
+      { name: 'aseprite', ref: 'a/hero~2', connectedAt: iso(3), lastSeen: iso(1) },
     ]
     const g = await run({}, { b: bridge({ clients }), r: reg('aseprite') })
     const ids = g[1]?.items.map((i) => i.id) ?? []
     expect(ids).toHaveLength(5)
     expect(new Set(ids).size).toBe(5)
-    expect(ids[0]).toBe('tool-aseprite-hero')
+    expect(ids[0]).toBe('tool-aseprite-a/hero')
   })
 
   it("neurons left sums today's cloudflare usage only", async () => {

@@ -41,7 +41,7 @@ test('window.squarel exposes only the typed API and main validates calls', async
         'onTaskEvent',
         'pickFile',
         'pickFolder',
-        'recentProjects',
+        'recentArts',
         'reveal',
         'runAction',
         'runCheck',

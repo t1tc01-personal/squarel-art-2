@@ -66,7 +66,7 @@ function harness(fx: Fixtures, over: Partial<ActionCtx> = {}) {
     isDev: false,
     toolsDir: (id) => join('D:', 'tools', id),
     env: parseEnv(''),
-    projects: async () => [],
+    artRefs: async () => [],
     bridgeTool: async () => '',
     openFolder: async () => {},
     homeDir: join('D:', 'home'),

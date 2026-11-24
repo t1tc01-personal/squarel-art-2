@@ -176,9 +176,9 @@ export async function buildPresence(
     if (!want) continue
     for (const c of bridge.clients.filter((x) => x.name === want)) {
       tools.push({
-        id: unique(`tool-${i.manifest.id}-${c.slug ?? c.name}`),
+        id: unique(`tool-${i.manifest.id}-${c.ref ?? c.name}`),
         title: i.manifest.name,
-        subtitle: [c.slug, c.app].filter(Boolean).join(' · ') || 'Đã kết nối',
+        subtitle: [c.ref, c.app].filter(Boolean).join(' · ') || 'Đã kết nối',
         status: 'online',
         icon: 'box',
         iconKind: 'name',

@@ -35,16 +35,16 @@ const actionId = z.string().regex(/^[A-Za-z0-9][\w.-]{0,63}$/)
 const level = z.enum(['ok', 'warn', 'error', 'running', 'idle'])
 const setupStepSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal('done')])
 
+/** `<project id>/<art id>`: how the bridge and the launcher address one art. */
+export const ART_REF = /^[a-z0-9][a-z0-9-]{0,63}\/[a-z0-9][a-z0-9-]{0,63}$/
+
 export const actionRefSchema = z.strictObject({
   componentId: compId,
   kind: z.enum(['install', 'update', 'launch', 'extension', 'fix', 'terminal']),
   id: actionId,
   label: str(200),
   needsConsent: z.strictObject({ command: str(4000), sizeHint: str(100).optional() }).optional(),
-  project: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
-    .optional(),
+  art: z.string().regex(ART_REF).optional(),
   pickProject: z.boolean().optional(),
 })
 
@@ -197,15 +197,16 @@ export const fileFilterSchema = z.strictObject({
 })
 export type FileFilter = z.infer<typeof fileFilterSchema>
 
-export const recentProjectSchema = z.object({
-  slug: str(64),
+export const recentArtSchema = z.object({
+  ref: z.string().regex(ART_REF),
   name: str(300),
+  projectName: str(300),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   version: str(40),
   updatedAt: str(40),
 })
-export type RecentProject = z.infer<typeof recentProjectSchema>
+export type RecentArt = z.infer<typeof recentArtSchema>
 
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
 export type LogLevel = (typeof LOG_LEVELS)[number]
@@ -446,7 +447,7 @@ export const CHANNELS = {
     output: z.string().nullable(),
   },
   'shell:reveal': { input: z.strictObject({ path: z.string().min(1).max(32_767) }), output: none },
-  'projects:recent': { input: none, output: z.array(recentProjectSchema).max(3) },
+  'arts:recent': { input: none, output: z.array(recentArtSchema).max(3) },
   'logs:read': { input: logsQuerySchema, output: logsResultSchema },
   /** Main redacts the text again before it reaches the clipboard. */
   'clipboard:write': { input: z.strictObject({ text: z.string().max(1_000_000) }), output: none },
@@ -520,7 +521,7 @@ export interface SquarelApi {
   pickFolder(): Promise<string | null>
   pickFile(input: { filters: FileFilter[] }): Promise<string | null>
   reveal(input: { path: string }): Promise<void>
-  recentProjects(): Promise<RecentProject[]>
+  recentArts(): Promise<RecentArt[]>
   readLogs(query: LogsQuery): Promise<LogsResult>
   writeClipboard(input: { text: string }): Promise<void>
   openLicense(): Promise<void>

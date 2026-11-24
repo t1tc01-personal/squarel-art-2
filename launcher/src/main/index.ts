@@ -98,7 +98,7 @@ const REPO_URL = 'https://github.com/t1tc01-personal/squarel-art-2'
  */
 interface TestSink {
   launched: unknown[]
-  bridgeTools: { name: string; input: unknown }[]
+  bridgeTools: { name: string; input: unknown; ref?: string }[]
   opened: string[]
   folders: string[]
   external: string[]
@@ -548,13 +548,13 @@ async function startServices(): Promise<IpcHandlers> {
     clipboard: {
       writeText: (t) => (testSink ? void testSink.clipboard.push(t) : clipboard.writeText(t)),
     },
-    bridgeTool: async (name, input) => {
+    bridgeTool: async (name, input, ref) => {
       if (testSink && fake) {
-        testSink.bridgeTools.push({ name, input })
+        testSink.bridgeTools.push({ name, input, ...(ref ? { ref } : {}) })
         return ''
       }
       if (!sup) throw new Error('Bridge chưa chạy')
-      return sup.sendTool(name, input)
+      return sup.sendTool(name, input, ref)
     },
     openExternal: async (url) => {
       if (!url.startsWith('https://')) throw new Error('Chỉ mở trang https')

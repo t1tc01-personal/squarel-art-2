@@ -14,6 +14,8 @@ const LOCAL = join(ROOT, 'local')
 const APPDATA = join(ROOT, 'roaming')
 const LOGS = join(APPDATA, 'SquarelArt Launcher', 'logs')
 const ELSEWHERE = join(ROOT, 'elsewhere')
+const FOLDER_A = join(ROOT, 'proj-a')
+const FOLDER_B = join(ROOT, 'proj-b')
 const LICENSE = join(ROOT, 'LICENSE.md')
 const APP_URL = 'file:///app/renderer/index.html'
 const APP: SenderInfo = { url: APP_URL, fromAppWindow: true }
@@ -35,6 +37,29 @@ function setup(fx: Fixtures = {}, over: Partial<IpcContext> = {}) {
       updatedAt: '2026-01-03T00:00:00Z',
       head: 'v000002',
     }),
+    // Two indexed projects: `b/hero` is the newest art, `a/cat` the second.
+    [join(DATA, 'workspaces', 'a.json')]: JSON.stringify({
+      schema: 1,
+      id: 'a',
+      name: 'Alpha',
+      folder: FOLDER_A,
+    }),
+    [join(DATA, 'workspaces', 'b.json')]: JSON.stringify({
+      schema: 1,
+      id: 'b',
+      name: 'Beta',
+      folder: FOLDER_B,
+    }),
+    [join(FOLDER_A, 'squarel_art', 'cat', 'project.json')]: JSON.stringify({
+      name: 'Cat',
+      updatedAt: '2026-01-03T00:00:00Z',
+      head: 'v000002',
+    }),
+    [join(FOLDER_B, 'squarel_art', 'hero', 'project.json')]: JSON.stringify({
+      name: 'Hero',
+      updatedAt: '2026-01-05T00:00:00Z',
+      head: 'v000001',
+    }),
     [join(LOCAL, 'SquarelArt', 'tools', 'aseprite', 'build.log')]: 'x',
     [join(LOGS, 'launcher.log')]: 'x',
     [join(ELSEWHERE, 'secret.txt')]: 'x',
@@ -44,7 +69,7 @@ function setup(fx: Fixtures = {}, over: Partial<IpcContext> = {}) {
   const d = createDeps('fake', { launched, ...fx, files, env: { APPDATA, LOCALAPPDATA: LOCAL, ...fx.env } })
   const opened: string[] = []
   const clipboard: string[] = []
-  const bridgeTools: { name: string; input: unknown }[] = []
+  const bridgeTools: { name: string; input: unknown; ref?: string }[] = []
   const folders: string[] = []
   let state: LauncherState = {
     schema: 1,
@@ -90,8 +115,8 @@ function setup(fx: Fixtures = {}, over: Partial<IpcContext> = {}) {
       return ''
     },
     clipboard: { writeText: (t) => void clipboard.push(t) },
-    bridgeTool: async (name, input) => {
-      bridgeTools.push({ name, input })
+    bridgeTool: async (name, input, ref) => {
+      bridgeTools.push({ name, input, ...(ref ? { ref } : {}) })
       return 'ok'
     },
     openFolder: async (p) => void folders.push(p),
@@ -154,7 +179,7 @@ describe('ipc handlers', () => {
     })) as LauncherState
     expect(st.closeToTray).toBe(false)
     expect(st.selected).toEqual(['aseprite'])
-    expect(h.channels).toContain('projects:recent')
+    expect(h.channels).toContain('arts:recent')
   })
 
   it('env:set refuses keys outside the allow-list', async () => {
@@ -406,21 +431,27 @@ describe('ipc handlers', () => {
     expect(events.filter((e) => e.event === 'checks:changed')).toHaveLength(0)
   })
 
-  it('projects:recent lists the newest projects of DATA_DIR', async () => {
+  it('arts:recent gathers the newest arts of two projects with refs', async () => {
     const { h } = setup({
       files: {
-        [join(DATA, 'projects', 'dog', 'project.json')]: JSON.stringify({
-          slug: 'dog',
+        [join(FOLDER_A, 'squarel_art', 'dog', 'project.json')]: JSON.stringify({
           name: 'Dog',
-          updatedAt: '2026-01-05T00:00:00Z',
+          updatedAt: '2026-01-04T00:00:00Z',
           head: 'v000001',
         }),
-        [join(DATA, 'projects', 'BAD', 'project.json')]: '{}',
+        [join(FOLDER_A, 'squarel_art', 'BAD', 'project.json')]: '{}',
       },
     })
-    const list = (await h.handle('projects:recent', APP, undefined)) as { slug: string; version: string }[]
-    expect(list.map((p) => p.slug)).toEqual(['dog', 'cat'])
-    expect(list[1]?.version).toBe('v000002')
+    const list = (await h.handle('arts:recent', APP, undefined)) as {
+      ref: string
+      name: string
+      projectName: string
+      version: string
+    }[]
+    expect(list.map((p) => p.ref)).toEqual(['b/hero', 'a/dog', 'a/cat'])
+    expect(list.map((p) => p.projectName)).toEqual(['Beta', 'Alpha', 'Alpha'])
+    expect(list[2]?.name).toBe('Cat')
+    expect(list[2]?.version).toBe('v000002')
   })
 
   it('window:close hides to the tray only when closeToTray is on', async () => {
@@ -487,14 +518,29 @@ describe('launch actions (from the manifest only)', () => {
     expect(done).toHaveLength(2)
   })
 
-  it('bridge tools get the recent project from DATA_DIR, or a picked existing one', async () => {
+  it('a pickProject action refuses a ref that does not exist', async () => {
+    const { h, bridgeTools, events } = withAseprite()
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    await h.handle('action:run', APP, ref('open-project', { art: 'b/nope' }))
+    await h.idle()
+    await h.handle('action:run', APP, ref('open-project', { art: 'zz/hero' }))
+    await h.idle()
+    expect(bridgeTools).toEqual([])
+    const ends = events
+      .filter((e) => e.event === 'task:event')
+      .map((e) => e.payload as { kind?: string })
+      .filter((p) => p.kind === 'done' || p.kind === 'error')
+    expect(ends.map((p) => p.kind)).toEqual(['error', 'error'])
+  })
+
+  it('open-recent sends open_in_editor with the newest ref; a picked existing ref is used', async () => {
     const { h, bridgeTools, events } = withAseprite()
     await h.handle('state:set', APP, { selected: ['aseprite'] })
     await h.handle('action:run', APP, ref('open-recent'))
     await h.idle()
-    expect(bridgeTools).toEqual([{ name: 'open_in_editor', input: { art: 'cat' } }])
+    expect(bridgeTools).toEqual([{ name: 'open_in_editor', input: {}, ref: 'b/hero' }])
 
-    await h.handle('action:run', APP, ref('open-project', { project: 'nope' }))
+    await h.handle('action:run', APP, ref('open-project', { art: 'a/nope' }))
     await h.idle()
     expect(bridgeTools).toHaveLength(1)
     const ends = events
@@ -502,11 +548,11 @@ describe('launch actions (from the manifest only)', () => {
       .map((e) => e.payload as { kind?: string })
       .filter((p) => p.kind === 'done' || p.kind === 'error')
     expect(ends.at(-1)?.kind).toBe('error')
-    await h.handle('action:run', APP, ref('open-project', { project: 'cat' }))
+    await h.handle('action:run', APP, ref('open-project', { art: 'a/cat' }))
     await h.idle()
-    expect(bridgeTools.at(-1)).toEqual({ name: 'open_in_editor', input: { art: 'cat' } })
-    // A path is never a valid project.
-    await expect(h.handle('action:run', APP, ref('open-project', { project: '..\\x' }))).rejects.toThrow(
+    expect(bridgeTools.at(-1)).toEqual({ name: 'open_in_editor', input: {}, ref: 'a/cat' })
+    // A path is never a valid art ref.
+    await expect(h.handle('action:run', APP, ref('open-project', { art: '..\\x' }))).rejects.toThrow(
       /không hợp lệ/,
     )
   })
@@ -524,16 +570,17 @@ describe('launch actions (from the manifest only)', () => {
     const labels = comps.find((c) => c.id === 'aseprite')?.actions.filter((a) => a.kind === 'launch')
     expect(labels?.map((a) => a.label)).toEqual([
       'Mở Aseprite',
-      'Mở project…',
-      'Mở cat',
+      'Mở art…',
+      'Mở b/hero',
       'Mở không đồng bộ',
       'Mở thư mục cài đặt',
     ])
   })
 
-  it('hides {recentProject} actions while there is no project', async () => {
+  it('hides {recentProject} actions while there is no art', async () => {
     const { h, d } = withAseprite()
-    await d.fs.rm(join(DATA, 'projects', 'cat', 'project.json'))
+    await d.fs.rm(join(FOLDER_A, 'squarel_art', 'cat', 'project.json'))
+    await d.fs.rm(join(FOLDER_B, 'squarel_art', 'hero', 'project.json'))
     await h.handle('state:set', APP, { selected: ['aseprite'] })
     const comps = (await h.handle('components:list', APP, undefined)) as {
       id: string

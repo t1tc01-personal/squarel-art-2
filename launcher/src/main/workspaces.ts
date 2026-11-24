@@ -11,6 +11,7 @@ import { win32 } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import {
   type ArtView,
+  type RecentArt,
   WORKSPACE_ID,
   WORKSPACE_PALETTES,
   WORKSPACE_PURPOSES,
@@ -605,6 +606,37 @@ async function readArtsIn(ctx: WorkspaceCtx, dir: string): Promise<ArtMeta[]> {
 /** The arts of a project folder: `<folder>/squarel_art/<id>/project.json`. */
 export function readArts(ctx: WorkspaceCtx, folder: string): Promise<ArtMeta[]> {
   return readArtsIn(ctx, artsDirOf(folder))
+}
+
+/** Every art of every indexed project as `<project id>/<art id>`, newest first. */
+async function allArts(ctx: WorkspaceCtx): Promise<{ ref: string; entry: IndexEntry; art: ArtMeta }[]> {
+  const out: { ref: string; entry: IndexEntry; art: ArtMeta }[] = []
+  for (const e of await readIndex(ctx))
+    for (const art of await readArts(ctx, e.folder)) out.push({ ref: `${e.id}/${art.slug}`, entry: e, art })
+  return out.sort((a, b) => b.art.updatedAt.localeCompare(a.art.updatedAt) || a.ref.localeCompare(b.ref))
+}
+
+/** Refs of all arts of all indexed projects (checks a `pickProject` choice). */
+export async function artRefs(ctx: WorkspaceCtx): Promise<string[]> {
+  return (await allArts(ctx)).map((x) => x.ref)
+}
+
+const pickSize = ({ width, height }: { width?: number; height?: number }) =>
+  width && height ? { width, height } : {}
+
+/** The newest `limit` arts across all indexed projects, the top ones with their size. */
+export async function recentArts(ctx: WorkspaceCtx, limit: number): Promise<RecentArt[]> {
+  const top = (await allArts(ctx)).slice(0, limit)
+  return Promise.all(
+    top.map(async ({ ref, entry: e, art: a }) => ({
+      ref,
+      name: a.name,
+      projectName: e.name,
+      version: a.head,
+      updatedAt: a.updatedAt,
+      ...pickSize(await docSize(ctx, artsDirOf(e.folder), a)),
+    })),
+  )
 }
 
 const asBuffer = (raw: unknown) => (Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'latin1'))

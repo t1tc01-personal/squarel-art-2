@@ -344,7 +344,7 @@ describe('setup actions', () => {
       defaultInstall: INSTALL,
       homeDir: 'D:\\home',
       env: parseEnv(''),
-      projects: async () => [],
+      artRefs: async () => [],
       bridgeTool: async () => '',
       openFolder: async () => {},
       openExternal: async (u) => void external.push(u),

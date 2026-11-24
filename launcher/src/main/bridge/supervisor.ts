@@ -42,7 +42,7 @@ export interface BridgeSupervisor {
   stop(): Promise<void>
   state(): BridgeState
   onChange(cb: (s: BridgeState) => void): () => void
-  sendTool(name: string, input: unknown): Promise<string>
+  sendTool(name: string, input: unknown, ref?: string): Promise<string>
   /** Synchronous last-resort for process exit / crash paths: kills our own child (never an attached bridge) and stops. */
   killOwnChild(): void
 }
@@ -75,7 +75,7 @@ function sameClients(a: BridgeClientInfo[], b: BridgeClientInfo[]): boolean {
     return (
       !!y &&
       x.name === y.name &&
-      x.slug === y.slug &&
+      x.ref === y.ref &&
       x.lastSeen === y.lastSeen &&
       x.version === y.version &&
       x.app === y.app &&
@@ -342,9 +342,9 @@ export function createBridgeSupervisor(opts: BridgeSupervisorOptions, d: Deps): 
       set('down', [])
     },
 
-    sendTool(name, input) {
+    sendTool(name, input, ref) {
       if (!conn) return Promise.reject(new Error('Bridge chưa kết nối'))
-      return conn.tool(name, input, toolTimeoutMs(name))
+      return conn.tool(name, input, toolTimeoutMs(name), ref)
     },
   }
 }

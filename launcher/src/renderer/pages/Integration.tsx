@@ -5,7 +5,7 @@
  */
 import { type CSSProperties, useEffect, useState } from 'react'
 import type { ActionRef, CheckResult, ComponentView, Level } from '../../shared/model'
-import { api, type RecentProject } from '../api'
+import { api, type RecentArt } from '../api'
 import { errorText, report, useData, useTasks } from '../app-context'
 import { Banner } from '../components/Banner'
 import { Button } from '../components/Button'
@@ -63,12 +63,12 @@ function InfoCard({
 
 const CHECK_LEVEL: Record<CheckResult['result'], Level> = { pass: 'ok', warn: 'warn', fail: 'error' }
 
-function ProjectPicker({ onPick, onClose }: { onPick(slug: string): void; onClose(): void }) {
-  const [projects, setProjects] = useState<RecentProject[] | null>(null)
+function ProjectPicker({ onPick, onClose }: { onPick(ref: string): void; onClose(): void }) {
+  const [arts, setArts] = useState<RecentArt[] | null>(null)
   useEffect(() => {
-    api.recentProjects().then(setProjects, (e) => {
-      report('projects:recent')(e)
-      setProjects([])
+    api.recentArts().then(setArts, (e) => {
+      report('arts:recent')(e)
+      setArts([])
     })
   }, [])
   return (
@@ -81,19 +81,19 @@ function ProjectPicker({ onPick, onClose }: { onPick(slug: string): void; onClos
         onKeyDown={(e) => e.key === 'Escape' && onClose()}
       >
         <h2 id="pick-title" className="modal-title">
-          Chọn project
+          Chọn art
         </h2>
-        {projects === null ? (
+        {arts === null ? (
           <p className="modal-text">Đang đọc…</p>
-        ) : projects.length === 0 ? (
-          <p className="modal-text">Chưa có project nào.</p>
+        ) : arts.length === 0 ? (
+          <p className="modal-text">Chưa có art nào.</p>
         ) : (
           <ul className="pick-list">
-            {projects.map((p) => (
-              <li key={p.slug}>
-                <button type="button" className="pick-item" onClick={() => onPick(p.slug)}>
+            {arts.map((p) => (
+              <li key={p.ref}>
+                <button type="button" className="pick-item" onClick={() => onPick(p.ref)}>
                   <span className="row-title">{p.name}</span>
-                  <span className="row-sub mono-small">{p.slug}</span>
+                  <span className="row-sub mono-small">{p.ref}</span>
                 </button>
               </li>
             ))}
@@ -231,10 +231,10 @@ function Overview({ c, checks, checked }: { c: ComponentView; checks: CheckResul
       {picking && (
         <ProjectPicker
           onClose={() => setPicking(null)}
-          onPick={(slug) => {
+          onPick={(artRef) => {
             const ref = picking
             setPicking(null)
-            void run({ ...ref, project: slug })
+            void run({ ...ref, art: artRef })
           }}
         />
       )}

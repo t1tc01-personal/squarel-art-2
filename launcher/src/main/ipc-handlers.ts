@@ -6,7 +6,6 @@
  */
 
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { gunzipSync } from 'node:zlib'
 import { substitute } from '@squarel/integration-schema'
 import type { z } from 'zod'
 import {
@@ -22,7 +21,6 @@ import {
   type FileFilter,
   IMAGE_PROVIDERS,
   type LauncherStateView,
-  type RecentProject,
   SECRET_ENV_KEYS,
   type SetupInfo,
   type UpdatesInfo,
@@ -53,12 +51,14 @@ import { planSquarelUpdate } from './updates/squarel'
 import { maskCredentials, showArgv } from './updates/tools'
 import type { Latest } from './versions'
 import {
+  artRefs,
   createWorkspace,
   getWorkspace,
   inspectFolder,
   legacyArts,
   listWorkspaces,
   openClaude,
+  recentArts,
   removeWorkspace,
   updateWorkspace,
   type WorkspaceCtx,
@@ -119,7 +119,7 @@ export interface IpcContext {
   openPath(path: string): Promise<string>
   clipboard: { writeText(text: string): void }
   /** Tool call over the launcher's bridge connection; rejects when the bridge is not running. */
-  bridgeTool(name: string, input: unknown): Promise<string>
+  bridgeTool(name: string, input: unknown, ref?: string): Promise<string>
   /** Opens a folder in the file manager; must refuse anything that is not a directory. */
   openFolder(path: string): Promise<void>
   /** shell.openExternal for https URLs from main's own fixed tables (official download pages). */
@@ -151,8 +151,6 @@ export interface IpcHandlers {
 }
 
 const UNC = /^[\\/]{2}/
-const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/
-const VERSION_ID = /^v\d{6}$/
 const MAX_TEXT = 20_000
 
 const errMsg = (e: unknown) => String((e as Error)?.message ?? e)
@@ -543,7 +541,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     const s = await getState()
     const env = await readEnv(s)
     const p = paths()
-    const recent = await newestProjectSlug(s, env)
+    const wc = await wsCtx()
+    const recent = (await recentArts(wc, 1))[0]?.ref
     return {
       actx: {
         d,
@@ -553,9 +552,9 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         isDev: ctx.isDev,
         toolsDir: p.toolsDir,
         env,
-        ...(recent ? { recentProject: recent } : {}),
-        projects: () => projectSlugs(s, env),
-        bridgeTool: (name, input) => ctx.bridgeTool(name, input),
+        ...(recent ? { recentArt: recent } : {}),
+        artRefs: () => artRefs(wc),
+        bridgeTool: (name, input, ref) => ctx.bridgeTool(name, input, ref),
         openFolder: (path) => ctx.openFolder(path),
         defaultInstall: p.defaultInstall,
         homeDir: ctx.homeDir,
@@ -614,89 +613,6 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     ctx.showItemInFolder(real)
   }
 
-  // ---- projects:recent ----------------------------------------------------------------------
-  /** Slug of the most recently updated project: project.json `updatedAt` only, no version files. */
-  async function newestProjectSlug(s: LauncherState, env: EnvDoc): Promise<string | undefined> {
-    const projects = join(dataDir(s, env), 'projects')
-    let best: { slug: string; at: string } | undefined
-    for (const slug of await projectSlugs(s, env)) {
-      try {
-        const file = join(projects, slug, 'project.json')
-        if ((await d.fs.stat(file)).size > 64 * 1024) continue
-        const raw = JSON.parse(String(await d.fs.readFile(file, 'utf8')).replace(/^﻿/, ''))
-        if (typeof raw?.updatedAt !== 'string' || typeof raw?.head !== 'string') continue
-        if (!best || raw.updatedAt > best.at) best = { slug, at: raw.updatedAt }
-      } catch {}
-    }
-    return best?.slug
-  }
-
-  /** Project folders of DATA_DIR that have a project.json. */
-  async function projectSlugs(s: LauncherState, env: EnvDoc): Promise<string[]> {
-    const projects = join(dataDir(s, env), 'projects')
-    let names: string[]
-    try {
-      names = (await d.fs.readdir(projects)).map(String).filter((n) => SLUG.test(n))
-    } catch {
-      return []
-    }
-    const out: string[] = []
-    for (const n of names) {
-      try {
-        await d.fs.stat(join(projects, n, 'project.json'))
-        out.push(n)
-      } catch {}
-    }
-    return out
-  }
-
-  async function recentProjects(): Promise<RecentProject[]> {
-    const s = await getState()
-    const projects = join(dataDir(s, await readEnv(s)), 'projects')
-    let names: string[]
-    try {
-      names = (await d.fs.readdir(projects)).map(String).filter((n) => SLUG.test(n))
-    } catch {
-      return []
-    }
-    const infos: RecentProject[] = []
-    for (const slug of names) {
-      try {
-        const file = join(projects, slug, 'project.json')
-        if ((await d.fs.stat(file)).size > 64 * 1024) continue
-        const raw = JSON.parse(String(await d.fs.readFile(file, 'utf8')).replace(/^﻿/, ''))
-        if (typeof raw?.updatedAt !== 'string' || typeof raw?.head !== 'string') continue
-        infos.push({
-          slug,
-          name: typeof raw.name === 'string' ? raw.name.slice(0, 300) : slug,
-          version: VERSION_ID.test(raw.head) ? raw.head : '',
-          updatedAt: raw.updatedAt.slice(0, 40),
-        })
-      } catch {
-        /* broken project: skip */
-      }
-    }
-    infos.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    const top = infos.slice(0, 3)
-    for (const p of top) {
-      if (!p.version) continue
-      try {
-        const file = join(projects, p.slug, 'versions', `${p.version}.json.gz`)
-        if ((await d.fs.stat(file)).size > 16 * 1024 * 1024) continue
-        const buf = Buffer.from((await d.fs.readFile(file)) as Uint8Array)
-        const json = JSON.parse(gunzipSync(buf, { maxOutputLength: 256 * 1024 * 1024 }).toString('utf8'))
-        const { width, height } = json?.doc ?? {}
-        if (Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0) {
-          p.width = width
-          p.height = height
-        }
-      } catch {
-        /* size is optional */
-      }
-    }
-    return top
-  }
-
   // ---- Dự án (workspaces) ------------------------------------------------------------------
   async function wsCtx(): Promise<WorkspaceCtx> {
     const s = await getState()
@@ -741,12 +657,12 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'components:list': async () => {
       const s = await getState()
       const env = await readEnv(s)
-      const recent = await newestProjectSlug(s, env)
+      const recent = (await recentArts(await wsCtx(), 1))[0]?.ref
       const ready = launcherReady().launcherUpdateReady
       return viewComponents(await registry(s), s, env, d, {
         launcherVersion: ctx.launcherVersion,
         isDev: ctx.isDev,
-        ...(recent ? { recentProject: recent } : {}),
+        ...(recent ? { recentArt: recent } : {}),
         ...(ready ? { launcherUpdateReady: ready } : {}),
       })
     },
@@ -796,7 +712,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       await revealPath(path)
       return undefined
     },
-    'projects:recent': () => recentProjects(),
+    'arts:recent': async () => recentArts(await wsCtx(), 3),
     'logs:read': async (query) => {
       const s = await getState()
       const env = await readEnv(s)

@@ -6,7 +6,7 @@ export interface BridgeClientInfo {
   name: string
   ext?: string
   app?: string
-  slug?: string
+  ref?: string
   version?: string
   connectedAt: string
   lastSeen: string

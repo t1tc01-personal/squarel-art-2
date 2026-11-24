@@ -63,7 +63,7 @@ export class BridgeConnection {
   }
 
   /** Run a Squarel tool through the bridge; resolves with the result text, rejects when the tool failed. */
-  tool(name: string, input: unknown, timeoutMs: number): Promise<string> {
+  tool(name: string, input: unknown, timeoutMs: number, ref?: string): Promise<string> {
     return new Promise((resolve, reject) => {
       if (this.closed) return reject(new Error('Bridge chưa kết nối'))
       const id = `launcher-${++this.seq}`
@@ -74,7 +74,7 @@ export class BridgeConnection {
       }, timeoutMs)
       this.toolWaiters.set(id, w)
       this.sendRaw(
-        { type: 'tool', id, name, input },
+        { type: 'tool', id, name, input, ref },
         () => {
           this.toolWaiters.delete(id)
           this.d.clearTimer(w.timer)
@@ -196,7 +196,7 @@ export function connectBridge(
   sock.on('open', () => {
     if (settled) return
     try {
-      sock.send(JSON.stringify({ type: 'hello', client: 'launcher' }))
+      sock.send(JSON.stringify({ type: 'hello', client: 'launcher', protocol: 2 }))
       sock.send(JSON.stringify({ type: 'status' }))
     } catch (e) {
       finish({ kind: 'foreign', reason: (e as Error).message })

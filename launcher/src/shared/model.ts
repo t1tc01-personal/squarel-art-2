@@ -27,10 +27,10 @@ export interface ActionRef {
   label: string
   needsConsent?: { command: string; sizeHint?: string }
   /**
-   * Launch actions with `pickProject` only: the project slug the user chose. Main checks it is an
-   * existing project of DATA_DIR; it is never a path.
+   * Launch actions with `pickProject` only: the art ref (`<project id>/<art id>`) the user chose. Main
+   * checks it is an existing art of an indexed project; it is never a path.
    */
-  project?: string
+  art?: string
   /** Launch actions: the renderer asks the user for a project first (manifest `pickProject`). */
   pickProject?: boolean
 }

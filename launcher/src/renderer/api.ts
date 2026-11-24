@@ -17,7 +17,7 @@ export type {
   LogLine,
   LogsQuery,
   LogsResult,
-  RecentProject,
+  RecentArt,
   SquarelApi,
   StatePatch,
   UpdatesInfo,

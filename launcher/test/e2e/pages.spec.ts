@@ -98,8 +98,8 @@ test('launch menu lists all non-default actions and runs the chosen one', async 
     const more = content(page).getByRole('button', { name: 'Cách mở khác' })
     await more.click()
     await expect(page.getByRole('menuitem')).toHaveText([
-      'Mở project…',
-      'Mở thu-sync',
+      'Mở art…',
+      'Mở game-dungeon/thu-sync',
       'Mở không đồng bộ',
       'Mở thư mục cài đặt',
     ])
@@ -109,18 +109,18 @@ test('launch menu lists all non-default actions and runs the chosen one', async 
       .toEqual({ argv: [exe], cwd: `${ROOT}\\squarel`, env: { SQUAREL_NO_SYNC: '1' } })
 
     await more.click()
-    await page.getByRole('menuitem', { name: 'Mở thu-sync' }).click()
+    await page.getByRole('menuitem', { name: 'Mở game-dungeon/thu-sync' }).click()
     await expect
       .poll(async () => (await sink(app)).bridgeTools)
-      .toEqual([{ name: 'open_in_editor', input: { art: 'thu-sync' } }])
+      .toEqual([{ name: 'open_in_editor', input: {}, ref: 'game-dungeon/thu-sync' }])
 
     await more.click()
-    await page.getByRole('menuitem', { name: 'Mở project…' }).click()
-    const dialog = page.getByRole('dialog', { name: 'Chọn project' })
+    await page.getByRole('menuitem', { name: 'Mở art…' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Chọn art' })
     await dialog.getByRole('button', { name: /Hiệp sĩ dungeon/ }).click()
     await expect
       .poll(async () => (await sink(app)).bridgeTools.at(-1))
-      .toEqual({ name: 'open_in_editor', input: { art: 'hiep-si' } })
+      .toEqual({ name: 'open_in_editor', input: {}, ref: 'game-dungeon/hiep-si' })
 
     await more.click()
     await page.getByRole('menuitem', { name: 'Mở thư mục cài đặt' }).click()
@@ -341,9 +341,9 @@ test('connections tip mentions Aseprite only while Aseprite is selected', async 
 test('screenshots: home and library', async () => {
   const { page, close } = await open()
   try {
-    await expect(
-      content(page).getByRole('list', { name: 'Project gần đây' }).getByRole('listitem'),
-    ).toHaveCount(2)
+    await expect(content(page).getByRole('list', { name: 'Art gần đây' }).getByRole('listitem')).toHaveCount(
+      2,
+    )
     await expect(content(page)).toContainText('Squarel Art v0.3.0 đã sẵn sàng')
     await settle(page)
     await page.screenshot({ path: `${SHOTS}/task-13-home.png` })

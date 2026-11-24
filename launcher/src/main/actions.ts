@@ -53,12 +53,12 @@ export interface ActionCtx {
   toolsDir(id: string): string
   /** The parsed Squarel `.env` (detection of integration executables). */
   env: EnvDoc
-  /** Slug of the most recently updated project (resolved in main), for `{recentProject}`. */
-  recentProject?: string
-  /** Slugs of all projects in DATA_DIR (checks a `pickProject` choice). */
-  projects(): Promise<string[]>
-  /** Sends a tool call over the bridge (launch actions with `bridgeTool`). */
-  bridgeTool(name: string, input: unknown): Promise<string>
+  /** Ref of the most recently updated art (resolved in main), for `{recentProject}`. */
+  recentArt?: string
+  /** Refs of all arts of all indexed projects (checks a `pickProject` choice). */
+  artRefs(): Promise<string[]>
+  /** Sends a tool call over the bridge (launch actions with `bridgeTool`); `ref` selects the art. */
+  bridgeTool(name: string, input: unknown, ref?: string): Promise<string>
   /** Opens a folder in the file manager (launch actions with `reveal`); refuses files. */
   openFolder(path: string): Promise<void>
   /** Where "Cài mới" clones Squarel (%LOCALAPPDATA%\SquarelArt\app). */
@@ -249,8 +249,8 @@ type LaunchSpec = LoadedIntegration['manifest']['launch'][number]
 
 /**
  * One entry of the manifest's `launch` list. The command, folder and tool name come only from the
- * manifest; `{exe}` / `{exeDir}` from detection and `{recentProject}` from DATA_DIR, both in main.
- * The renderer contributes at most a project slug for `pickProject`, checked against DATA_DIR.
+ * manifest; `{exe}` / `{exeDir}` from detection and `{recentProject}` (an art ref) from the project index, both in main.
+ * The renderer contributes at most an art ref for `pickProject`, checked against the indexed projects.
  */
 async function runLaunch(
   taskId: string,
@@ -258,7 +258,7 @@ async function runLaunch(
   ctx: ActionCtx,
   i: LoadedIntegration,
   a: LaunchSpec,
-  project: string | undefined,
+  art: string | undefined,
 ): Promise<void> {
   const m = i.manifest
   const fail = (text: string) => emit({ taskId, kind: 'error', text })
@@ -269,7 +269,7 @@ async function runLaunch(
     exe: det.path,
     exeDir: dirname(det.path),
     ...(det.version ? { version: det.version } : {}),
-    ...(ctx.recentProject ? { recentProject: ctx.recentProject } : {}),
+    ...(ctx.recentArt ? { recentProject: ctx.recentArt } : {}),
   }
   let label: string
   try {
@@ -289,15 +289,15 @@ async function runLaunch(
       return emit({ taskId, kind: 'done', code: 0, text: `Đã mở: ${label}` })
     }
     if (a.bridgeTool) {
-      let slug = ctx.recentProject
+      let target = ctx.recentArt
       if (a.pickProject) {
-        if (!project) return fail('Hãy chọn một project')
-        if (!(await ctx.projects()).includes(project)) return fail(`Không có project "${project}"`)
-        slug = project
+        if (!art) return fail('Hãy chọn một art')
+        if (!(await ctx.artRefs()).includes(art)) return fail(`Không có art "${art}"`)
+        target = art
       }
-      if (!slug) return fail('Chưa có project nào')
-      const text = await ctx.bridgeTool(a.bridgeTool, { art: slug })
-      return emit({ taskId, kind: 'done', code: 0, text: text.trim() || `Đã mở ${slug}` })
+      if (!target) return fail('Chưa có art nào')
+      const text = await ctx.bridgeTool(a.bridgeTool, {}, target)
+      return emit({ taskId, kind: 'done', code: 0, text: text.trim() || `Đã mở ${target}` })
     }
     if (a.reveal) {
       await ctx.openFolder(substitute(a.reveal, vars))
@@ -609,7 +609,7 @@ export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
     if (typeof i === 'string') return { error: i }
     return {
       key: `${cid}:launch:${id}`,
-      body: (taskId, emit) => runLaunch(taskId, emit, ctx, i, a, ref.project),
+      body: (taskId, emit) => runLaunch(taskId, emit, ctx, i, a, ref.art),
     }
   }
 

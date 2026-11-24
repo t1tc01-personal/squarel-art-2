@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
+import { bridgeUrl, connectBridge } from '../src/main/bridge/client'
 import { createBridgeSupervisor, toolTimeoutMs } from '../src/main/bridge/supervisor'
 import type { BridgeState } from '../src/main/bridge/types'
 import { type BridgeChild, createDeps, type Deps } from '../src/main/deps'
@@ -22,7 +23,11 @@ interface RealBridge {
   stop(): Promise<void>
 }
 interface RootModules {
-  BridgeServer: new (ctx: unknown, opts: { port: number; watchFiles?: boolean }) => RealBridge
+  BridgeServer: new (
+    ctx: unknown,
+    opts: { port: number; watchFiles?: boolean; projects: unknown },
+  ) => RealBridge
+  ProjectDirectory: new (o: { dataDir: string; log: unknown }) => unknown
   createToolContext: (o: unknown) => Promise<{ editor?: unknown }>
   silentLogger: unknown
   MockProvider: new () => unknown
@@ -30,14 +35,16 @@ interface RootModules {
 async function rootModules(): Promise<RootModules> {
   const load = (rel: string) =>
     import(/* @vite-ignore */ fileURLToPath(new URL(`../../src/${rel}`, import.meta.url)))
-  const [server, context, log, mock] = await Promise.all([
+  const [server, projects, context, log, mock] = await Promise.all([
     load('bridge/server.ts'),
+    load('bridge/projects.ts'),
     load('tools/context.ts'),
     load('log.ts'),
     load('providers/mock.ts'),
   ])
   return {
     BridgeServer: server.BridgeServer,
+    ProjectDirectory: projects.ProjectDirectory,
     createToolContext: context.createToolContext,
     silentLogger: log.silentLogger,
     MockProvider: mock.MockProvider,
@@ -59,14 +66,31 @@ async function until(pred: () => boolean, ms = 3000, what = 'condition') {
 }
 
 async function startRealBridge(): Promise<RealBridge> {
-  const { BridgeServer, createToolContext, silentLogger, MockProvider } = await rootModules()
+  const { BridgeServer, ProjectDirectory, createToolContext, silentLogger, MockProvider } =
+    await rootModules()
   const dir = mkdtempSync(join(tmpdir(), 'sq-launcher-bridge-'))
+  // One indexed project `game`, so a tool call carrying the ref `game/hero` can resolve its folder.
+  const home = join(dir, 'proj-game')
+  mkdirSync(join(home, '.squarel'), { recursive: true })
+  writeFileSync(
+    join(home, '.squarel', 'project.json'),
+    JSON.stringify({ schema: 1, id: 'game', name: 'Game' }),
+  )
+  mkdirSync(join(dir, 'workspaces'), { recursive: true })
+  writeFileSync(
+    join(dir, 'workspaces', 'game.json'),
+    JSON.stringify({ schema: 1, id: 'game', name: 'Game', folder: home, createdAt: '2026-01-01T00:00:00Z' }),
+  )
   const ctx = await createToolContext({
     config: { dataDir: dir, imageProvider: 'mock', asepritePath: undefined },
     providers: { mock: new MockProvider() },
     log: silentLogger,
   })
-  const bridge = new BridgeServer(ctx, { port: 0, watchFiles: false })
+  const bridge = new BridgeServer(ctx, {
+    port: 0,
+    watchFiles: false,
+    projects: new ProjectDirectory({ dataDir: dir, log: silentLogger }),
+  })
   expect(await bridge.start()).toBe(true)
   ctx.editor = bridge
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
@@ -81,7 +105,7 @@ async function asepriteClient(port: number): Promise<WebSocket> {
     ws.once('open', () => res())
     ws.once('error', rej)
   })
-  ws.send(JSON.stringify({ type: 'hello', client: 'aseprite', app: '1.3.18.6' }))
+  ws.send(JSON.stringify({ type: 'hello', client: 'aseprite', app: '1.3.18.6', protocol: 2 }))
   await new Promise<void>((res) => ws.once('message', () => res()))
   return ws
 }
@@ -189,9 +213,35 @@ describe('bridge supervisor', () => {
     await asepriteClient(bridge.port)
     await until(() => sup.state().clients.length === 2, 2000, 'second client')
     // tool calls go over the same socket
-    const text = await sup.sendTool('art_list', {})
+    await expect(sup.sendTool('art_list', {})).rejects.toThrow(/NO_PROJECT/)
+    const text = await sup.sendTool('art_list', {}, 'game/hero')
     expect(typeof text).toBe('string')
+    await expect(sup.sendTool('no_such_tool', {}, 'game/hero')).rejects.toThrow()
     await expect(sup.sendTool('no_such_tool', {})).rejects.toThrow()
+  })
+
+  it('the launcher hello declares protocol 2', async () => {
+    const sent: unknown[] = []
+    let open: () => void = () => {}
+    const attempt = connectBridge(
+      {
+        ...createDeps('fake'),
+        connectWs: () => ({
+          on: (ev: string, cb: () => void) => {
+            if (ev === 'open') open = cb
+          },
+          send: (data: string) => void sent.push(JSON.parse(data)),
+          close() {},
+          terminate() {},
+        }),
+      },
+      bridgeUrl(1),
+      50,
+    )
+    open()
+    expect(sent[0]).toEqual({ type: 'hello', client: 'launcher', protocol: 2 })
+    attempt.abort()
+    await attempt.result
   })
 
   it('spawns its own bridge when nothing listens', async () => {

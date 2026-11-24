@@ -26,13 +26,20 @@
       "updatedAt": "2026-01-01T11:59:55.000Z"
     },
     "{root}/data/usage.jsonl": "{\"provider\":\"cloudflare\",\"unitKind\":\"neuron\",\"units\":860,\"ts\":\"2026-01-01T09:00:00.000Z\"}\n",
-    "{root}/data/projects/thu-sync/project.json": {
+    "{root}/data/workspaces/game-dungeon.json": {
+      "schema": 1,
+      "id": "game-dungeon",
+      "name": "Game dungeon",
+      "folder": "{root}\\work\\game-dungeon",
+      "createdAt": "2025-12-01T09:00:00.000Z"
+    },
+    "{root}/work/game-dungeon/squarel_art/thu-sync/project.json": {
       "slug": "thu-sync",
       "name": "Thu sync",
       "updatedAt": "2026-01-01T11:40:00.000Z",
       "head": "v000002"
     },
-    "{root}/data/projects/hiep-si/project.json": {
+    "{root}/work/game-dungeon/squarel_art/hiep-si/project.json": {
       "slug": "hiep-si",
       "name": "Hiệp sĩ dungeon",
       "updatedAt": "2025-12-31T10:00:00.000Z",
@@ -74,7 +81,7 @@
       {
         "name": "aseprite",
         "app": "1.3.18.6",
-        "slug": "thu-sync",
+        "ref": "game-dungeon/thu-sync",
         "version": "v000002",
         "connectedAt": "2026-01-01T11:30:00.000Z",
         "lastSeen": "2026-01-01T11:59:59.000Z"

@@ -25,7 +25,7 @@
   "bridge": { "client": "aseprite" },
   "launch": [
     { "id": "open", "label": "Mở Aseprite", "default": true, "run": ["{exe}"] },
-    { "id": "open-project", "label": "Mở project…", "pickProject": true, "bridgeTool": "open_in_editor" },
+    { "id": "open-project", "label": "Mở art…", "pickProject": true, "bridgeTool": "open_in_editor" },
     { "id": "open-recent", "label": "Mở {recentProject}", "bridgeTool": "open_in_editor" },
     { "id": "open-plain", "label": "Mở không đồng bộ", "run": ["{exe}"], "env": { "SQUAREL_NO_SYNC": "1" } },
     { "id": "folder", "label": "Mở thư mục cài đặt", "reveal": "{exeDir}" }
