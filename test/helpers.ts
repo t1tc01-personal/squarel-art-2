@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { celKey, createDoc, ensureColor } from '../src/core/index.ts'
@@ -86,4 +86,12 @@ export function asLetters(doc: PixelDoc, layerIndex = 0): string[] {
     rows.push(s)
   }
   return rows
+}
+
+/** A project folder (`.squarel/project.json`) inside `dir`; returns its path. */
+export function makeProjectFolder(dir: string, id = 'game', name = 'Game'): string {
+  const folder = join(dir, `proj-${id}`)
+  mkdirSync(join(folder, '.squarel'), { recursive: true })
+  writeFileSync(join(folder, '.squarel', 'project.json'), JSON.stringify({ schema: 1, id, name }))
+  return folder
 }

@@ -1,15 +1,16 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { celKey, decodePng, encodePng, readDpi } from '../src/core/index.ts'
 import { silentLogger } from '../src/log.ts'
 import { MockProvider, mockSprite } from '../src/providers/mock.ts'
 import type { GenRequest, ImageProvider, RawImage } from '../src/providers/types.ts'
+import { NO_PROJECT_TEXT } from '../src/tools/common.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { ALL_TOOLS, runTool } from '../src/tools/registry.ts'
 import type { ToolContext, ToolResult } from '../src/tools/types.ts'
 import { SQUAREL_VERSION } from '../src/version.ts'
-import { fakeAiImage, tempDir } from './helpers.ts'
+import { fakeAiImage, makeProjectFolder, tempDir } from './helpers.ts'
 
 /** A paid provider double (behaves like Retro Diffusion but offline). */
 class FakePaid extends MockProvider {
@@ -27,6 +28,7 @@ class FakePaid extends MockProvider {
 
 let t: ReturnType<typeof tempDir>
 let ctx: ToolContext
+let folder: string
 let paid: FakePaid
 
 async function call(name: string, input: Record<string, unknown> = {}): Promise<ToolResult> {
@@ -40,7 +42,9 @@ async function expectCode(p: Promise<unknown>, code: string) {
 beforeEach(async () => {
   t = tempDir()
   paid = new FakePaid()
+  folder = makeProjectFolder(t.dir)
   ctx = await createToolContext({
+    projectStart: folder,
     config: { dataDir: t.dir, imageProvider: 'mock', dailyBudgetUsd: 0.05, previewPx: 128 },
     providers: { mock: new MockProvider(), retrodiffusion: paid as unknown as ImageProvider },
     log: silentLogger,
@@ -49,6 +53,66 @@ beforeEach(async () => {
 afterEach(() => t.cleanup())
 
 const isPng = (b: Uint8Array) => b[0] === 0x89 && b[1] === 0x50
+
+describe('project context', () => {
+  const bare = () =>
+    createToolContext({
+      config: { dataDir: t.dir, imageProvider: 'mock', previewPx: 0 },
+      providers: { mock: new MockProvider() },
+      log: silentLogger,
+    })
+
+  it('art tools outside a project fail with NO_PROJECT', async () => {
+    const outside = await bare()
+    const err = await runTool(
+      'draw_pixels',
+      { ops: [{ op: 'set', points: [[0, 0]], color: '#ff0000' }] },
+      outside,
+    ).catch((e) => e)
+    expect(err.code).toBe('NO_PROJECT')
+    expect(err.message).toBe(NO_PROJECT_TEXT)
+    await expect(
+      runTool('project_create', { name: 'X', width: 8, height: 8 }, outside),
+    ).rejects.toMatchObject({
+      code: 'NO_PROJECT',
+    })
+  })
+
+  it('usage_today works outside a project', async () => {
+    const r = await runTool('usage_today', {}, await bare())
+    expect(r.text).toContain('Today:')
+  })
+
+  it('a context started in squarel_art/hero detects the project above', async () => {
+    const hero = join(folder, 'squarel_art', 'hero')
+    mkdirSync(hero, { recursive: true })
+    const inside = await createToolContext({
+      config: { dataDir: t.dir, imageProvider: 'mock' },
+      providers: { mock: new MockProvider() },
+      log: silentLogger,
+      projectStart: hero,
+    })
+    expect(inside.session.workspace?.id).toBe('game')
+    expect(inside.arts?.root).toBe(join(folder, 'squarel_art'))
+  })
+
+  it('art is written under <project>/squarel_art', async () => {
+    await call('project_create', { name: 'Hero', width: 8, height: 8 })
+    expect(existsSync(join(folder, 'squarel_art', 'hero', 'project.json'))).toBe(true)
+  })
+
+  it('detecting a project creates nothing', async () => {
+    const fresh = makeProjectFolder(t.dir, 'other')
+    const c = await createToolContext({
+      config: { dataDir: t.dir, imageProvider: 'mock' },
+      providers: { mock: new MockProvider() },
+      log: silentLogger,
+      projectStart: fresh,
+    })
+    expect(c.session.workspace?.id).toBe('other')
+    expect(existsSync(join(fresh, 'squarel_art'))).toBe(false)
+  })
+})
 
 describe('tool registry', () => {
   it('has unique, documented tools with object schemas', () => {
@@ -181,7 +245,7 @@ describe('AI proposals (mock + paid provider double)', () => {
       keep_palette: true,
     })
     await call('accept_variant', { proposal: (ed.data as any).id, variant: 1 })
-    const { doc } = await ctx.store.readHead('e')
+    const { doc } = await ctx.arts!.readHead('e')
     const ai = doc.layers.find((l) => l.origin === 'ai')!
     const cel = doc.cels[celKey(ai.id, doc.frames[0].id)]
     let inside = 0
@@ -276,6 +340,7 @@ describe('export presets', () => {
 describe('photo_to_pixel', () => {
   it('turns a local image into a new project', async () => {
     const img = fakeAiImage(10, { noise: 30 })
+    mkdirSync(join(t.dir, 'inbox'), { recursive: true })
     const file = join(t.dir, 'inbox', 'photo.png')
     writeFileSync(file, encodePng(img))
     const r = await call('photo_to_pixel', { path: 'photo.png', width: 16, colors: 6, name: 'Ảnh mèo' })

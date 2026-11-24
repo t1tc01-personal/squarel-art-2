@@ -2,6 +2,7 @@ import { copyFile, mkdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import sharp from 'sharp'
 import { z } from 'zod'
+import { inboxDir } from '../config.ts'
 import { celKey } from '../core/codec.ts'
 import { addLayer, createDoc, docSummary, resolvePaletteInput } from '../core/doc.ts'
 import { findPreset, PRESETS } from '../core/export.ts'
@@ -10,9 +11,9 @@ import { pasteIndexed } from '../core/ops.ts'
 import { decodePng, encodePng } from '../core/png.ts'
 import { renderRGBA } from '../core/preview.ts'
 import { MAX_SIDE, PURPOSES, type Purpose } from '../shared/types.ts'
-import { loadWorkspaceById, resolveExportDir, type Workspace, writeCatalog } from '../store/workspace.ts'
+import { resolveExportDir, writeCatalog } from '../store/workspace.ts'
 import { SQUAREL_VERSION } from '../version.ts'
-import { currentWorkspace, mutate, preview, previewArg, projectArg, projectSlug } from './common.ts'
+import { artStore, currentWorkspace, mutate, preview, previewArg, projectArg, projectSlug } from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'])
@@ -26,7 +27,7 @@ export const historyTools = [
     annotations: { readOnly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const list = await ctx.store.history(slug, i.limit)
+      const list = await artStore(ctx).history(slug, i.limit)
       return {
         text: list
           .map((v) => `${v.id}  ${v.ts.slice(0, 19).replace('T', ' ')}  [${v.source}] ${v.label}`)
@@ -44,7 +45,7 @@ export const historyTools = [
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
       try {
-        const r = await ctx.store.undo(slug, ctx.source)
+        const r = await artStore(ctx).undo(slug, ctx.source)
         ctx.onCommit?.(slug, r.versionId)
         return {
           text: `Restored content of ${r.restored} as ${r.versionId}.`,
@@ -63,7 +64,7 @@ export const historyTools = [
     input: z.object({ project: projectArg, version: z.string().regex(/^v\d{6}$/), preview: previewArg }),
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const r = await ctx.store.restore(slug, i.version, ctx.source)
+      const r = await artStore(ctx).restore(slug, i.version, ctx.source)
       ctx.onCommit?.(slug, r.versionId)
       return { text: `Restored ${i.version} as ${r.versionId}.`, images: preview(ctx, r.doc, i.preview) }
     },
@@ -117,12 +118,7 @@ export const exportTools = [
       const parsed = preset.options.safeParse(i.options ?? {})
       if (!parsed.success)
         throw new ToolError('INVALID', `bad options for ${preset.id}: ${parsed.error.message}`)
-      const artWs = (await ctx.store.info(slug)).workspace
-      let ws: Workspace | undefined
-      if (artWs) {
-        const session = await currentWorkspace(ctx)
-        ws = session?.id === artWs ? session : await loadWorkspaceById(ctx.store.dataDir, artWs)
-      }
+      const ws = await currentWorkspace(ctx)
       // A bad export folder never fails the export: files still go to exports/, the copy is skipped.
       let copyDir: string | undefined
       let copySkipped: string | undefined
@@ -131,7 +127,7 @@ export const exportTools = [
       } catch (e: any) {
         copySkipped = `Warning: not copied to the project export folder: ${e.message}. Fix the export folder of project "${ws?.name}" in the launcher.`
       }
-      const { versionId, doc } = await ctx.store.readHead(slug)
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
       const files = await preset.run(doc, parsed.data, i.name ?? slug, { appVersion: SQUAREL_VERSION })
       const paths: string[] = []
       const notes: string[] = []
@@ -141,7 +137,7 @@ export const exportTools = [
         if (f.convertTo === 'webp')
           bytes = new Uint8Array(await sharp(f.bytes).webp({ lossless: true }).toBuffer())
         if (!firstImage && f.mime === 'image/png') firstImage = f.bytes
-        paths.push(await ctx.store.writeExport(slug, f.name, bytes))
+        paths.push(await artStore(ctx).writeExport(slug, f.name, bytes))
         if (f.note) notes.push(f.note)
       }
       const copies: string[] = []
@@ -153,7 +149,7 @@ export const exportTools = [
           copies.push(dest)
         }
       }
-      if (ws) await writeCatalog(ctx.store, ws, ctx.log)
+      if (ws) await writeCatalog(artStore(ctx), ws, ctx.log)
       let images: { png: Uint8Array; alt: string }[] | undefined
       if (firstImage) {
         const img = decodePng(firstImage)
@@ -195,7 +191,7 @@ export const importTools = [
       preview: previewArg,
     }),
     async handler(ctx, i) {
-      const file = isAbsolute(i.path) ? resolve(i.path) : join(ctx.store.inboxDir, basename(i.path))
+      const file = isAbsolute(i.path) ? resolve(i.path) : join(inboxDir(ctx.config), basename(i.path))
       if (!IMAGE_EXT.has(extname(file).toLowerCase()))
         throw new ToolError('INVALID', 'only image files (png, jpg, webp, gif, bmp, tif) are accepted')
       let size: number
@@ -247,11 +243,10 @@ export const importTools = [
         doc.palette = r.palette
         doc.cels[celKey(doc.layers[0].id, doc.frames[0].id)] = r.pixels
         doc.layers[0].name = 'Photo'
-        const info2 = await ctx.store.createProject({
+        const info2 = await artStore(ctx).createProject({
           name: i.name ?? basename(file, extname(file)),
           doc,
           source: ctx.source,
-          workspace: ws?.id,
         })
         ctx.session.activeProject = info2.slug
         ctx.onCommit?.(info2.slug, info2.head)

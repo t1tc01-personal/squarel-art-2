@@ -24,7 +24,7 @@ export function workspaceInstructions(ws: Workspace, arts: ProjectInfo[]): strin
     `Defaults for new art: ${describeDefaults(ws.config.defaults)}. project_create fills in missing width/height/purpose/palette from them, and new art joins this workspace.`,
     `${arts.length} art${arts.length === 1 ? '' : 's'} in this workspace${newest ? `; newest: ${newest}` : ''}.`,
     'The brief is in AGENTS.md in the workspace folder (workspace_info shows it too); the art catalog is .squarel/arts.md. Follow the brief and do not ask again for what it already decides.',
-    "project_list shows only this workspace's art; project_list with all: true shows everything. workspace_add_art moves an art into this workspace.",
+    'project_list shows the arts of this project.',
   ].join('\n')
 }
 

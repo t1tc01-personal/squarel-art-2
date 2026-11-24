@@ -14,7 +14,7 @@ import { createToolContext } from '../src/tools/context.ts'
 import { runTool } from '../src/tools/registry.ts'
 import type { ToolContext } from '../src/tools/types.ts'
 import { SQUAREL_VERSION } from '../src/version.ts'
-import { tempDir } from './helpers.ts'
+import { makeProjectFolder, tempDir } from './helpers.ts'
 
 let t: ReturnType<typeof tempDir>
 let ctx: ToolContext
@@ -74,6 +74,7 @@ beforeEach(async () => {
     config: { dataDir: t.dir, imageProvider: 'mock', asepritePath: undefined },
     providers: { mock: new MockProvider() },
     log: silentLogger,
+    projectStart: makeProjectFolder(t.dir),
   })
   bridge = new BridgeServer(ctx, { port: 0 })
   expect(await bridge.start()).toBe(true)
@@ -149,7 +150,7 @@ describe('bridge', () => {
     const cel = doc.cels[celKey(doc.layers[0].id, doc.frames[0].id)]
     expect(cel[0]).toBe(1)
     expect(cel[63]).toBe(2)
-    const hist = await ctx.store.history('bridge', 1)
+    const hist = await ctx.arts!.history('bridge', 1)
     expect(hist[0].source).toBe('editor')
     expect(hist[0].label).toContain('brush (1 px)')
     // a no-op save on the latest base is just acknowledged
@@ -161,7 +162,7 @@ describe('bridge', () => {
     const c = await connect()
     c.send({ type: 'open', slug: 'bridge' })
     await c.next('doc')
-    const other = new Store(t.dir) // no onCommit hook: only the watcher can see this
+    const other = new Store(ctx.arts!.root) // no onCommit hook: only the watcher can see this
     await other.withHead('bridge', 'cli', 'external', (doc) => {
       doc.cels[celKey(doc.layers[0].id, doc.frames[0].id)][5] = 3
     })

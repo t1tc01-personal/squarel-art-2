@@ -3,8 +3,18 @@ import { z } from 'zod'
 import { encodePng } from '../core/png.ts'
 import { renderDoc } from '../core/preview.ts'
 import type { PixelDoc } from '../shared/types.ts'
+import type { Store } from '../store/store.ts'
 import { readWorkspace, type Workspace } from '../store/workspace.ts'
 import { type ToolContext, ToolError, type ToolImage, type ToolResult } from './types.ts'
+
+export const NO_PROJECT_TEXT =
+  'No Squarel project here. Art lives inside a project folder: create one in Squarel Art Launcher (Dự án → Dự án mới), then open Claude Code in that folder.'
+
+/** The project's art store; art tools fail with NO_PROJECT outside a project. */
+export function artStore(ctx: ToolContext): Store {
+  if (!ctx.arts) throw new ToolError('NO_PROJECT', NO_PROJECT_TEXT)
+  return ctx.arts
+}
 
 export const projectArg = z
   .string()
@@ -27,13 +37,14 @@ export const layerArg = z.string().optional().describe('Layer id or name (defaul
 export const frameArg = z.number().int().min(0).optional().describe('Frame index (default 0)')
 
 export async function projectSlug(ctx: ToolContext, project?: string): Promise<string> {
+  const store = artStore(ctx)
   const slug = project ?? ctx.session.activeProject
   if (!slug)
     throw new ToolError(
       'NOT_FOUND',
       'no project selected: call project_list / project_open, or project_create first',
     )
-  if (!(await ctx.store.hasProject(slug)))
+  if (!(await store.hasProject(slug)))
     throw new ToolError('NOT_FOUND', `project "${slug}" not found (see project_list)`)
   return slug
 }
@@ -87,7 +98,7 @@ export async function mutate(
         : ctx.source === 'editor'
           ? 'Editor'
           : 'AI'
-  const { versionId, doc, result } = await ctx.store.withHead(slug, ctx.source, `${prefix}: ${label}`, fn)
+  const { versionId, doc, result } = await artStore(ctx).withHead(slug, ctx.source, `${prefix}: ${label}`, fn)
   ctx.onCommit?.(slug, versionId)
   return {
     text: `${result}\nSaved as ${versionId} in "${slug}".`,

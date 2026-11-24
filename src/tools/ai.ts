@@ -19,7 +19,16 @@ import {
 import { paletteColors } from '../shared/palettes.ts'
 import type { PixelDoc, Rect } from '../shared/types.ts'
 import type { ProposalMeta } from '../store/store.ts'
-import { decodeImage, mutate, previewArg, projectArg, projectSlug, short, sniffExt } from './common.ts'
+import {
+  artStore,
+  decodeImage,
+  mutate,
+  previewArg,
+  projectArg,
+  projectSlug,
+  short,
+  sniffExt,
+} from './common.ts'
 import { defineTool, type ToolContext, ToolError, type ToolResult } from './types.ts'
 
 const COST_NOTE =
@@ -180,7 +189,7 @@ async function saveProposal(
     variants.length > 2 ? 128 : 192,
   )
   files['sheet.png'] = encodePng(sheet)
-  await ctx.store.saveProposal(slug, meta, files)
+  await artStore(ctx).saveProposal(slug, meta, files)
   const lines = meta.variants.map(
     (v) =>
       `  ${v.n}: ${v.metrics.colorCount} colors, grid confidence ${v.metrics.gridConfidence}${v.metrics.warnings.length ? ` ⚠ ${v.metrics.warnings.join('; ')}` : ''}`,
@@ -259,7 +268,7 @@ export const aiTools = [
     annotations: { openWorld: true, costly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const { versionId, doc } = await ctx.store.readHead(slug)
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
       const palette = paletteInput(doc, i.palette)
       const req = {
         prompt: i.prompt,
@@ -346,7 +355,7 @@ export const aiTools = [
     annotations: { openWorld: true, costly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const { versionId, doc } = await ctx.store.readHead(slug)
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
       const frame = doc.frames[i.frame]
       if (!frame) throw new ToolError('INVALID', `frame ${i.frame} out of range`)
       if (i.region && (i.region.x + i.region.w > doc.width || i.region.y + i.region.h > doc.height))
@@ -427,7 +436,7 @@ export const aiTools = [
     annotations: { openWorld: true, costly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const { versionId, doc } = await ctx.store.readHead(slug)
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
       const req = {
         prompt: i.prompt,
         action: i.action,
@@ -522,7 +531,7 @@ export const aiTools = [
     }),
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const meta = await ctx.store.readProposal(slug, i.proposal)
+      const meta = await artStore(ctx).readProposal(slug, i.proposal)
       if (meta.status !== 'open')
         throw new ToolError('INVALID', `proposal ${meta.id} is already ${meta.status}`)
       const v = meta.variants.find((x) => x.n === i.variant)
@@ -532,7 +541,7 @@ export const aiTools = [
           `variant ${i.variant} not in proposal (has ${meta.variants.map((x) => x.n).join(', ')})`,
         )
       const data = JSON.parse(
-        new TextDecoder().decode(await ctx.store.readProposalFile(slug, meta.id, v.normalized)),
+        new TextDecoder().decode(await artStore(ctx).readProposalFile(slug, meta.id, v.normalized)),
       ) as VariantData
       const label = String(meta.request.prompt ?? meta.request.instruction ?? 'AI')
       const res = await mutate(
@@ -583,7 +592,7 @@ export const aiTools = [
       meta.status = 'accepted'
       meta.acceptedVariant = i.variant
       meta.acceptedInVersion = (res.data as { version: string }).version
-      await ctx.store.updateProposal(slug, meta)
+      await artStore(ctx).updateProposal(slug, meta)
       return res
     },
   }),
@@ -594,9 +603,9 @@ export const aiTools = [
     input: z.object({ project: projectArg, proposal: z.string() }),
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const meta = await ctx.store.readProposal(slug, i.proposal)
+      const meta = await artStore(ctx).readProposal(slug, i.proposal)
       meta.status = 'discarded'
-      await ctx.store.updateProposal(slug, meta)
+      await artStore(ctx).updateProposal(slug, meta)
       return { text: `Discarded ${meta.id}.` }
     },
   }),
@@ -608,7 +617,7 @@ export const aiTools = [
     annotations: { readOnly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const list = await ctx.store.listProposals(slug, i.status)
+      const list = await artStore(ctx).listProposals(slug, i.status)
       return {
         text: list.length
           ? list

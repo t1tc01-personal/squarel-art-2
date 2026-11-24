@@ -1,8 +1,8 @@
 import { isAbsolute, resolve } from 'node:path'
 import { z } from 'zod'
 import { describeDefaults, workspaceArts } from '../store/workspace.ts'
-import { currentWorkspace, projectArg, projectSlug } from './common.ts'
-import { defineTool, ToolError } from './types.ts'
+import { artStore, currentWorkspace } from './common.ts'
+import { defineTool } from './types.ts'
 
 const NO_WORKSPACE =
   'No Squarel workspace ("Dự án") is active in this session: no .squarel/project.json was found in the folder Claude Code was started in or any parent. Create one in the Squarel Art Launcher (Dự án → Dự án mới), then start Claude Code in that folder.'
@@ -19,7 +19,7 @@ export const workspaceTools = [
       const ws = await currentWorkspace(ctx)
       if (!ws) return { text: NO_WORKSPACE, data: { workspace: null } }
       const c = ws.config
-      const arts = await workspaceArts(ctx.store, ws.id)
+      const arts = await workspaceArts(artStore(ctx))
       const repos = (c.repos ?? []).map((r) => ({
         path: r,
         resolved: resolve(ws.folder, r),
@@ -55,24 +55,6 @@ export const workspaceTools = [
           },
           arts,
         },
-      }
-    },
-  }),
-  defineTool({
-    name: 'workspace_add_art',
-    title: 'Add art to workspace',
-    description:
-      'Move an art (project), including an unassigned one, into the active workspace. Its previous workspace loses it.',
-    input: z.object({ project: projectArg }),
-    async handler(ctx, i) {
-      const ws = await currentWorkspace(ctx)
-      if (!ws) throw new ToolError('UNAVAILABLE', NO_WORKSPACE)
-      const slug = await projectSlug(ctx, i.project)
-      const prev = await ctx.store.setWorkspace(slug, ws.id)
-      const from = prev === ws.id ? 'already in it' : prev ? `moved from workspace ${prev}` : 'was unassigned'
-      return {
-        text: `Art "${slug}" is in workspace "${ws.name}" (${from}).`,
-        data: { project: slug, workspace: ws.id, previous: prev ?? null },
       }
     },
   }),

@@ -69,13 +69,12 @@ function captureLog(): Logger & { warnings: string[] } {
 }
 
 async function makeCtx(withWorkspace = true): Promise<ToolContext> {
-  const ctx = await createToolContext({
+  return createToolContext({
     config: { dataDir, imageProvider: 'mock', previewPx: 0 },
     providers: { mock: new MockProvider() },
     log: silentLogger,
+    projectStart: withWorkspace ? folder : undefined,
   })
-  if (withWorkspace) ctx.session.workspace = await detectWorkspace({ start: folder, dataDir })
-  return ctx
 }
 
 beforeEach(() => {
@@ -253,27 +252,30 @@ describe('export folder rule', () => {
 })
 
 describe('workspace tools', () => {
-  it('project_create fills in workspace defaults and assigns the workspace', async () => {
+  it('project_create fills in project defaults', async () => {
     const ctx = await makeCtx()
     const r = await runTool('project_create', { name: 'Hero' }, ctx)
-    expect(r.data).toMatchObject({ slug: 'hero', workspace: 'game-dungeon', purpose: 'game' })
-    const { doc } = await ctx.store.readHead('hero')
+    expect(r.data).toMatchObject({ slug: 'hero', purpose: 'game' })
+    const { doc } = await ctx.arts!.readHead('hero')
     expect([doc.width, doc.height]).toEqual([32, 32])
     expect(doc.palette.length).toBe(17) // sweetie16 + transparent
     // explicit values win
     const r2 = await runTool('project_create', { name: 'Big', width: 64, height: 16, purpose: 'print' }, ctx)
-    expect(r2.data).toMatchObject({ purpose: 'print', workspace: 'game-dungeon' })
-    expect((await ctx.store.readHead('big')).doc.width).toBe(64)
+    expect(r2.data).toMatchObject({ purpose: 'print' })
+    expect((await ctx.arts!.readHead('big')).doc.width).toBe(64)
   })
 
   it('project_create needs a size without workspace defaults', async () => {
     const ctx = await makeCtx(false)
-    await expect(runTool('project_create', { name: 'x' }, ctx)).rejects.toMatchObject({
+    await expect(runTool('project_create', { name: 'x', width: 4, height: 4 }, ctx)).rejects.toMatchObject({
+      code: 'NO_PROJECT',
+    })
+    writeConfig(folder, { ...CONFIG, defaults: undefined })
+    const ctx1 = await makeCtx()
+    await expect(runTool('project_create', { name: 'x' }, ctx1)).rejects.toMatchObject({
       code: 'INVALID',
       message: expect.stringMatching(/width and height are required/),
     })
-    const r = await runTool('project_create', { name: 'x', width: 4, height: 4 }, ctx)
-    expect((r.data as { workspace?: string }).workspace).toBeUndefined()
 
     writeConfig(folder, { ...CONFIG, defaults: { purpose: 'print' } })
     const ctx2 = await makeCtx()
@@ -283,32 +285,22 @@ describe('workspace tools', () => {
     })
   })
 
-  it('project_list shows only the workspace art unless all is true', async () => {
-    const plain = await makeCtx(false)
-    await runTool('project_create', { name: 'Loose', width: 4, height: 4 }, plain)
+  it('project_list shows the art of the current project', async () => {
     const ctx = await makeCtx()
     await runTool('project_create', { name: 'Hero' }, ctx)
     const mine = await runTool('project_list', {}, ctx)
     expect((mine.data as { slug: string }[]).map((p) => p.slug)).toEqual(['hero'])
     expect(mine.text).toContain('Project "Game dungeon"')
-    expect(mine.text).toContain('1 other art outside this project')
-    const all = await runTool('project_list', { all: true }, ctx)
-    expect((all.data as { slug: string }[]).map((p) => p.slug).sort()).toEqual(['hero', 'loose'])
-    expect(all.text).toContain('[workspace game-dungeon]')
-    expect(all.text).toContain('[unassigned]')
-    // no workspace: unchanged behaviour
-    expect(((await runTool('project_list', {}, plain)).data as unknown[]).length).toBe(2)
+    await expect(runTool('project_list', {}, await makeCtx(false))).rejects.toMatchObject({
+      code: 'NO_PROJECT',
+    })
   })
 
-  it('workspace_info and workspace_add_art', async () => {
+  it('workspace_info', async () => {
     const plain = await makeCtx(false)
     const none = await runTool('workspace_info', {}, plain)
     expect(none.text).toMatch(/No Squarel workspace/)
     expect(none.data).toEqual({ workspace: null })
-    await expect(runTool('workspace_add_art', { project: 'x' }, plain)).rejects.toMatchObject({
-      code: 'UNAVAILABLE',
-    })
-    await runTool('project_create', { name: 'Loose', width: 4, height: 4 }, plain)
 
     const ctx = await makeCtx()
     const info = await runTool('workspace_info', {}, ctx)
@@ -328,21 +320,20 @@ describe('workspace tools', () => {
       arts: [],
     })
 
-    const moved = await runTool('workspace_add_art', { project: 'loose' }, ctx)
-    expect(moved.data).toEqual({ project: 'loose', workspace: 'game-dungeon', previous: null })
-    expect((await ctx.store.info('loose')).workspace).toBe('game-dungeon')
+    await runTool('project_create', { name: 'Loose' }, ctx)
     expect(readFileSync(catalogPath(folder), 'utf8')).toContain('`loose`')
     const after = await runTool('workspace_info', {}, ctx)
     expect((after.data as { arts: { slug: string }[] }).arts.map((a) => a.slug)).toEqual(['loose'])
   })
 
-  it('photo_to_pixel as a new project joins the workspace', async () => {
+  it('photo_to_pixel as a new project uses the project defaults', async () => {
     const ctx = await makeCtx()
     const img = join(t.dir, 'photo.png')
     writeFileSync(img, encodePng(fakeAiImage(4, { noise: 0 })))
     await runTool('photo_to_pixel', { path: img, width: 8, colors: 8 }, ctx)
-    const p = await ctx.store.info(ctx.session.activeProject!)
-    expect(p).toMatchObject({ workspace: 'game-dungeon', purpose: 'game' })
+    const p = await ctx.arts!.info(ctx.session.activeProject!)
+    expect(p).toMatchObject({ purpose: 'game' })
+    expect(p).not.toHaveProperty('workspace')
   })
 
   it('export also copies files into the workspace exportDir', async () => {
@@ -358,20 +349,13 @@ describe('workspace tools', () => {
     }
     expect(r.text).toContain('Also copied to')
     expect(readFileSync(catalogPath(folder), 'utf8')).toContain('Latest exports')
-
-    // an art outside any workspace exports only to DATA_DIR
-    const plain = await makeCtx(false)
-    await runTool('project_create', { name: 'Loose', width: 4, height: 4 }, plain)
-    expect(
-      ((await runTool('export', { preset: 'game-png' }, plain)).data as { copies: string[] }).copies,
-    ).toEqual([])
   })
 
   it('export with a bad exportDir still writes exports/ and warns that the copy was skipped', async () => {
     for (const bad of ['../outside', '.', join(t.dir, 'abs')]) {
       writeConfig(folder, { ...CONFIG, exportDir: bad })
       const ctx = await makeCtx()
-      if (!(await ctx.store.hasProject('hero')))
+      if (!(await ctx.arts!.hasProject('hero')))
         await runTool('project_create', { name: 'Hero', width: 8, height: 8 }, ctx)
       const r = await runTool('export', { project: 'hero', preset: 'game-png' }, ctx)
       const data = r.data as { files: string[]; copies: string[]; copySkipped?: string }
@@ -404,7 +388,7 @@ describe('store hooks', () => {
     expect(readFileSync(cat, 'utf8')).toMatch(/^<!-- Generated by Squarel/)
     expect(readFileSync(cat, 'utf8')).toContain('Head version: v000001')
 
-    const bridgeStore = new Store(dataDir) // separate instance, as in `pnpm bridge`
+    const bridgeStore = new Store(ctx.arts!.root, { project: ctx.session.workspace }) // separate instance, as in `pnpm bridge`
     const { versionId, doc } = await bridgeStore.readHead('hero')
     addFrame(doc)
     await bridgeStore.commit('hero', { baseVersion: versionId, doc, source: 'editor', label: 'Aseprite' })
@@ -421,7 +405,7 @@ describe('store hooks', () => {
     rmSync(cat, { force: true })
     mkdirSync(cat)
     const log = captureLog()
-    ctx.store.log = log
+    ctx.arts!.log = log
     const r = await runTool('draw_pixels', { ops: [{ op: 'set', points: [[1, 1]], color: '#ff0000' }] }, ctx)
     expect((r.data as { version: string }).version).toBe('v000002')
     expect(log.warnings.join('\n')).toMatch(/catalog/)
@@ -448,14 +432,13 @@ describe('MCP instructions and presence', () => {
     const ctx = await makeCtx()
     await runTool('project_create', { name: 'Hero' }, ctx)
     const ws = ctx.session.workspace!
-    const text = serverInstructions({ workspace: ws, arts: await ctx.store.listProjects() })
+    const text = serverInstructions({ workspace: ws, arts: await ctx.arts!.listProjects() })
     expect(text.startsWith(SERVER_INSTRUCTIONS)).toBe(true)
     expect(text).toContain('Active workspace: "Game dungeon"')
     expect(text).toContain('game, 32×32, palette sweetie16')
     expect(text).toContain('1 art in this workspace; newest: hero')
     expect(text).toContain('AGENTS.md')
     expect(text).toContain('.squarel/arts.md')
-    expect(text).toContain('all: true')
     expect(serverInstructions()).toBe(SERVER_INSTRUCTIONS)
   })
 

@@ -4,6 +4,7 @@ import type { Logger } from '../log.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import type { Source } from '../shared/types.ts'
 import type { Store } from '../store/store.ts'
+import type { UsageLog } from '../store/usage.ts'
 import type { Workspace } from '../store/workspace.ts'
 
 export type ErrorCode =
@@ -15,6 +16,8 @@ export type ErrorCode =
   | 'PROVIDER'
   | 'TIMEOUT'
   | 'UNAVAILABLE'
+  | 'NO_PROJECT'
+  | 'DUPLICATE_PROJECT'
 
 export class ToolError extends Error {
   readonly code: ErrorCode
@@ -44,7 +47,11 @@ export interface EditorHost {
 }
 
 export interface ToolContext {
-  store: Store
+  /** The project's art store; absent outside a project. Use artStore(ctx). */
+  arts?: Store
+  /** Read-only view of the old DATA_DIR/projects library. */
+  legacy: Store
+  usage: UsageLog
   router: ProviderRouter
   config: Config
   log: Logger
@@ -52,6 +59,8 @@ export interface ToolContext {
     activeProject?: string
     /** Workspace ("Dự án") detected at MCP startup; CLI and the standalone bridge have none. */
     workspace?: Workspace
+    /** Id of another detected project already claiming this project's id (set by the MCP server). */
+    duplicateOf?: string
   }
   /** Who is making changes: recorded on every version. */
   source: Source

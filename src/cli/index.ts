@@ -40,10 +40,13 @@ async function main() {
     for (const t of ALL_TOOLS) console.log(`  ${t.name.padEnd(20)} ${t.description.split('. ')[0]}`)
     return
   }
-  const ctx = await createToolContext({ source: 'cli', logName: 'cli' })
+  const ctx = await createToolContext({
+    source: 'cli',
+    logName: 'cli',
+    projectStart: process.env.SQUAREL_PROJECT_DIR || process.env.INIT_CWD || process.cwd(),
+  })
   ctx.log = { debug() {}, info() {}, warn: (m) => console.error(m), error: (m) => console.error(m) }
   const input = parseArgs(rest)
-  if (typeof input.project === 'string') ctx.session.activeProject = input.project
   try {
     const r = await runTool(cmd, input, ctx)
     console.log(r.text)

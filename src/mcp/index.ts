@@ -6,25 +6,24 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { openViaBridge } from '../bridge/remote.ts'
 import { BridgeServer, readBridgeToken } from '../bridge/server.ts'
-import { detectWorkspace, workspaceArts, writeCatalog } from '../store/workspace.ts'
+import { workspaceArts, writeCatalog } from '../store/workspace.ts'
 import { createToolContext } from '../tools/context.ts'
 import { SQUAREL_VERSION as VERSION } from '../version.ts'
 import { bridgeMode, startPresence } from './presence.ts'
 import { createMcpServer, serverInstructions } from './server.ts'
 
 async function main() {
-  const ctx = await createToolContext({ source: 'claude', logName: 'mcp' })
-  const workspace = await detectWorkspace({
-    start: process.env.CLAUDE_PROJECT_DIR || process.cwd(),
-    dataDir: ctx.config.dataDir,
-    log: ctx.log,
+  const ctx = await createToolContext({
+    source: 'claude',
+    logName: 'mcp',
+    projectStart: process.env.CLAUDE_PROJECT_DIR || process.cwd(),
   })
-  ctx.session.workspace = workspace
+  const workspace = ctx.session.workspace
   // Cheap: reads each art's project.json only (no document decode), so it can run before connect.
-  const arts = workspace ? await workspaceArts(ctx.store, workspace.id).catch(() => []) : []
+  const arts = ctx.arts ? await workspaceArts(ctx.arts).catch(() => []) : []
   // The catalog decodes every art's head; run it in the background so a large library never delays
   // startup. writeCatalog never rejects (failures are logged).
-  if (workspace) void writeCatalog(ctx.store, workspace, ctx.log)
+  if (workspace && ctx.arts) void writeCatalog(ctx.arts, workspace, ctx.log)
   const bridge = new BridgeServer(ctx, {
     port: ctx.config.bridgePort,
     token: readBridgeToken(ctx.config.dataDir),

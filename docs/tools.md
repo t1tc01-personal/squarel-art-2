@@ -2,15 +2,11 @@
 
 > File này được sinh bởi `pnpm docs:tools` từ schema zod trong `src/tools`. Đừng sửa tay.
 
-Tổng cộng **43 tool**. Mọi tool đều nhận `project` (slug, mặc định là project đang mở) nếu có liên quan.
+Tổng cộng **42 tool**. Mọi tool đều nhận `project` (slug, mặc định là project đang mở) nếu có liên quan.
 
 ## `project_list` — List projects
 
-List pixel-art projects (arts), most recently changed first. When a workspace is active, only its arts are listed unless all is true.
-
-| Tham số | Kiểu | Bắt buộc | Mô tả |
-|---|---|---|---|
-| `all` | boolean |  | List every art with the workspace it belongs to (default: only the active workspace) |
+List pixel-art projects (arts), most recently changed first. Lists the arts of the current project.
 
 _chỉ đọc_
 
@@ -79,14 +75,6 @@ _chỉ đọc_
 The active workspace ("Dự án": a folder grouping arts for one game, sticker set or print): name, folder, description, brief, defaults for new art, repos, export folder and its arts.
 
 _chỉ đọc_
-
-## `workspace_add_art` — Add art to workspace
-
-Move an art (project), including an unassigned one, into the active workspace. Its previous workspace loses it.
-
-| Tham số | Kiểu | Bắt buộc | Mô tả |
-|---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
 
 ## `draw_pixels` — Draw pixels
 

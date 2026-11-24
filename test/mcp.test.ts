@@ -11,7 +11,7 @@ import { MockProvider } from '../src/providers/mock.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { ALL_TOOLS } from '../src/tools/registry.ts'
 import { SQUAREL_VERSION } from '../src/version.ts'
-import { tempDir } from './helpers.ts'
+import { makeProjectFolder, tempDir } from './helpers.ts'
 
 let t: ReturnType<typeof tempDir>
 beforeEach(() => {
@@ -27,6 +27,7 @@ describe('MCP server (in-memory transport)', () => {
       config: { dataDir: t.dir, imageProvider: 'mock' },
       providers: { mock: new MockProvider() },
       log: silentLogger,
+      projectStart: makeProjectFolder(t.dir),
     })
     const server = createMcpServer(ctx)
     const [a, b] = InMemoryTransport.createLinkedPair()
@@ -80,6 +81,7 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
       env: {
         ...(process.env as Record<string, string>),
         DATA_DIR: t.dir,
+        CLAUDE_PROJECT_DIR: makeProjectFolder(t.dir),
         IMAGE_PROVIDER: 'mock',
         SQUAREL_NO_BRIDGE: '1',
         BRIDGE_PORT: String(closedPort),
@@ -97,7 +99,7 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
     expect(info?.name).toBe('squarel')
     expect(client.getInstructions()).toContain('PROPOSALS')
     const list = await client.callTool({ name: 'project_list', arguments: {} })
-    expect((list.content as Content[])[0].text).toContain('No projects yet')
+    expect((list.content as Content[])[0].text).toContain('No art in project')
     const created = await client.callTool({
       name: 'project_create',
       arguments: { name: 'stdio', width: 4, height: 4 },

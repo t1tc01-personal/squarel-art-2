@@ -7,6 +7,7 @@ import { MAX_SIDE, PURPOSES } from '../shared/types.ts'
 import type { ProjectInfo } from '../store/store.ts'
 import { describeDefaults } from '../store/workspace.ts'
 import {
+  artStore,
   currentWorkspace,
   frameArg,
   layerArg,
@@ -25,34 +26,18 @@ export const projectTools = [
     name: 'project_list',
     title: 'List projects',
     description:
-      'List pixel-art projects (arts), most recently changed first. When a workspace is active, only its arts are listed unless all is true.',
-    input: z.object({
-      all: z
-        .boolean()
-        .optional()
-        .describe('List every art with the workspace it belongs to (default: only the active workspace)'),
-    }),
+      'List pixel-art projects (arts), most recently changed first. Lists the arts of the current project.',
+    input: z.object({}),
     annotations: { readOnly: true },
-    async handler(ctx, i) {
+    async handler(ctx) {
       const ws = ctx.session.workspace
-      const every = await ctx.store.listProjects()
-      const list = ws && !i.all ? every.filter((p) => p.workspace === ws.id) : every
+      const list = await artStore(ctx).listProjects()
       const line = (p: ProjectInfo) =>
-        `${p.slug === ctx.session.activeProject ? '* ' : '- '}${p.slug} — "${p.name}" (${p.purpose}, head ${p.head}, updated ${p.updatedAt})${i.all ? ` [${p.workspace ? `workspace ${p.workspace}` : 'unassigned'}]` : ''}`
-      if (ws && !i.all) {
-        const others = every.length - list.length
-        const more = others
-          ? `\n(${others} other art${others === 1 ? '' : 's'} outside this project: project_list with all: true)`
-          : ''
-        if (!list.length)
-          return {
-            text: `No art in project "${ws.name}" yet. Create one with project_create.${more}`,
-            data: [],
-          }
-        return { text: `Project "${ws.name}":\n${list.map(line).join('\n')}${more}`, data: list }
-      }
-      if (!list.length) return { text: 'No projects yet. Create one with project_create.', data: [] }
-      return { text: list.map(line).join('\n'), data: list }
+        `${p.slug === ctx.session.activeProject ? '* ' : '- '}${p.slug} - "${p.name}" (${p.purpose}, head ${p.head}, updated ${p.updatedAt})`
+      if (!list.length)
+        return { text: `No art in project "${ws?.name}" yet. Create one with project_create.`, data: [] }
+      const lines = list.map(line).join('\n')
+      return { text: `Project "${ws?.name}":\n${lines}`, data: list }
     },
   }),
   defineTool({
@@ -106,11 +91,10 @@ export const projectTools = [
         title: i.name,
       })
       if (i.max_colors) doc.meta.maxColors = i.max_colors
-      const info = await ctx.store.createProject({
+      const info = await artStore(ctx).createProject({
         name: i.name,
         doc,
         source: ctx.source,
-        workspace: ws?.id,
       })
       ctx.session.activeProject = info.slug
       ctx.onCommit?.(info.slug, info.head)
@@ -130,8 +114,8 @@ export const projectTools = [
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
       ctx.session.activeProject = slug
-      const { versionId, doc } = await ctx.store.readHead(slug)
-      const open = await ctx.store.listProposals(slug, 'open')
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
+      const open = await artStore(ctx).listProposals(slug, 'open')
       return {
         text: `Active project: ${slug} (head ${versionId})\n${docSummary(doc)}${open.length ? `\nOpen AI proposals: ${open.map((p) => p.id).join(', ')}` : ''}`,
         images: preview(ctx, doc, i.preview),
@@ -147,7 +131,7 @@ export const projectTools = [
     annotations: { readOnly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const { versionId, doc } = await ctx.store.readHead(slug)
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
       return {
         text: `Project ${slug}, head ${versionId}\n${docSummary(doc)}\nframes: ${doc.frames.map((f, n) => `${n}:${f.durationMs}ms`).join(' ')}`,
         data: {
@@ -179,7 +163,7 @@ export const projectTools = [
     annotations: { readOnly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const { versionId, doc } = await ctx.store.readHead(slug)
+      const { versionId, doc } = await artStore(ctx).readHead(slug)
       const frame = doc.frames[i.frame ?? 0]
       if (!frame)
         throw new ToolError('INVALID', `frame ${i.frame} out of range (0..${doc.frames.length - 1})`)
@@ -206,7 +190,7 @@ export const projectTools = [
     annotations: { readOnly: true },
     async handler(ctx, i) {
       const slug = await projectSlug(ctx, i.project)
-      const { doc } = await ctx.store.readHead(slug)
+      const { doc } = await artStore(ctx).readHead(slug)
       const used = usedColorIndices(doc)
       return {
         text: doc.palette

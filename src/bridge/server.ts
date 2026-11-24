@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { readFile, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { type FSWatcher, watch } from 'chokidar'
 import { type WebSocket, WebSocketServer } from 'ws'
 import { deserializeDoc, serializeDoc } from '../core/codec.ts'
 import { diff, isEmptyPatch, rebase } from '../core/diff.ts'
 import { validateDoc } from '../core/doc.ts'
 import type { PixelDocJSON } from '../shared/types.ts'
-import { ConflictError } from '../store/store.ts'
+import { ConflictError, type Store } from '../store/store.ts'
+import { artStore } from '../tools/common.ts'
 import { runTool } from '../tools/registry.ts'
 import type { EditorHost, ToolContext } from '../tools/types.ts'
 import { SQUAREL_VERSION } from '../version.ts'
@@ -130,8 +131,14 @@ export class BridgeServer implements EditorHost {
     }))
   }
 
+  /** The single project this bridge serves (multi-project bridge comes later). */
+  private get store(): Store {
+    return artStore(this.ctx)
+  }
+
   private async projectList() {
-    return (await this.ctx.store.listProjects()).map((p) => ({ slug: p.slug, name: p.name, head: p.head }))
+    if (!this.ctx.arts) return []
+    return (await this.store.listProjects()).map((p) => ({ slug: p.slug, name: p.name, head: p.head }))
   }
 
   private onConnection(ws: WebSocket) {
@@ -180,7 +187,7 @@ export class BridgeServer implements EditorHost {
       case 'status':
         return this.send(c, { type: 'status', version: SQUAREL_VERSION, clients: this.clientInfos() })
       case 'open': {
-        const { versionId, doc } = await this.ctx.store.readHead(m.slug)
+        const { versionId, doc } = await this.store.readHead(m.slug)
         c.slug = m.slug
         c.version = versionId
         this.ctx.log.info('editor opened project', { slug: m.slug, versionId })
@@ -236,10 +243,10 @@ export class BridgeServer implements EditorHost {
   ): Promise<{ versionId: string; rebasedDoc?: PixelDocJSON; warnings: string[] }> {
     const incoming = deserializeDoc(json)
     validateDoc(incoming)
-    const base = await this.ctx.store.readVersion(slug, baseVersion)
+    const base = await this.store.readVersion(slug, baseVersion)
     const patch = diff(base, incoming)
     for (let attempt = 0; ; attempt++) {
-      const head = await this.ctx.store.readHead(slug)
+      const head = await this.store.readHead(slug)
       if (isEmptyPatch(patch)) {
         const moved = head.versionId !== baseVersion
         return {
@@ -251,7 +258,7 @@ export class BridgeServer implements EditorHost {
       // Always replay as a patch: keeps head-only data (title, maxColors) and works whether or not head moved.
       const { doc, warnings } = rebase(patch, head.doc)
       try {
-        const versionId = await this.ctx.store.commit(slug, {
+        const versionId = await this.store.commit(slug, {
           baseVersion: head.versionId,
           doc,
           source: 'editor',
@@ -272,9 +279,9 @@ export class BridgeServer implements EditorHost {
   async notify(slug: string, versionId?: string): Promise<void> {
     const targets = [...this.clients].filter((c) => c.slug === slug)
     if (!targets.length) return
-    const head = await this.ctx.store.readHead(slug)
+    const head = await this.store.readHead(slug)
     if (versionId && head.versionId !== versionId) versionId = head.versionId
-    const [info] = await this.ctx.store.history(slug, 1)
+    const [info] = await this.store.history(slug, 1)
     for (const c of targets) {
       if (c.version === head.versionId) continue
       c.version = head.versionId
@@ -313,13 +320,13 @@ export class BridgeServer implements EditorHost {
   async writeWorkFile(slug: string): Promise<string> {
     const exe = this.ctx.config.asepritePath
     if (!asepriteAvailable(exe)) throw new Error('ASEPRITE_PATH not set')
-    const { versionId, doc } = await this.ctx.store.readHead(slug)
-    const jsonPath = await this.ctx.store.writeProjectFile(
+    const { versionId, doc } = await this.store.readHead(slug)
+    const jsonPath = await this.store.writeProjectFile(
       slug,
       '.work-in.json',
       JSON.stringify({ slug, baseVersion: versionId, doc: serializeDoc(doc) }),
     )
-    const out = this.ctx.store.projectPath(slug, 'work.aseprite')
+    const out = this.store.projectPath(slug, 'work.aseprite')
     await runAsepriteScript(exe, CLI_SCRIPTS.docToAseprite, { in: jsonPath, out })
     await rm(jsonPath, { force: true })
     this.selfWritten.set(out, statSync(out).mtimeMs)
@@ -330,8 +337,8 @@ export class BridgeServer implements EditorHost {
   async importWorkFile(slug: string): Promise<string | undefined> {
     const exe = this.ctx.config.asepritePath
     if (!asepriteAvailable(exe)) return undefined
-    const file = this.ctx.store.projectPath(slug, 'work.aseprite')
-    const outJson = this.ctx.store.projectPath(slug, '.work-out.json')
+    const file = this.store.projectPath(slug, 'work.aseprite')
+    const outJson = this.store.projectPath(slug, '.work-out.json')
     await runAsepriteScript(exe, CLI_SCRIPTS.asepriteToDoc, { in: file, out: outJson })
     const parsed = JSON.parse(await readFile(outJson, 'utf8')) as { baseVersion: string; doc: PixelDocJSON }
     await rm(outJson, { force: true })
@@ -341,18 +348,24 @@ export class BridgeServer implements EditorHost {
   }
 
   private startWatcher() {
-    const projects = this.ctx.store.projectsDir
-    this.watcher = watch(projects, {
+    if (!this.ctx.arts) return
+    const root = this.ctx.arts.root
+    // squarel_art/ may not exist yet (the first art creates it): watch its parent and ignore the rest.
+    const parent = dirname(root)
+    const outside = (p: string) => resolve(p) !== parent && relative(root, p).startsWith('..')
+    this.watcher = watch(parent, {
       ignoreInitial: true,
-      depth: 1,
+      depth: 2,
       awaitWriteFinish: { stabilityThreshold: 80, pollInterval: 20 },
       ignored: (p) =>
-        /[\\/](versions|proposals|exports|assets|\.lock)([\\/]|$)/.test(p) || p.endsWith('.tmp'),
+        outside(p) ||
+        /[\\/](versions|proposals|exports|assets|\.lock)([\\/]|$)/.test(p) ||
+        p.endsWith('.tmp'),
     })
     const onFile = (path: string) => {
-      const m = path
+      const m = relative(root, path)
         .replace(/\\/g, '/')
-        .match(/projects\/([a-z0-9][a-z0-9-]*)\/(project\.json|work\.aseprite)$/)
+        .match(/^([a-z0-9][a-z0-9-]*)\/(project\.json|work\.aseprite)$/)
       if (!m) return
       const [, slug, file] = m
       const key = `${slug}/${file}`
