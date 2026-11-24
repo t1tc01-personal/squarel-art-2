@@ -64,6 +64,7 @@ export class ProjectDirectory {
   }
 
   async get(id: string): Promise<KnownProject> {
+    this.throwIfDuplicate(id)
     const home = this.known.get(id)
     if (home) {
       const ws = await this.read(home)
@@ -71,16 +72,20 @@ export class ProjectDirectory {
       this.known.delete(id)
     }
     await this.scan()
+    this.throwIfDuplicate(id)
+    const found = this.known.get(id)
+    const ws = found ? await this.read(found) : undefined
+    if (!ws || ws.id !== id) throw new ToolError('NOT_FOUND', `Unknown project "${id}".`)
+    return this.build(ws)
+  }
+
+  private throwIfDuplicate(id: string): void {
     const dup = this.duplicates.get(id)
     if (dup)
       throw new ToolError(
         'DUPLICATE_PROJECT',
         `Project id "${id}" is declared by more than one folder: ${dup.join(' and ')}. Change the id in one of their .squarel/project.json files.`,
       )
-    const found = this.known.get(id)
-    const ws = found ? await this.read(found) : undefined
-    if (!ws || ws.id !== id) throw new ToolError('NOT_FOUND', `Unknown project "${id}".`)
-    return this.build(ws)
   }
 
   async list(): Promise<KnownProject[]> {
@@ -114,7 +119,7 @@ export class ProjectDirectory {
 
   private build(ws: Workspace): KnownProject {
     let store = this.stores.get(ws.home)
-    if (!store) {
+    if (!store || store.project?.id !== ws.id || store.project.name !== ws.name) {
       store = new Store(artsDirOf(ws), { log: this.log, project: ws })
       this.stores.set(ws.home, store)
     }

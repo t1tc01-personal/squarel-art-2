@@ -111,6 +111,32 @@ describe('ProjectDirectory', () => {
     index(home, 'new')
     expect(((await code(d.get('old'))) as ToolError).code).toBe('NOT_FOUND')
     expect((await d.get('new')).id).toBe('new')
+    expect((await d.get('new')).store.project?.id).toBe('new')
+  })
+
+  it('rebuilds the store when the project name is edited', async () => {
+    const home = project(join(t.dir, NAME), 'game', 'Old name')
+    index(home, 'game')
+    const d = dir()
+    expect((await d.get('game')).store.project?.name).toBe('Old name')
+    project(home, 'game', 'New name')
+    const k = await d.get('game')
+    expect(k.ws.name).toBe('New name')
+    expect(k.store.project?.name).toBe('New name')
+  })
+
+  it('a cached id turns DUPLICATE_PROJECT once a refresh sees a copy', async () => {
+    const a = project(join(t.dir, 'a', NAME), 'game')
+    index(a, 'game')
+    const d = dir()
+    await d.get('game')
+    const b = project(join(t.dir, 'b', NAME), 'game')
+    presence(b, 'game')
+    await d.refresh()
+    const e = (await code(d.get('game'))) as ToolError
+    expect(e.code).toBe('DUPLICATE_PROJECT')
+    expect(e.message).toContain(a)
+    expect(e.message).toContain(b)
   })
 
   it('refresh reports whether the set of homes changed', async () => {
