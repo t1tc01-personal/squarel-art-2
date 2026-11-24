@@ -50,3 +50,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   }
   return { ...cfg, ...overrides }
 }
+
+/** Where files dropped for import are looked up. */
+export function inboxDir(config: Config): string {
+  return join(config.dataDir, 'inbox')
+}

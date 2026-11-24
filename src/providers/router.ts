@@ -1,5 +1,5 @@
 import type { Config } from '../config.ts'
-import type { Store, UsageEntry } from '../store/store.ts'
+import type { UsageEntry, UsageLog } from '../store/usage.ts'
 import { CF_FREE_NEURONS_PER_DAY, CF_USD_PER_NEURON, CloudflareProvider } from './cloudflare.ts'
 import { LocalSdProvider } from './localsd.ts'
 import { MockProvider } from './mock.ts'
@@ -29,11 +29,11 @@ function supports(p: ImageProvider, task: Task) {
 
 export class ProviderRouter {
   private cfg: Config
-  private store: Store
+  private usage: UsageLog
   readonly providers: ProviderMap
-  constructor(cfg: Config, store: Store, providers: ProviderMap) {
+  constructor(cfg: Config, usage: UsageLog, providers: ProviderMap) {
     this.cfg = cfg
-    this.store = store
+    this.usage = usage
     this.providers = providers
   }
 
@@ -78,7 +78,7 @@ export class ProviderRouter {
   /** Cost that actually leaves the wallet (Cloudflare neurons within the free tier cost $0). */
   async effectiveUsd(q: Quote): Promise<number> {
     if (q.unitKind !== 'neuron') return q.usd
-    const s = await this.store.usageSummary()
+    const s = await this.usage.summary()
     const over =
       Math.max(0, s.todayNeurons + q.units - CF_FREE_NEURONS_PER_DAY) -
       Math.max(0, s.todayNeurons - CF_FREE_NEURONS_PER_DAY)
@@ -86,7 +86,7 @@ export class ProviderRouter {
   }
 
   async checkBudget(q: Quote): Promise<{ effectiveUsd: number; todayUsd: number }> {
-    const s = await this.store.usageSummary()
+    const s = await this.usage.summary()
     const eff = await this.effectiveUsd(q)
     if (eff > 0 && s.todayUsd + eff > this.cfg.dailyBudgetUsd + 1e-9)
       throw new BudgetError(
@@ -96,11 +96,11 @@ export class ProviderRouter {
   }
 
   async record(e: Omit<UsageEntry, 'ts'>): Promise<void> {
-    await this.store.appendUsage({ ts: new Date().toISOString(), ...e })
+    await this.usage.append({ ts: new Date().toISOString(), ...e })
   }
 
   async status() {
-    const s = await this.store.usageSummary()
+    const s = await this.usage.summary()
     const providers = await Promise.all(
       Object.values(this.providers).map(async (p) => ({
         id: p!.id,

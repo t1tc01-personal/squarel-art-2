@@ -1,10 +1,11 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { celKey, createDoc } from '../src/core/index.ts'
 import { ConflictError, Store, slugify } from '../src/store/store.ts'
+import { ART_GITIGNORE, catalogPath, type Workspace } from '../src/store/workspace.ts'
 import { celOf, spriteDoc, tempDir } from './helpers.ts'
 
 const run = promisify(execFile)
@@ -13,7 +14,7 @@ let store: Store
 
 beforeEach(async () => {
   t = tempDir()
-  store = new Store(t.dir)
+  store = new Store(join(t.dir, 'squarel_art'))
   await store.init()
 })
 afterEach(() => t.cleanup())
@@ -90,8 +91,8 @@ describe('store', () => {
     })
     const worker = join(import.meta.dirname, 'fixtures', 'commit-worker.ts')
     await Promise.all([
-      run(process.execPath, [worker, t.dir, p.slug, '0', '12']),
-      run(process.execPath, [worker, t.dir, p.slug, '100', '12']),
+      run(process.execPath, [worker, store.root, p.slug, '0', '12']),
+      run(process.execPath, [worker, store.root, p.slug, '100', '12']),
     ])
     const { versionId, doc } = await store.readHead(p.slug)
     expect(versionId).toBe('v000025')
@@ -103,7 +104,7 @@ describe('store', () => {
     expect(existsSync(store.projectPath(p.slug, '.lock'))).toBe(false)
   }, 60000)
 
-  it('saves proposals and summarizes usage per day/month', async () => {
+  it('saves and lists proposals', async () => {
     const p = await store.createProject({ name: 'p', doc: spriteDoc(), source: 'claude' })
     await store.saveProposal(
       p.slug,
@@ -124,40 +125,44 @@ describe('store', () => {
     expect((await store.listProposals(p.slug, 'open')).map((x) => x.id)).toEqual(['p_test1'])
     expect([...(await store.readProposalFile(p.slug, 'p_test1', 'sheet.png'))]).toEqual([1, 2, 3])
     await expect(store.readProposal(p.slug, '../x')).rejects.toThrow()
-    const now = new Date()
-    await store.appendUsage({
-      ts: now.toISOString(),
-      provider: 'cloudflare',
-      model: 'm',
-      op: 'generate',
-      units: 43,
-      unitKind: 'neuron',
-      usd: 0,
-      ok: true,
-    })
-    await store.appendUsage({
-      ts: now.toISOString(),
-      provider: 'retrodiffusion',
-      model: 'm',
-      op: 'generate',
-      units: 2,
-      unitKind: 'credit',
-      usd: 0.02,
-      ok: true,
-    })
-    await store.appendUsage({
-      ts: '2000-01-01T00:00:00Z',
-      provider: 'retrodiffusion',
-      model: 'm',
-      op: 'generate',
-      units: 2,
-      unitKind: 'credit',
-      usd: 5,
-      ok: true,
-    })
-    const s = await store.usageSummary(now)
-    expect(s.todayUsd).toBeCloseTo(0.02)
-    expect(s.monthUsd).toBeCloseTo(0.02)
-    expect(s.todayNeurons).toBe(43)
+  })
+
+  it('init on a project store writes .gitignore once and never overwrites it', async () => {
+    const ws = { id: 'w', name: 'W', folder: t.dir, home: t.dir, config: {} } as unknown as Workspace
+    const root = join(t.dir, 'kept', 'squarel_art')
+    const kept = new Store(root, { project: ws, hooks: false })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, '.gitignore'), 'custom\n')
+    await kept.init()
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe('custom\n')
+    const fresh = join(t.dir, 'fresh', 'squarel_art')
+    await new Store(fresh, { project: ws, hooks: false }).init()
+    expect(readFileSync(join(fresh, '.gitignore'), 'utf8')).toBe(ART_GITIGNORE)
+  })
+
+  it('listProjects on a missing root returns [] and creates nothing', async () => {
+    const root = join(t.dir, 'nope', 'squarel_art')
+    expect(await new Store(root).listProjects()).toEqual([])
+    expect(existsSync(root)).toBe(false)
+  })
+
+  it('a readOnly store refuses writes with its reason', async () => {
+    const s = new Store(join(t.dir, 'legacy'), { readOnly: 'legacy art is read-only' })
+    await expect(s.createProject({ name: 'x', doc: spriteDoc(), source: 'claude' })).rejects.toThrow(
+      'legacy art',
+    )
+    await expect(s.writeProjectFile('x', 'a.txt', 'a')).rejects.toThrow('legacy art')
+    await expect(
+      s.commit('x', { baseVersion: '', doc: spriteDoc(), source: 'claude', label: 'l' }),
+    ).rejects.toThrow('legacy art')
+  })
+
+  it('the catalog goes to <home>/.squarel/arts.md', async () => {
+    const ws = { id: 'w', name: 'W', folder: t.dir, home: t.dir, config: {} } as unknown as Workspace
+    const s = new Store(join(t.dir, 'squarel_art'), { project: ws })
+    await s.createProject({ name: 'Knight', doc: spriteDoc(), source: 'claude' })
+    const md = readFileSync(catalogPath(t.dir), 'utf8')
+    expect(md).toContain('## Knight')
+    expect(md).toContain('`knight`')
   })
 })

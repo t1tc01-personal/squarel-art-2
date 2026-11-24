@@ -7,7 +7,7 @@ import { encodePng } from '../core/png.ts'
 import type { Logger } from '../log.ts'
 import type { PixelDoc, PixelDocJSON, Purpose, Source } from '../shared/types.ts'
 import { exists, readJson, withLock, writeAtomic } from './fsutil.ts'
-import { refreshCatalog } from './workspace.ts'
+import { ART_GITIGNORE, type Workspace, writeCatalog } from './workspace.ts'
 
 export interface ProjectInfo {
   slug: string
@@ -16,8 +16,6 @@ export interface ProjectInfo {
   createdAt: string
   updatedAt: string
   head: string
-  /** Id of the workspace ("Dự án") this art belongs to; absent = unassigned. */
-  workspace?: string
 }
 
 /** Called after every commit (any Store method that appends a version), outside the project lock. */
@@ -82,21 +80,36 @@ export function slugify(name: string): string {
 }
 
 export class Store {
-  readonly dataDir: string
+  /** Folder holding one sub-folder per art (a project's `squarel_art/`, or a legacy DATA_DIR/projects). */
+  readonly root: string
   /** Where thumb/catalog failures are reported (they never fail a commit). */
   log?: Logger
+  private readonly project?: Workspace
+  private readonly readOnly?: string
   private readonly commitListeners: CommitListener[] = []
 
   /**
-   * `hooks: false` skips the built-in post-commit work (thumb.png and the workspace art catalog).
+   * `hooks: false` skips the built-in post-commit work (thumb.png and the project's art catalog).
+   * `project` is the project whose art this is (enables .gitignore and the catalog);
+   * `readOnly` is the error text every write throws.
    */
-  constructor(dataDir: string, o: { hooks?: boolean; log?: Logger } = {}) {
-    this.dataDir = resolve(dataDir)
+  constructor(
+    root: string,
+    o: { log?: Logger; hooks?: boolean; project?: Workspace; readOnly?: string } = {},
+  ) {
+    this.root = resolve(root)
     this.log = o.log
+    this.project = o.project
+    this.readOnly = o.readOnly
     if (o.hooks !== false) {
       this.onCommit(({ slug, doc }) => this.writeThumb(slug, doc))
-      this.onCommit(async ({ slug }) => refreshCatalog(this, (await this.info(slug)).workspace, this.log))
+      const project = o.project
+      if (project) this.onCommit(() => writeCatalog(this, project, this.log))
     }
+  }
+
+  private assertWritable(): void {
+    if (this.readOnly) throw new Error(this.readOnly)
   }
 
   /** Register a post-commit listener; returns a function that removes it. */
@@ -117,23 +130,16 @@ export class Store {
       }
   }
 
-  /** DATA_DIR/projects/<slug>/thumb.png (frame 0, longest side ≤ 128). */
+  /** <root>/<slug>/thumb.png (frame 0, longest side ≤ 128). */
   async writeThumb(slug: string, doc: PixelDoc): Promise<string> {
     const p = this.projectPath(slug, 'thumb.png')
     await writeAtomic(p, renderThumb(doc))
     return p
   }
 
-  get projectsDir(): string {
-    return join(this.dataDir, 'projects')
-  }
-  get inboxDir(): string {
-    return join(this.dataDir, 'inbox')
-  }
-
   projectDir(slug: string): string {
     if (!SLUG_RE.test(slug)) throw new Error(`invalid project slug "${slug}"`)
-    return join(this.projectsDir, slug)
+    return join(this.root, slug)
   }
 
   /** Resolve a path inside a project, refusing anything that escapes it. */
@@ -144,15 +150,20 @@ export class Store {
     return p
   }
 
+  /** Create the root (and, for a project store, its .gitignore unless one exists). */
   async init(): Promise<void> {
-    await mkdir(this.projectsDir, { recursive: true })
-    await mkdir(this.inboxDir, { recursive: true })
+    this.assertWritable()
+    await mkdir(this.root, { recursive: true })
+    if (this.project) {
+      const ignore = join(this.root, '.gitignore')
+      if (!(await exists(ignore))) await writeFile(ignore, ART_GITIGNORE)
+    }
   }
 
   async listProjects(): Promise<ProjectInfo[]> {
-    await this.init()
+    if (!(await exists(this.root))) return []
     const out: ProjectInfo[] = []
-    for (const e of await readdir(this.projectsDir, { withFileTypes: true })) {
+    for (const e of await readdir(this.root, { withFileTypes: true })) {
       if (!e.isDirectory() || !SLUG_RE.test(e.name)) continue
       try {
         out.push(await this.info(e.name))
@@ -178,8 +189,6 @@ export class Store {
     doc: PixelDoc
     source: Source
     slug?: string
-    /** Workspace id the new art belongs to. */
-    workspace?: string
   }): Promise<ProjectInfo> {
     await this.init()
     validateDoc(o.doc)
@@ -196,7 +205,6 @@ export class Store {
       createdAt: now,
       updatedAt: now,
       head: '',
-      ...(o.workspace ? { workspace: o.workspace } : {}),
     }
     await writeAtomic(join(dir, 'project.json'), JSON.stringify(info, null, 2))
     const head = await this.commit(slug, {
@@ -227,27 +235,11 @@ export class Store {
     slug: string,
     c: { baseVersion: string; doc: PixelDoc; source: Source; label: string; contentOf?: string },
   ): Promise<string> {
+    this.assertWritable()
     validateDoc(c.doc)
     const id = await withLock(this.projectPath(slug, '.lock'), () => this.commitLocked(slug, c))
     await this.afterCommit(slug, id, c.doc)
     return id
-  }
-
-  /**
-   * Move an art into a workspace (or out of any with null). Regenerates the catalogs of the
-   * old and new workspace. Returns the previous workspace id.
-   */
-  async setWorkspace(slug: string, id: string | null): Promise<string | undefined> {
-    const prev = await withLock(this.projectPath(slug, '.lock'), async () => {
-      const info = await this.info(slug)
-      const { workspace: old, ...rest } = info
-      const next: ProjectInfo = id ? { ...rest, workspace: id } : rest
-      await writeAtomic(this.projectPath(slug, 'project.json'), JSON.stringify(next, null, 2))
-      return old
-    })
-    if (prev && prev !== id) await refreshCatalog(this, prev, this.log)
-    if (id) await refreshCatalog(this, id, this.log)
-    return prev
   }
 
   /** Commit body; caller must hold the project lock. */
@@ -303,6 +295,7 @@ export class Store {
     label: string,
     fn: (doc: PixelDoc, versionId: string) => T | Promise<T>,
   ): Promise<{ versionId: string; doc: PixelDoc; result: T }> {
+    this.assertWritable()
     const r = await withLock(this.projectPath(slug, '.lock'), async () => {
       const { versionId, doc } = await this.readHead(slug)
       const result = await fn(doc, versionId)
@@ -334,6 +327,7 @@ export class Store {
     source: Source,
     label?: string,
   ): Promise<{ versionId: string; doc: PixelDoc }> {
+    this.assertWritable()
     const doc = await this.readVersion(slug, id)
     const r = await withLock(this.projectPath(slug, '.lock'), async () => {
       const info = await this.info(slug)
@@ -352,6 +346,7 @@ export class Store {
 
   /** Step back one version from what is currently shown (repeated undo keeps walking back). */
   async undo(slug: string, source: Source): Promise<{ versionId: string; doc: PixelDoc; restored: string }> {
+    this.assertWritable()
     const index = await this.readIndex(slug)
     const byId = new Map(index.map((v) => [v.id, v]))
     const info = await this.info(slug)
@@ -364,6 +359,7 @@ export class Store {
   }
 
   async writeProjectFile(slug: string, rel: string, data: string | Uint8Array): Promise<string> {
+    this.assertWritable()
     const p = this.projectPath(slug, rel)
     await writeAtomic(p, data)
     return p
@@ -379,6 +375,7 @@ export class Store {
     meta: ProposalMeta,
     files: Record<string, Uint8Array | string>,
   ): Promise<void> {
+    this.assertWritable()
     for (const [name, data] of Object.entries(files))
       await this.writeProjectFile(slug, join('proposals', meta.id, name), data)
     await this.writeProjectFile(slug, join('proposals', meta.id, 'meta.json'), JSON.stringify(meta, null, 2))
@@ -396,6 +393,7 @@ export class Store {
   }
 
   async updateProposal(slug: string, meta: ProposalMeta): Promise<void> {
+    this.assertWritable()
     await this.writeProjectFile(slug, join('proposals', meta.id, 'meta.json'), JSON.stringify(meta, null, 2))
   }
 
@@ -412,38 +410,6 @@ export class Store {
           /* ignore partial proposal */
         }
     return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  }
-
-  // ---- usage ----
-  async appendUsage(e: UsageEntry): Promise<void> {
-    await mkdir(this.dataDir, { recursive: true })
-    await appendFile(join(this.dataDir, 'usage.jsonl'), `${JSON.stringify(e)}\n`)
-  }
-
-  async usageEntries(): Promise<UsageEntry[]> {
-    const file = join(this.dataDir, 'usage.jsonl')
-    if (!(await exists(file))) return []
-    return (await readFile(file, 'utf8'))
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as UsageEntry)
-  }
-
-  async usageSummary(now = new Date()): Promise<UsageSummary> {
-    const day = now.toISOString().slice(0, 10)
-    const month = day.slice(0, 7)
-    const s: UsageSummary = { todayUsd: 0, monthUsd: 0, todayNeurons: 0, todayCalls: 0, byProvider: {} }
-    for (const e of await this.usageEntries()) {
-      if (e.ts.slice(0, 7) !== month) continue
-      s.monthUsd += e.usd
-      if (e.ts.slice(0, 10) === day) {
-        s.todayUsd += e.usd
-        s.todayCalls++
-        if (e.unitKind === 'neuron') s.todayNeurons += e.units
-        s.byProvider[e.provider] = (s.byProvider[e.provider] ?? 0) + e.usd
-      }
-    }
-    return s
   }
 
   /** Raw write for tests and tools that need a file next to the doc. */
@@ -472,25 +438,4 @@ export interface ProposalMeta {
   status: 'open' | 'accepted' | 'discarded'
   acceptedVariant?: number
   acceptedInVersion?: string
-}
-
-export interface UsageEntry {
-  ts: string
-  provider: string
-  model: string
-  op: string
-  units: number
-  unitKind: 'neuron' | 'credit' | 'none'
-  usd: number
-  project?: string
-  proposal?: string
-  ok: boolean
-}
-
-export interface UsageSummary {
-  todayUsd: number
-  monthUsd: number
-  todayNeurons: number
-  todayCalls: number
-  byProvider: Record<string, number>
 }

@@ -7,7 +7,7 @@ import { MockProvider, mockSprite } from '../src/providers/mock.ts'
 import { RetroDiffusionProvider } from '../src/providers/retrodiffusion.ts'
 import { BudgetError, ProviderRouter } from '../src/providers/router.ts'
 import { ProviderError } from '../src/providers/types.ts'
-import { Store } from '../src/store/store.ts'
+import { UsageLog } from '../src/store/usage.ts'
 import { tempDir } from './helpers.ts'
 
 const PNG = encodePng(mockSprite(1, 8, ['#ff0000'], 8))
@@ -109,11 +109,10 @@ describe('LocalSdProvider', () => {
 
 describe('ProviderRouter', () => {
   let t: ReturnType<typeof tempDir>
-  let store: Store
+  let usage: UsageLog
   beforeEach(async () => {
     t = tempDir()
-    store = new Store(t.dir)
-    await store.init()
+    usage = new UsageLog(t.dir)
   })
   afterEach(() => t.cleanup())
 
@@ -126,23 +125,23 @@ describe('ProviderRouter', () => {
   })
 
   it('free chain never includes paid providers; errors when nothing is configured', async () => {
-    const r = new ProviderRouter(cfg(), store, {
+    const r = new ProviderRouter(cfg(), usage, {
       cloudflare: new CloudflareProvider({}),
       retrodiffusion: new RetroDiffusionProvider({ apiKey: 'k', usdPerCredit: 0.01 }),
       'local-sd': new LocalSdProvider('http://127.0.0.1:1'),
     })
     await expect(r.chain('generate', 'free')).rejects.toThrow(/no image provider is configured/)
     expect((await r.chain('generate', 'high'))[0].id).toBe('retrodiffusion')
-    const r2 = new ProviderRouter(cfg({ imageProvider: 'mock' }), store, { mock: new MockProvider() })
+    const r2 = new ProviderRouter(cfg({ imageProvider: 'mock' }), usage, { mock: new MockProvider() })
     expect((await r2.chain('generate', 'free')).map((p) => p.id)).toEqual(['mock'])
     await expect(r2.chain('generate', 'high')).rejects.toThrow(/RETRO_DIFFUSION_API_KEY/)
   })
 
   it('Cloudflare free tier costs $0 until 10k neurons, then counts against the budget', async () => {
-    const r = new ProviderRouter(cfg(), store, {})
+    const r = new ProviderRouter(cfg(), usage, {})
     const q = { usd: 0.002, units: 200, unitKind: 'neuron' as const, model: 'm' }
     expect(await r.effectiveUsd(q)).toBe(0)
-    await store.appendUsage({
+    await usage.append({
       ts: new Date().toISOString(),
       provider: 'cloudflare',
       model: 'm',
@@ -156,7 +155,7 @@ describe('ProviderRouter', () => {
   })
 
   it('blocks paid calls over the daily cap', async () => {
-    const r = new ProviderRouter(cfg(), store, {})
+    const r = new ProviderRouter(cfg(), usage, {})
     await r.record({
       provider: 'retrodiffusion',
       model: 'm',
@@ -172,5 +171,47 @@ describe('ProviderRouter', () => {
     await expect(
       r.checkBudget({ usd: 0.005, units: 1, unitKind: 'credit', model: 'm' }),
     ).resolves.toBeTruthy()
+  })
+})
+
+describe('UsageLog', () => {
+  it('summarizes usage per day and month', async () => {
+    const t = tempDir()
+    try {
+      const usage = new UsageLog(t.dir)
+      const now = new Date()
+      const e = { model: 'm', op: 'generate', ok: true }
+      await usage.append({
+        ts: now.toISOString(),
+        provider: 'cloudflare',
+        units: 43,
+        unitKind: 'neuron',
+        usd: 0,
+        ...e,
+      })
+      await usage.append({
+        ts: now.toISOString(),
+        provider: 'retrodiffusion',
+        units: 2,
+        unitKind: 'credit',
+        usd: 0.02,
+        ...e,
+      })
+      await usage.append({
+        ts: '2000-01-01T00:00:00Z',
+        provider: 'retrodiffusion',
+        units: 2,
+        unitKind: 'credit',
+        usd: 5,
+        ...e,
+      })
+      const s = await usage.summary(now)
+      expect(s.todayUsd).toBeCloseTo(0.02)
+      expect(s.monthUsd).toBeCloseTo(0.02)
+      expect(s.todayNeurons).toBe(43)
+      expect(s.todayCalls).toBe(2)
+    } finally {
+      t.cleanup()
+    }
   })
 })
