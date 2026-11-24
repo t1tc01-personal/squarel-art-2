@@ -132,7 +132,7 @@ end
 
 local function pickProject()
   if #state.projects == 0 then
-    app.alert { title = 'Squarel', text = 'No projects yet. Ask Claude to create one (project_create).' }
+    app.alert { title = 'Squarel', text = 'No projects yet. Ask Claude to create one (art_create).' }
     return
   end
   local names = {}
@@ -303,7 +303,7 @@ local function setup(plugin)
     dlg:show()
     if dlg.data.ok then
       flush()
-      send({ type = 'tool', id = tostring(os.time()), name = 'export', slug = slug, input = { project = slug, preset = dlg.data.preset } })
+      send({ type = 'tool', id = tostring(os.time()), name = 'export', slug = slug, input = { art = slug, preset = dlg.data.preset } })
     end
   end }
   plugin:newCommand { id = 'SquarelSettings', title = 'Settings…', group = group, onclick = function()

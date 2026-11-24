@@ -401,7 +401,7 @@ export async function renderCatalog(store: Store, ws: Workspace): Promise<string
     `# Art catalog: ${ws.name}`,
     '',
     `${arts.length} art${arts.length === 1 ? '' : 's'} in this project, newest first. Defaults for new art: ${describeDefaults(ws.config.defaults)}.`,
-    'Open one with the Squarel tool `project_open` and its slug.',
+    'Open one with the Squarel tool `art_open` and its id.',
     '',
   ]
   for (const p of arts) {

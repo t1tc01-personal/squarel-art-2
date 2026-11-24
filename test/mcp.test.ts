@@ -38,13 +38,21 @@ describe('MCP server (in-memory transport)', () => {
 
     const { tools } = await client.listTools()
     expect(tools.map((x) => x.name).sort()).toEqual(ALL_TOOLS.map((x) => x.name).sort())
+    const names = tools.map((x) => x.name)
+    expect(names).toContain('art_create')
+    expect(names).not.toContain('project_create')
+    expect(names).toContain('project_info')
+    expect(names).not.toContain('workspace_info')
+    expect(Object.keys(tools.find((x) => x.name === 'canvas_view')!.inputSchema.properties ?? {})).toContain(
+      'art',
+    )
     const draw = tools.find((x) => x.name === 'draw_pixels')!
     expect(draw.inputSchema.type).toBe('object')
     expect(Object.keys(draw.inputSchema.properties ?? {})).toContain('ops')
     expect(tools.find((x) => x.name === 'canvas_view')!.annotations?.readOnlyHint).toBe(true)
 
     const created = await client.callTool({
-      name: 'project_create',
+      name: 'art_create',
       arguments: { name: 'MCP test', width: 8, height: 8 },
     })
     const content = created.content as Content[]
@@ -58,7 +66,7 @@ describe('MCP server (in-memory transport)', () => {
     })
     expect((gen.content as Content[])[0].text).toMatch(/Proposal p_/)
 
-    const bad = await client.callTool({ name: 'project_open', arguments: { project: 'does-not-exist' } })
+    const bad = await client.callTool({ name: 'art_open', arguments: { art: 'does-not-exist' } })
     expect(bad.isError).toBe(true)
     expect((bad.content as Content[])[0].text).toMatch(/^\[NOT_FOUND\]/)
 
@@ -98,10 +106,10 @@ describe('MCP server over stdio (as Claude Code runs it)', () => {
     const info = client.getServerVersion()
     expect(info?.name).toBe('squarel')
     expect(client.getInstructions()).toContain('PROPOSALS')
-    const list = await client.callTool({ name: 'project_list', arguments: {} })
+    const list = await client.callTool({ name: 'art_list', arguments: {} })
     expect((list.content as Content[])[0].text).toContain('No art in project')
     const created = await client.callTool({
-      name: 'project_create',
+      name: 'art_create',
       arguments: { name: 'stdio', width: 4, height: 4 },
     })
     expect(created.isError).toBeFalsy()

@@ -19,16 +19,7 @@ import {
 import { paletteColors } from '../shared/palettes.ts'
 import type { PixelDoc, Rect } from '../shared/types.ts'
 import type { ProposalMeta } from '../store/store.ts'
-import {
-  artStore,
-  decodeImage,
-  mutate,
-  previewArg,
-  projectArg,
-  projectSlug,
-  short,
-  sniffExt,
-} from './common.ts'
+import { artArg, artSlug, artStore, decodeImage, mutate, previewArg, short, sniffExt } from './common.ts'
 import { defineTool, type ToolContext, ToolError, type ToolResult } from './types.ts'
 
 const COST_NOTE =
@@ -250,9 +241,9 @@ export const aiTools = [
   defineTool({
     name: 'generate_image',
     title: 'Generate pixel art (AI)',
-    description: `Generate pixel-art variants for the active project's canvas size. Results are cleaned to a true pixel grid and palette and stored as a PROPOSAL (canvas unchanged until accept_variant). ${COST_NOTE}`,
+    description: `Generate pixel-art variants for the active art's canvas size. Results are cleaned to a true pixel grid and palette and stored as a PROPOSAL (canvas unchanged until accept_variant). ${COST_NOTE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       prompt: z.string().min(2).max(500).describe('Subject and style, in English for best results'),
       palette: z
         .union([z.string(), z.array(z.string())])
@@ -267,7 +258,7 @@ export const aiTools = [
     }),
     annotations: { openWorld: true, costly: true },
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const { versionId, doc } = await artStore(ctx).readHead(slug)
       const palette = paletteInput(doc, i.palette)
       const req = {
@@ -341,7 +332,7 @@ export const aiTools = [
     title: 'Edit with AI',
     description: `Change the current artwork from an instruction ("give him a red cape"), optionally only inside a rectangle. Output is cleaned and stored as a PROPOSAL; accept_variant adds it as a new layer. Prefer the free deterministic tools (recolor, add_outline, draw_pixels…) when they can do the job. ${COST_NOTE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       instruction: z.string().min(2).max(500),
       region: regionArg,
       keep_palette: z.boolean().default(true).describe('Snap the result to the current palette'),
@@ -354,7 +345,7 @@ export const aiTools = [
     }),
     annotations: { openWorld: true, costly: true },
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const { versionId, doc } = await artStore(ctx).readHead(slug)
       const frame = doc.frames[i.frame]
       if (!frame) throw new ToolError('INVALID', `frame ${i.frame} out of range`)
@@ -423,7 +414,7 @@ export const aiTools = [
     title: 'Animate with AI',
     description: `Generate an animation (walk cycle, idle, attack…) at the canvas size. Stored as a PROPOSAL; accept_variant adds the frames on a new layer. Needs a provider that can animate (quality "high" = Retro Diffusion, or provider "mock" for testing). ${COST_NOTE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       prompt: z.string().min(2).max(300).describe('What the character looks like'),
       action: z.string().min(2).max(80).describe('e.g. "walking", "idle", "attack"'),
       frames: z.number().int().min(2).max(16).default(4),
@@ -435,7 +426,7 @@ export const aiTools = [
     }),
     annotations: { openWorld: true, costly: true },
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const { versionId, doc } = await artStore(ctx).readHead(slug)
       const req = {
         prompt: i.prompt,
@@ -523,14 +514,14 @@ export const aiTools = [
     description:
       'Put a proposal variant onto the canvas as a NEW layer (never overwrites existing pixels). Animation proposals fill frames on that layer, adding frames if needed.',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       proposal: z.string(),
       variant: z.number().int().min(1).max(4),
       layer_name: z.string().max(60).optional(),
       preview: previewArg,
     }),
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const meta = await artStore(ctx).readProposal(slug, i.proposal)
       if (meta.status !== 'open')
         throw new ToolError('INVALID', `proposal ${meta.id} is already ${meta.status}`)
@@ -600,9 +591,9 @@ export const aiTools = [
     name: 'discard_proposal',
     title: 'Discard proposal',
     description: 'Mark an AI proposal as discarded (files are kept for reference).',
-    input: z.object({ project: projectArg, proposal: z.string() }),
+    input: z.object({ art: artArg, proposal: z.string() }),
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const meta = await artStore(ctx).readProposal(slug, i.proposal)
       meta.status = 'discarded'
       await artStore(ctx).updateProposal(slug, meta)
@@ -612,11 +603,11 @@ export const aiTools = [
   defineTool({
     name: 'proposal_list',
     title: 'List proposals',
-    description: 'List AI proposals of a project (open ones first).',
-    input: z.object({ project: projectArg, status: z.enum(['open', 'accepted', 'discarded']).optional() }),
+    description: 'List AI proposals of an art (open ones first).',
+    input: z.object({ art: artArg, status: z.enum(['open', 'accepted', 'discarded']).optional() }),
     annotations: { readOnly: true },
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const list = await artStore(ctx).listProposals(slug, i.status)
       return {
         text: list.length

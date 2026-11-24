@@ -43,7 +43,7 @@ const rows: string[] = ['| id | provider | grid conf. (min/avg) | colors | warni
 let total = 0
 for (const p of prompts) {
   try {
-    await runTool('project_create', { name: p.id, width: p.width, height: p.height, purpose: p.purpose, palette: p.palette }, ctx)
+    await runTool('art_create', { name: p.id, width: p.width, height: p.height, purpose: p.purpose, palette: p.palette }, ctx)
     const r = await runTool(
       'generate_image',
       { prompt: p.prompt, variants, quality, provider, confirm_cost: quality === 'high', palette: p.palette ?? 'auto' },

@@ -30,7 +30,7 @@ export function openViaBridge(opts: {
     const timer = setTimeout(() => finish(new Error(`${prefix} within ${timeoutMs} ms`)), timeoutMs)
     ws.on('open', () => {
       ws.send(JSON.stringify({ type: 'hello', client: 'squarel-mcp' }))
-      ws.send(JSON.stringify({ type: 'tool', id: 'open', name: 'open_in_editor', input: { project: slug } }))
+      ws.send(JSON.stringify({ type: 'tool', id: 'open', name: 'open_in_editor', input: { art: slug } }))
     })
     ws.on('message', (raw) => {
       let m: ServerMessage

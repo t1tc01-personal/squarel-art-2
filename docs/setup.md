@@ -111,11 +111,11 @@ pnpm check
 3. Thử bằng CLI:
 
    ```powershell
-   pnpm cli project_create --name "Thu" --width 32 --height 32
+   pnpm cli art_create --name "Thu" --width 32 --height 32
    ```
 
    ```powershell
-   pnpm cli generate_image --project thu --prompt "a red apple" --variants 2
+   pnpm cli generate_image --art thu --prompt "a red apple" --variants 2
    ```
 
    ```powershell
@@ -169,7 +169,7 @@ Free tier của Workers AI là **10.000 neuron mỗi ngày**. Một ảnh FLUX.1
 **Kiểm tra** (gọi API thật, tốn khoảng 43 neuron miễn phí):
 
 ```powershell
-pnpm cli generate_image --project thu --prompt "a red apple" --variants 1 --provider cloudflare
+pnpm cli generate_image --art thu --prompt "a red apple" --variants 1 --provider cloudflare
 ```
 
 Kết quả đúng: `Proposal p_… (generate, cloudflare/…)`. Mở file `squarel-generate_image-1.png`: phải là pixel art sạch trên nền trong suốt.
@@ -327,13 +327,13 @@ Retro Diffusion là model chuyên pixel art: ra ảnh đúng lưới ngay từ �
 **Kiểm tra:** lệnh đầu chỉ hỏi giá, **không tốn tiền**. Nó phải báo lỗi `[NEEDS_CONFIRM]` kèm số tiền:
 
 ```powershell
-pnpm cli generate_image --project thu --prompt "a red apple" --variants 1 --quality high
+pnpm cli generate_image --art thu --prompt "a red apple" --variants 1 --quality high
 ```
 
 Đồng ý với giá đó thì chạy thật (**tốn tiền**):
 
 ```powershell
-pnpm cli generate_image --project thu --prompt "a red apple" --variants 1 --quality high --confirm_cost true
+pnpm cli generate_image --art thu --prompt "a red apple" --variants 1 --quality high --confirm_cost true
 ```
 
 Trong Claude Code, quy trình này tự động: Claude báo giá và hỏi bạn trước khi gọi.
@@ -359,7 +359,7 @@ Chạy Stable Diffusion 1.5 trên GPU NVIDIA của máy (GTX 1650 4GB chạy đ�
 **Kiểm tra:**
 
 ```powershell
-pnpm cli generate_image --project thu --prompt "a red apple" --variants 1 --provider local-sd
+pnpm cli generate_image --art thu --prompt "a red apple" --variants 1 --provider local-sd
 ```
 
 Service local-sd mới được kiểm tra cú pháp, chưa chạy thật. Nếu lỗi, gửi Claude output của cửa sổ `uvicorn`.

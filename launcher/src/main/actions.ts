@@ -296,7 +296,7 @@ async function runLaunch(
         slug = project
       }
       if (!slug) return fail('Chưa có project nào')
-      const text = await ctx.bridgeTool(a.bridgeTool, { project: slug })
+      const text = await ctx.bridgeTool(a.bridgeTool, { art: slug })
       return emit({ taskId, kind: 'done', code: 0, text: text.trim() || `Đã mở ${slug}` })
     }
     if (a.reveal) {

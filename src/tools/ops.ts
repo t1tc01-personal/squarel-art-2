@@ -15,7 +15,7 @@ import {
 } from '../core/ops.ts'
 import { PALETTES } from '../shared/palettes.ts'
 import { MAX_SIDE } from '../shared/types.ts'
-import { colorArg, layerArg, mutate, previewArg, projectArg } from './common.ts'
+import { artArg, colorArg, layerArg, mutate, previewArg } from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const FREE = 'Deterministic, instant and free (no AI).'
@@ -26,7 +26,7 @@ export const opsTools = [
     title: 'Recolor',
     description: `Replace one color with another on one or all layers. ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       from: colorArg,
       to: colorArg,
       layer: layerArg.describe('Only this layer (default all)'),
@@ -41,7 +41,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `recolor ${i.from} → ${i.to}`,
         (doc) => {
           const n = recolor(doc, i.from, i.to, { layer: i.layer, tolerance: i.tolerance })
@@ -56,7 +56,7 @@ export const opsTools = [
     title: 'Apply palette',
     description: `Map the artwork onto a palette preset (${Object.keys(PALETTES).join(', ')}) or a list of colors, optionally with ordered dithering. ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       palette: z.union([z.string(), z.array(z.string()).min(1).max(255)]),
       dither: z.boolean().optional(),
       preview: previewArg,
@@ -64,7 +64,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `apply palette ${typeof i.palette === 'string' ? i.palette : `${i.palette.length} colors`}`,
         (doc) => {
           let colors: string[]
@@ -84,11 +84,11 @@ export const opsTools = [
     name: 'reduce_colors',
     title: 'Reduce colors',
     description: `Reduce the artwork to at most n colors (perceptual k-means). ${FREE}`,
-    input: z.object({ project: projectArg, n: z.number().int().min(1).max(255), preview: previewArg }),
+    input: z.object({ art: artArg, n: z.number().int().min(1).max(255), preview: previewArg }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `reduce to ${i.n} colors`,
         (doc) => {
           const before = doc.palette.length - 1
@@ -104,7 +104,7 @@ export const opsTools = [
     title: 'Add outline',
     description: `Draw a 1px outline around the visible sprite (outer) or along its inner edge. Written into the given layer (default top). ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       color: colorArg,
       mode: z.enum(['outer', 'inner']).default('outer'),
       diagonal: z.boolean().optional().describe('Also outline diagonally (thicker look)'),
@@ -114,7 +114,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `${i.mode} outline ${i.color}`,
         (doc) => {
           const n = addOutline(doc, i.color, { mode: i.mode, diagonal: i.diagonal, layer: i.layer })
@@ -129,7 +129,7 @@ export const opsTools = [
     title: 'Remove background',
     description: `Clear the flat background color connected to the canvas edges. ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       layer: layerArg.describe('Only this layer (default all)'),
       tolerance: z.number().min(0).max(0.5).optional(),
       preview: previewArg,
@@ -137,7 +137,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         'remove background',
         (doc) => `Cleared ${removeBackground(doc, i)} pixel(s).`,
         {
@@ -151,7 +151,7 @@ export const opsTools = [
     title: 'Resize canvas',
     description: `Change canvas size without scaling the art (crop or pad around an anchor). ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       width: z.number().int().min(1).max(MAX_SIDE),
       height: z.number().int().min(1).max(MAX_SIDE),
       anchor: z
@@ -172,7 +172,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `canvas ${i.width}×${i.height}`,
         (doc) => {
           resizeCanvas(doc, i.width, i.height, i.anchor)
@@ -187,7 +187,7 @@ export const opsTools = [
     title: 'Scale artwork',
     description: `Nearest-neighbor scale the whole artwork (integer factor or exact size). ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       factor: z.number().positive().optional(),
       width: z.number().int().min(1).max(MAX_SIDE).optional(),
       height: z.number().int().min(1).max(MAX_SIDE).optional(),
@@ -196,7 +196,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         'scale',
         (doc) => {
           const w = i.width ?? (i.factor ? Math.round(doc.width * i.factor) : undefined)
@@ -214,7 +214,7 @@ export const opsTools = [
     title: 'Flip',
     description: `Mirror horizontally or vertically (one layer or all). ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       axis: z.enum(['horizontal', 'vertical']),
       layer: layerArg,
       preview: previewArg,
@@ -222,7 +222,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `flip ${i.axis}`,
         (doc) => {
           flip(doc, i.axis, i.layer)
@@ -237,14 +237,14 @@ export const opsTools = [
     title: 'Rotate 90°',
     description: `Rotate the whole canvas 90° clockwise or counter-clockwise. ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       direction: z.enum(['cw', 'ccw']).default('cw'),
       preview: previewArg,
     }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `rotate ${i.direction}`,
         (doc) => {
           rotate90(doc, i.direction)
@@ -259,14 +259,14 @@ export const opsTools = [
     title: 'Crop to content',
     description: `Trim empty borders (optionally keep padding). ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       padding: z.number().int().min(0).max(64).default(0),
       preview: previewArg,
     }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         'crop to content',
         (doc) => {
           try {
@@ -285,7 +285,7 @@ export const opsTools = [
     title: 'Shift hue',
     description: `Rotate the hue of all palette colors (or selected indices). ${FREE}`,
     input: z.object({
-      project: projectArg,
+      art: artArg,
       degrees: z.number().min(-360).max(360),
       indices: z.array(z.number().int().min(1).max(255)).optional(),
       preview: previewArg,
@@ -293,7 +293,7 @@ export const opsTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `hue ${i.degrees}°`,
         (doc) => `Shifted ${shiftHue(doc, i.degrees, i.indices)} color(s).`,
         {

@@ -13,7 +13,7 @@ import {
 } from '../core/doc.ts'
 import { ellipse, floodFill, line, rect, setPixel } from '../core/draw.ts'
 import { setPaletteColor } from '../core/ops.ts'
-import { colorArg, frameArg, layerArg, mutate, previewArg, projectArg } from './common.ts'
+import { artArg, colorArg, frameArg, layerArg, mutate, previewArg } from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const point = z.tuple([z.number().int(), z.number().int()])
@@ -55,7 +55,7 @@ export const drawTools = [
     description:
       'Draw directly on a layer: set points, lines, rectangles, ellipses, flood fill. Coordinates are 0-based, x right, y down. Use canvas_view with coords first. Free and exact — prefer this for small, precise edits.',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       layer: layerArg.describe('Layer id or name (default: top layer)'),
       frame: frameArg,
       ops: z.array(drawOp).min(1).max(200),
@@ -64,7 +64,7 @@ export const drawTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `draw ${i.ops.length} op(s)`,
         (doc) => {
           const layer = findLayer(doc, i.layer)
@@ -91,7 +91,7 @@ export const drawTools = [
     title: 'Add layer',
     description: 'Add an empty layer (on top, or above a given layer).',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       name: z.string().min(1).max(60),
       above: layerArg,
       preview: previewArg,
@@ -99,7 +99,7 @@ export const drawTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `add layer ${i.name}`,
         (doc) => {
           const above = i.above ? findLayer(doc, i.above).id : undefined
@@ -114,11 +114,11 @@ export const drawTools = [
     name: 'layer_remove',
     title: 'Remove layer',
     description: 'Delete a layer (it stays recoverable through history/undo).',
-    input: z.object({ project: projectArg, layer: z.string(), preview: previewArg }),
+    input: z.object({ art: artArg, layer: z.string(), preview: previewArg }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `remove layer ${i.layer}`,
         (doc) => {
           const l = findLayer(doc, i.layer)
@@ -133,11 +133,11 @@ export const drawTools = [
     name: 'layer_merge_down',
     title: 'Merge layer down',
     description: 'Merge a layer into the one below it (e.g. after accepting an AI proposal).',
-    input: z.object({ project: projectArg, layer: z.string(), preview: previewArg }),
+    input: z.object({ art: artArg, layer: z.string(), preview: previewArg }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `merge ${i.layer}`,
         (doc) => {
           const l = findLayer(doc, i.layer)
@@ -153,7 +153,7 @@ export const drawTools = [
     title: 'Reorder layer',
     description: 'Move a layer to an index (0 = bottom).',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       layer: z.string(),
       to_index: z.number().int().min(0),
       preview: previewArg,
@@ -161,7 +161,7 @@ export const drawTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `move ${i.layer}`,
         (doc) => {
           const l = findLayer(doc, i.layer)
@@ -177,7 +177,7 @@ export const drawTools = [
     title: 'Set layer properties',
     description: 'Rename, hide/show, change opacity (0-255) or lock a layer.',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       layer: z.string(),
       name: z.string().min(1).max(60).optional(),
       visible: z.boolean().optional(),
@@ -188,7 +188,7 @@ export const drawTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `layer ${i.layer} props`,
         (doc) => {
           const l = findLayer(doc, i.layer)
@@ -207,7 +207,7 @@ export const drawTools = [
     title: 'Add frame',
     description: 'Append an animation frame (empty or copied from another frame).',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       duration_ms: z.number().int().min(10).max(10000).optional(),
       copy_from: frameArg,
       preview: previewArg,
@@ -215,7 +215,7 @@ export const drawTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         'add frame',
         (doc) => {
           const from = i.copy_from !== undefined ? findFrame(doc, i.copy_from).id : undefined
@@ -230,11 +230,11 @@ export const drawTools = [
     name: 'frame_remove',
     title: 'Remove frame',
     description: 'Delete an animation frame by index.',
-    input: z.object({ project: projectArg, frame: z.number().int().min(0), preview: previewArg }),
+    input: z.object({ art: artArg, frame: z.number().int().min(0), preview: previewArg }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `remove frame ${i.frame}`,
         (doc) => {
           removeFrame(doc, findFrame(doc, i.frame).id)
@@ -249,14 +249,14 @@ export const drawTools = [
     title: 'Set frame duration',
     description: 'Change how long a frame shows (ms).',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       frame: z.number().int().min(0),
       duration_ms: z.number().int().min(10).max(10000),
     }),
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `frame ${i.frame} duration`,
         (doc) => {
           findFrame(doc, i.frame).durationMs = i.duration_ms
@@ -271,7 +271,7 @@ export const drawTools = [
     title: 'Change palette color',
     description: 'Change one palette entry; every pixel using that index changes color.',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       index: z.number().int().min(1).max(255),
       color: z.string(),
       preview: previewArg,
@@ -279,7 +279,7 @@ export const drawTools = [
     async handler(ctx, i) {
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `palette ${i.index} → ${i.color}`,
         (doc) => {
           setPaletteColor(doc, i.index, i.color)

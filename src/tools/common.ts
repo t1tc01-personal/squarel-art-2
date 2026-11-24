@@ -2,6 +2,7 @@ import sharp from 'sharp'
 import { z } from 'zod'
 import { encodePng } from '../core/png.ts'
 import { renderDoc } from '../core/preview.ts'
+import { artRef } from '../shared/ref.ts'
 import type { PixelDoc } from '../shared/types.ts'
 import type { Store } from '../store/store.ts'
 import { readWorkspace, type Workspace } from '../store/workspace.ts'
@@ -16,10 +17,10 @@ export function artStore(ctx: ToolContext): Store {
   return ctx.arts
 }
 
-export const projectArg = z
+export const artArg = z
   .string()
   .optional()
-  .describe('Project slug. Defaults to the project opened with project_open / project_create.')
+  .describe('Art id in this project. Defaults to the art opened with art_open / art_create.')
 
 export const previewArg = z
   .number()
@@ -36,16 +37,13 @@ export const colorArg = z
 export const layerArg = z.string().optional().describe('Layer id or name (default depends on the tool)')
 export const frameArg = z.number().int().min(0).optional().describe('Frame index (default 0)')
 
-export async function projectSlug(ctx: ToolContext, project?: string): Promise<string> {
+export async function artSlug(ctx: ToolContext, art?: string): Promise<string> {
   const store = artStore(ctx)
-  const slug = project ?? ctx.session.activeProject
+  const slug = art ?? ctx.session.activeProject
   if (!slug)
-    throw new ToolError(
-      'NOT_FOUND',
-      'no project selected: call project_list / project_open, or project_create first',
-    )
+    throw new ToolError('NOT_FOUND', 'no art selected: call art_list / art_open, or art_create first')
   if (!(await store.hasProject(slug)))
-    throw new ToolError('NOT_FOUND', `project "${slug}" not found (see project_list)`)
+    throw new ToolError('NOT_FOUND', `art "${slug}" not found (see art_list)`)
   return slug
 }
 
@@ -84,12 +82,12 @@ export function preview(
 /** Run a mutation on the head version, commit it and return a standard result. */
 export async function mutate(
   ctx: ToolContext,
-  project: string | undefined,
+  art: string | undefined,
   label: string,
   fn: (doc: PixelDoc) => string | Promise<string>,
   o: { preview?: number; frame?: number } = {},
 ): Promise<ToolResult> {
-  const slug = await projectSlug(ctx, project)
+  const slug = await artSlug(ctx, art)
   const prefix =
     ctx.source === 'claude'
       ? 'Claude'
@@ -103,7 +101,11 @@ export async function mutate(
   return {
     text: `${result}\nSaved as ${versionId} in "${slug}".`,
     images: preview(ctx, doc, o.preview, { frame: o.frame }),
-    data: { project: slug, version: versionId },
+    data: {
+      art: slug,
+      ref: ctx.session.workspace ? artRef(ctx.session.workspace.id, slug) : slug,
+      version: versionId,
+    },
   }
 }
 

@@ -198,8 +198,8 @@ Trong code, "project" là **một art** (một canvas). Cấp gom nhiều art ch
 - **Đọc dễ dãi:** file có thể bị sửa tay, nên chỉ bắt buộc `id` hợp lệ và `name` không rỗng (cắt còn 80 ký tự); thiếu `schema` thì coi là 1. Trường nào sai (`defaults.width: 0`, bảng màu lạ, `description` không phải chuỗi...) thì bỏ riêng trường đó và ghi log cảnh báo, không bỏ cả dự án. Tên bảng màu so không phân biệt hoa thường, bỏ qua `-` và `_` (`PICO-8` → `pico8`).
 - **Nhận dự án:** lúc MCP khởi động, dò ngược từ `CLAUDE_PROJECT_DIR` (không có thì `process.cwd()`) lên tối đa 32 cấp tới khi gặp `.squarel/project.json`. File hỏng (không đọc được, thiếu `id`/`name`) thì ghi log cảnh báo và coi như không có dự án. Việc nhận dự án không cần `DATA_DIR/workspaces/<id>.json`.
 - **Chỉ mục `DATA_DIR/workspaces/<id>.json`** do launcher quản lý (tạo khi thêm, xóa khi gỡ dự án). Squarel không bao giờ tạo mục thiếu, để dự án đã gỡ vẫn bị gỡ. Squarel chỉ sửa mục có sẵn khi thư mục mà mục đó trỏ tới không còn `.squarel/project.json` cùng `id` (thư mục đã bị chuyển); mục còn sống không bao giờ bị chuyển sang bản sao. CLI và `pnpm bridge` không dò dự án.
-- **Mặc định:** `project_create` lấy `width`, `height`, `purpose`, `palette` từ `defaults` khi bỏ trống; không có dự án mà thiếu kích thước thì báo `INVALID`. Art mới (kể cả `photo_to_pixel` tạo project mới) gắn `workspace`. Mỗi lần gọi tool, file cấu hình được đọc lại nên sửa trong launcher có hiệu lực ngay.
-- **Danh mục `.squarel/arts.md`:** sinh lại sau mỗi commit (kể cả từ bridge ở tiến trình khác, vì hook nằm trong `Store`), sau `workspace_add_art`, sau `export` và lúc MCP khởi động (chạy nền, không chờ trước khi kết nối, để thư viện lớn không làm chậm khởi động; phần hướng dẫn cho Claude chỉ đọc `project.json` của từng art). Ghi tạm + rename; lỗi chỉ ghi log, không làm hỏng commit.
+- **Mặc định:** `art_create` lấy `width`, `height`, `purpose`, `palette` từ `defaults` khi bỏ trống; không có dự án mà thiếu kích thước thì báo `INVALID`. Art mới (kể cả `photo_to_pixel` tạo project mới) gắn `workspace`. Mỗi lần gọi tool, file cấu hình được đọc lại nên sửa trong launcher có hiệu lực ngay.
+- **Danh mục `.squarel/arts.md`:** sinh lại sau mỗi commit (kể cả từ bridge ở tiến trình khác, vì hook nằm trong `Store`), sau `art_import`, sau `export` và lúc MCP khởi động (chạy nền, không chờ trước khi kết nối, để thư viện lớn không làm chậm khởi động; phần hướng dẫn cho Claude chỉ đọc `project.json` của từng art). Ghi tạm + rename; lỗi chỉ ghi log, không làm hỏng commit.
 - **Xuất file:** art thuộc dự án có `exportDir` thì `export` chép thêm các file vào `<thư mục>/<exportDir>` (tự tạo thư mục). Quy tắc chung với launcher: `exportDir` phải là đường dẫn tương đối tới thư mục con nằm hẳn bên trong thư mục dự án; rỗng, `.`, đường dẫn tuyệt đối, `..` hoặc `../x` đều bị từ chối (thư mục tên `..assets` thì được). `exportDir` sai không làm hỏng lệnh `export`: file vẫn ghi vào `exports/`, bước chép bị bỏ qua và kết quả có dòng cảnh báo nêu lý do.
 
 ## 4. Các interface chính
@@ -340,16 +340,15 @@ interface ExportPreset<O = unknown> {
 
 ## 5. Danh mục tool
 
-Mọi tool đều có tham số tuỳ chọn `project`. Cột "Ghi" cho biết tool có tạo version mới không; "$" là tool có thể tốn tiền.
+Mọi tool art đều có tham số tuỳ chọn `art` và cần một dự án (ngoài dự án trả `NO_PROJECT`, chỉ `art_list { legacy: true }` vẫn chạy). Cột "Ghi" cho biết tool có tạo version mới không; "$" là tool có thể tốn tiền.
 
 | Tool | Input chính | Ghi | $ | Trả về |
 |---|---|---|---|---|
-| `project_list` | all? | | | danh sách art; có dự án thì chỉ art của dự án, `all: true` liệt kê tất cả kèm dự án của từng art |
-| `project_create` | name, width?, height?, purpose?, palette? (bỏ trống thì lấy mặc định của dự án) | ✓ | | info + ảnh canvas trống |
-| `workspace_info` | — | | | dự án hiện tại: tên, thư mục, mô tả, brief, mặc định, repo, exportDir, art; không có thì hướng dẫn tạo bằng launcher |
-| `workspace_add_art` | project? | | | chuyển art (kể cả Chưa phân loại) vào dự án hiện tại |
-| `project_open` | slug | | | đặt làm project đang mở + ảnh preview |
-| `project_info` | — | | | kích thước, palette, layers, frames, head |
+| `art_list` | legacy? | | | danh sách art của dự án; `legacy: true` liệt kê art cũ trong `DATA_DIR/projects` (chạy được ngoài dự án) |
+| `art_create` | name, width?, height?, purpose?, palette? (bỏ trống thì lấy mặc định của dự án) | ✓ | | info (có thư mục của art) + ảnh canvas trống |
+| `project_info` | — | | | dự án hiện tại: tên, thư mục, mô tả, brief, mặc định, repo, exportDir, art; không có thì hướng dẫn tạo bằng launcher |
+| `art_open` | art | | | đặt làm art đang mở + ảnh preview |
+| `art_info` | — | | | kích thước, palette, layers, frames, head, thư mục của art |
 | `canvas_view` | scale?, layer?, frame?, grid?, coords? | | | **ảnh** (có lưới và toạ độ nếu bật) |
 | `palette_view` | — | | | ảnh các ô màu đánh số + danh sách hex |
 | `draw_pixels` | layer?, frame?, ops[] (`set`/`line`/`rect`/`ellipse`/`fill`), color (hex hoặc chỉ số) | ✓ | | ảnh sau khi vẽ |
@@ -499,7 +498,7 @@ Các ngưỡng trên là giá trị khởi điểm, sẽ được tinh chỉnh b
   1. Nạp `.env` từ thư mục gốc repo. Đường dẫn resolve qua `import.meta.url`, không phụ thuộc thư mục hiện hành (cwd).
   2. Khởi tạo `store`, `providers`, logger. Logger ghi bằng pino ra stderr và `DATA_DIR/logs/mcp.log`.
   3. Dò dự án (mục 3.5), đặt `session.workspace`, sinh lại `.squarel/arts.md`.
-  4. `new McpServer({ name: 'squarel', version }, { instructions })`. Có dự án thì `instructions` thêm một đoạn: tên, thư mục, mặc định, số art và tối đa 5 art mới nhất, brief ở `AGENTS.md`, danh mục ở `.squarel/arts.md`, `project_list` chỉ hiện art của dự án (`all: true` để xem hết).
+  4. `new McpServer({ name: 'squarel', version }, { instructions })`. Có dự án thì `instructions` thêm một đoạn: tên, thư mục, mặc định, số art và tối đa 5 art mới nhất, brief ở `AGENTS.md`, danh mục ở `.squarel/arts.md`, `art_list` chỉ hiện art của dự án (`legacy: true` để xem art cũ). Không có dự án thì đoạn đó là `NO_PROJECT_TEXT` kèm số art cũ chờ `art_import`; thư mục là git worktree thì thêm đoạn nói art nằm ở checkout chính; trùng id thì thêm đoạn báo ghi bị chặn.
   5. Gọi `registerTool` cho từng `ToolDef`.
   6. `connect(new StdioServerTransport())`.
 - **Chuyển kết quả sang MCP:**
@@ -670,7 +669,7 @@ Các script trong `package.json`:
 | Tình huống | Xử lý |
 |---|---|
 | Input sai schema | zod báo lỗi → `INVALID`, kèm tên trường sai |
-| Project không tồn tại / chưa mở project | `NOT_FOUND`, gợi ý gọi `project_list` hoặc `project_open` |
+| Project không tồn tại / chưa mở project | `NOT_FOUND`, gợi ý gọi `art_list` hoặc `art_open` |
 | Hai tiến trình ghi cùng lúc | `withHead` tự thử lại 3 lần. Vẫn lỗi thì trả `CONFLICT` |
 | Provider lỗi hoặc timeout | Thử lại 2 lần, rồi fallback nếu `quality:'free'`. Hết cách thì trả `PROVIDER`, kèm lời khuyên (ví dụ "Cloudflare hết free tier hôm nay; bật local-sd hoặc dùng quality high") |
 | Vượt ngân sách | `BUDGET`, kèm số đã tiêu hôm nay và trần |
@@ -708,7 +707,7 @@ Log dạng JSON (pino), xoay vòng theo ngày, giữ 14 ngày. **Không bao gi�
 | `store` | vitest trên `DATA_DIR` tạm | commit tuần tự; 2 tiến trình (child_process) cùng commit thì đúng 1 bên bị `CONFLICT`; ghi nửa chừng không để lại file hỏng |
 | `providers` | Contract test với fixture HTTP ghi sẵn (`msw`) | Cloudflare trả base64 → `RawImage`; 429 → thử lại; `mock` cho kết quả theo seed |
 | `tools` | Gọi handler trực tiếp với ctx giả | `undo` không mất lịch sử; `NEEDS_CONFIRM` khi `quality:'high'`; `BUDGET` khi vượt trần |
-| `mcp` | Client của MCP SDK, chạy server qua stdio | `listTools` có đủ tool; `project_create` → `canvas_view` trả content ảnh; stdout không có rác |
+| `mcp` | Client của MCP SDK, chạy server qua stdio | `listTools` có đủ tool; `art_create` → `canvas_view` trả content ảnh; stdout không có rác |
 | `bridge` | WebSocket client giả lập extension, viết bằng Node | Claude sửa → nhận `doc.updated`; gửi `cels` → có version mới; hai bên sửa cùng lúc → rebase không mất pixel; kết nối có `Origin` bị từ chối |
 | `integrations/aseprite` | Aseprite CLI (`pnpm aseprite:test`, CI bỏ qua) + kịch bản tay | `doc.json → .aseprite → doc.json` giống hệt; Claude sửa → hiện ngay trong Aseprite; Ctrl+Z trong Aseprite được đồng bộ ngược |
 | Chất lượng AI | `pnpm eval` (chạy tay) | ~50 prompt × provider → bảng `gridConfidence`, số màu, độ sạch alpha + ảnh để chấm tay |

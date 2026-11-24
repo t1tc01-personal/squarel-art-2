@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { celKey, decodePng, encodePng, readDpi } from '../src/core/index.ts'
+import { celKey, createDoc, decodePng, encodePng, readDpi } from '../src/core/index.ts'
 import { silentLogger } from '../src/log.ts'
 import { MockProvider, mockSprite } from '../src/providers/mock.ts'
 import type { GenRequest, ImageProvider, RawImage } from '../src/providers/types.ts'
+import { Store } from '../src/store/store.ts'
 import { NO_PROJECT_TEXT } from '../src/tools/common.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { ALL_TOOLS, runTool } from '../src/tools/registry.ts'
@@ -62,6 +63,26 @@ describe('project context', () => {
       log: silentLogger,
     })
 
+  it('art_list { legacy: true } lists DATA_DIR/projects anywhere; plain art_list needs a project', async () => {
+    const outside = await bare()
+    await new Store(join(t.dir, 'projects'), { log: silentLogger }).createProject({
+      name: 'Old',
+      doc: createDoc({ width: 8, height: 8, purpose: 'game' }),
+      source: 'claude',
+    })
+    await expect(runTool('art_list', {}, outside)).rejects.toMatchObject({ code: 'NO_PROJECT' })
+    const r = await runTool('art_list', { legacy: true }, outside)
+    expect(r.text).toContain('old')
+    expect(r.text).toContain('art_import')
+  })
+
+  it('art_create and art_info name the art folder', async () => {
+    const made = await runTool('art_create', { name: 'Hero', width: 8, height: 8 }, ctx)
+    const folder = ctx.arts!.projectPath('hero')
+    expect(made.text).toContain(folder)
+    expect((await runTool('art_info', {}, ctx)).text).toContain(folder)
+  })
+
   it('art tools outside a project fail with NO_PROJECT', async () => {
     const outside = await bare()
     const err = await runTool(
@@ -72,7 +93,7 @@ describe('project context', () => {
     expect(err.code).toBe('NO_PROJECT')
     expect(err.message).toBe(NO_PROJECT_TEXT)
     for (const input of [{ name: 'X', width: 8, height: 8 }, { name: 'X' }])
-      await expect(runTool('project_create', input, outside)).rejects.toMatchObject({
+      await expect(runTool('art_create', input, outside)).rejects.toMatchObject({
         code: 'NO_PROJECT',
         message: NO_PROJECT_TEXT,
       })
@@ -97,7 +118,7 @@ describe('project context', () => {
   })
 
   it('art is written under <project>/squarel_art', async () => {
-    await call('project_create', { name: 'Hero', width: 8, height: 8 })
+    await call('art_create', { name: 'Hero', width: 8, height: 8 })
     expect(existsSync(join(folder, 'squarel_art', 'hero', 'project.json'))).toBe(true)
   })
 
@@ -126,14 +147,14 @@ describe('tool registry', () => {
   })
   it('maps errors to codes', async () => {
     await expectCode(call('canvas_view'), 'NOT_FOUND')
-    await expectCode(call('project_create', { name: 'x', width: 0, height: 8 }), 'INVALID')
+    await expectCode(call('art_create', { name: 'x', width: 0, height: 8 }), 'INVALID')
     await expectCode(call('nope'), 'NOT_FOUND')
   })
 })
 
 describe('project, view, draw, ops, history', () => {
   it('runs a full editing session with previews and versions', async () => {
-    const created = await call('project_create', {
+    const created = await call('art_create', {
       name: 'Hiệp sĩ',
       width: 16,
       height: 16,
@@ -157,7 +178,7 @@ describe('project, view, draw, ops, history', () => {
     await call('add_outline', { color: '#000000' })
     await call('recolor', { from: '#ff004d', to: '#29adff' })
     await call('flip', { axis: 'horizontal' })
-    const info = await call('project_info')
+    const info = await call('art_info')
     expect((info.data as { usedColors: number }).usedColors).toBe(3)
 
     const hist = await call('history')
@@ -172,7 +193,7 @@ describe('project, view, draw, ops, history', () => {
   })
 
   it('layers, frames and palette tools', async () => {
-    await call('project_create', { name: 'L', width: 8, height: 8 })
+    await call('art_create', { name: 'L', width: 8, height: 8 })
     await call('layer_add', { name: 'fx' })
     await call('draw_pixels', { layer: 'fx', ops: [{ op: 'fill', x: 0, y: 0, color: 3 }] })
     await call('layer_set', { layer: 'fx', opacity: 100, name: 'effects' })
@@ -181,7 +202,7 @@ describe('project, view, draw, ops, history', () => {
     await call('frame_add', { copy_from: 0, duration_ms: 200 })
     await call('frame_set', { frame: 1, duration_ms: 80 })
     await call('palette_set_color', { index: 3, color: '#123456' })
-    const info = (await call('project_info')).data as any
+    const info = (await call('art_info')).data as any
     expect(info.layers).toHaveLength(1)
     expect(info.frames).toHaveLength(2)
     expect(info.palette[3]).toBe('#123456ff')
@@ -194,7 +215,7 @@ describe('project, view, draw, ops, history', () => {
   })
 
   it('palette & geometry ops keep the doc valid', async () => {
-    await call('project_create', { name: 'G', width: 16, height: 16 })
+    await call('art_create', { name: 'G', width: 16, height: 16 })
     await call('draw_pixels', {
       ops: [{ op: 'ellipse', x: 2, y: 2, w: 10, h: 10, color: '#ff77a8', fill: true }],
     })
@@ -205,7 +226,7 @@ describe('project, view, draw, ops, history', () => {
     await call('crop_to_content', { padding: 1 })
     await call('scale', { factor: 2 })
     await call('rotate90', { direction: 'ccw' })
-    const info = (await call('project_info')).data as any
+    const info = (await call('art_info')).data as any
     expect(info.width).toBe(24)
     expect(info.usedColors).toBeLessThanOrEqual(2)
     await expectCode(call('apply_palette', { palette: 'nope' }), 'INVALID')
@@ -214,7 +235,7 @@ describe('project, view, draw, ops, history', () => {
 
 describe('AI proposals (mock + paid provider double)', () => {
   it('generate → numbered sheet → accept as a new AI layer', async () => {
-    await call('project_create', { name: 'AI', width: 16, height: 16 })
+    await call('art_create', { name: 'AI', width: 16, height: 16 })
     const gen = await call('generate_image', { prompt: 'a tiny knight', variants: 3 })
     const id = (gen.data as { id: string }).id
     expect(gen.text).toContain('Nothing on the canvas changed yet')
@@ -222,7 +243,7 @@ describe('AI proposals (mock + paid provider double)', () => {
     expect((await call('proposal_list', { status: 'open' })).text).toContain(id)
     const acc = await call('accept_variant', { proposal: id, variant: 2 })
     expect(acc.text).toContain('as layer "AI: a tiny knight"')
-    const info = (await call('project_info')).data as any
+    const info = (await call('art_info')).data as any
     expect(info.layers.map((l: any) => l.origin)).toContain('ai')
     expect(info.usedColors).toBeGreaterThan(0)
     await expectCode(call('accept_variant', { proposal: id, variant: 1 }), 'INVALID')
@@ -231,7 +252,7 @@ describe('AI proposals (mock + paid provider double)', () => {
   })
 
   it('edit_image with a region only changes pixels inside it', async () => {
-    await call('project_create', {
+    await call('art_create', {
       name: 'E',
       width: 8,
       height: 8,
@@ -260,10 +281,10 @@ describe('AI proposals (mock + paid provider double)', () => {
   })
 
   it('animate → frames on one layer', async () => {
-    await call('project_create', { name: 'Anim', width: 16, height: 16 })
+    await call('art_create', { name: 'Anim', width: 16, height: 16 })
     const an = await call('animate', { prompt: 'slime', action: 'idle', frames: 4, provider: 'mock' })
     await call('accept_variant', { proposal: (an.data as any).id, variant: 1 })
-    const info = (await call('project_info')).data as any
+    const info = (await call('art_info')).data as any
     expect(info.frames).toHaveLength(4)
     const ex = await call('export', { preset: 'game-spritesheet', options: { scale: 2 } })
     const json = JSON.parse(readFileSync(ex.files!.find((f) => f.endsWith('.json'))!, 'utf8'))
@@ -273,7 +294,7 @@ describe('AI proposals (mock + paid provider double)', () => {
   })
 
   it('paid provider: price first, confirm, budget cap', async () => {
-    await call('project_create', { name: 'Paid', width: 16, height: 16 })
+    await call('art_create', { name: 'Paid', width: 16, height: 16 })
     await expectCode(
       call('generate_image', { prompt: 'knight', quality: 'high', variants: 1 }),
       'NEEDS_CONFIRM',
@@ -299,7 +320,7 @@ describe('AI proposals (mock + paid provider double)', () => {
 
 describe('export presets', () => {
   it('writes valid files for all four purposes', async () => {
-    await call('project_create', { name: 'Exp', width: 30, height: 20, purpose: 'craft' })
+    await call('art_create', { name: 'Exp', width: 30, height: 20, purpose: 'craft' })
     await call('draw_pixels', {
       ops: [
         { op: 'rect', x: 2, y: 2, w: 26, h: 16, color: '#ff004d', fill: true },
@@ -345,7 +366,7 @@ describe('photo_to_pixel', () => {
     writeFileSync(file, encodePng(img))
     const r = await call('photo_to_pixel', { path: 'photo.png', width: 16, colors: 6, name: 'Ảnh mèo' })
     expect(r.text).toContain('anh-meo')
-    const info = (await call('project_info')).data as any
+    const info = (await call('art_info')).data as any
     expect(info.width).toBe(16)
     expect(info.usedColors).toBeLessThanOrEqual(6)
     await expectCode(call('photo_to_pixel', { path: 'C:/Windows/win.ini', width: 16 }), 'INVALID')
@@ -355,7 +376,7 @@ describe('photo_to_pixel', () => {
   })
 
   it('generate also works when mock sprites are noisy (normalize retry path)', async () => {
-    await call('project_create', { name: 'N', width: 12, height: 12 })
+    await call('art_create', { name: 'N', width: 12, height: 12 })
     const big = encodePng(mockSprite(3, 12, [], 40, 60))
     expect(isPng(big)).toBe(true)
     const r = await call('generate_image', { prompt: 'noise test', variants: 1 })

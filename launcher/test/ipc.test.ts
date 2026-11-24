@@ -457,7 +457,7 @@ describe('launch actions (from the manifest only)', () => {
     await h.handle('state:set', APP, { selected: ['aseprite'] })
     await h.handle('action:run', APP, ref('open-recent'))
     await h.idle()
-    expect(bridgeTools).toEqual([{ name: 'open_in_editor', input: { project: 'cat' } }])
+    expect(bridgeTools).toEqual([{ name: 'open_in_editor', input: { art: 'cat' } }])
 
     await h.handle('action:run', APP, ref('open-project', { project: 'nope' }))
     await h.idle()
@@ -469,7 +469,7 @@ describe('launch actions (from the manifest only)', () => {
     expect(ends.at(-1)?.kind).toBe('error')
     await h.handle('action:run', APP, ref('open-project', { project: 'cat' }))
     await h.idle()
-    expect(bridgeTools.at(-1)).toEqual({ name: 'open_in_editor', input: { project: 'cat' } })
+    expect(bridgeTools.at(-1)).toEqual({ name: 'open_in_editor', input: { art: 'cat' } })
     // A path is never a valid project.
     await expect(h.handle('action:run', APP, ref('open-project', { project: '..\\x' }))).rejects.toThrow(
       /không hợp lệ/,

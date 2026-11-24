@@ -4,44 +4,48 @@
 
 Tổng cộng **42 tool**. Mọi tool đều nhận `project` (slug, mặc định là project đang mở) nếu có liên quan.
 
-## `project_list` — List projects
+## `art_list` — List arts
 
-List pixel-art projects (arts), most recently changed first. Lists the arts of the current project.
+List the arts of the current project, most recently changed first. With legacy: true, list the older arts that still wait in DATA_DIR/projects (works outside a project too).
+
+| Tham số | Kiểu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `legacy` | boolean |  | List the legacy arts in DATA_DIR/projects instead |
 
 _chỉ đọc_
 
-## `project_create` — Create project
+## `art_create` — Create art
 
-Create a new pixel-art canvas and make it the active project. Width, height, purpose and palette default to the active workspace's defaults, and the new art joins that workspace. Typical sizes: game sprites 16/32/64, print 64–128, avatars/emoji 32–128, bead patterns 29/58 (pegboard multiples). Palette presets: pico8, sweetie16, db16, gameboy, grayscale4, bw.
+Create a new pixel-art canvas in the current project and make it the active art. Width, height, purpose and palette default to the project's defaults. Typical sizes: game sprites 16/32/64, print 64–128, avatars/emoji 32–128, bead patterns 29/58 (pegboard multiples). Palette presets: pico8, sweetie16, db16, gameboy, grayscale4, bw.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
 | `name` | string | ✓ |  |
-| `width` | integer |  | Required unless the workspace has a default |
-| `height` | integer |  | Required unless the workspace has a default |
-| `purpose` | "game" \| "print" \| "digital" \| "craft" |  | Default: the workspace default, else game |
-| `palette` | string \| string[] |  | Preset name or list of "#rrggbb" colors (default: the workspace default, else pico8) |
+| `width` | integer |  | Required unless the project has a default |
+| `height` | integer |  | Required unless the project has a default |
+| `purpose` | "game" \| "print" \| "digital" \| "craft" |  | Default: the project default, else game |
+| `palette` | string \| string[] |  | Preset name or list of "#rrggbb" colors (default: the project default, else pico8) |
 | `max_colors` | integer |  | Keep the palette at most this big |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
-## `project_open` — Open project
+## `art_open` — Open art
 
-Make a project the active one for later tool calls and show it.
+Make an art the active one for later tool calls and show it.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string | ✓ |  |
+| `art` | string | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
 _chỉ đọc_
 
-## `project_info` — Project info
+## `art_info` — Art info
 
-Size, palette, layers, frames and head version of a project (text only).
+Size, palette, layers, frames, head version and folder of an art (text only).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 
 _chỉ đọc_
 
@@ -51,7 +55,7 @@ Render the canvas as an image so you can see it. Use grid/coords to point at exa
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `size` | integer |  | Longest side in px (default 256) |
 | `layer` | string |  | Show only this layer |
 | `frame` | integer |  | Frame index (default 0) |
@@ -66,13 +70,13 @@ Show palette colors with their indices (index 0 is transparent and not shown).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 
 _chỉ đọc_
 
-## `workspace_info` — Workspace info
+## `project_info` — Project info
 
-The active workspace ("Dự án": a folder grouping arts for one game, sticker set or print): name, folder, description, brief, defaults for new art, repos, export folder and its arts.
+The current project ("Dự án": a folder whose squarel_art/ holds the arts of one game, sticker set or print): name, folder, description, brief, defaults for new art, repos, export folder and its arts.
 
 _chỉ đọc_
 
@@ -82,7 +86,7 @@ Draw directly on a layer: set points, lines, rectangles, ellipses, flood fill. C
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `layer` | string |  | Layer id or name (default: top layer) |
 | `frame` | integer |  | Frame index (default 0) |
 | `ops` | object[] | ✓ |  |
@@ -94,7 +98,7 @@ Add an empty layer (on top, or above a given layer).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `name` | string | ✓ |  |
 | `above` | string |  | Layer id or name (default depends on the tool) |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -105,7 +109,7 @@ Delete a layer (it stays recoverable through history/undo).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `layer` | string | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -115,7 +119,7 @@ Merge a layer into the one below it (e.g. after accepting an AI proposal).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `layer` | string | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -125,7 +129,7 @@ Move a layer to an index (0 = bottom).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `layer` | string | ✓ |  |
 | `to_index` | integer | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -136,7 +140,7 @@ Rename, hide/show, change opacity (0-255) or lock a layer.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `layer` | string | ✓ |  |
 | `name` | string |  |  |
 | `visible` | boolean |  |  |
@@ -150,7 +154,7 @@ Append an animation frame (empty or copied from another frame).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `duration_ms` | integer |  |  |
 | `copy_from` | integer |  | Frame index (default 0) |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -161,7 +165,7 @@ Delete an animation frame by index.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `frame` | integer | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -171,7 +175,7 @@ Change how long a frame shows (ms).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `frame` | integer | ✓ |  |
 | `duration_ms` | integer | ✓ |  |
 
@@ -181,7 +185,7 @@ Change one palette entry; every pixel using that index changes color.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `index` | integer | ✓ |  |
 | `color` | string | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -192,7 +196,7 @@ Replace one color with another on one or all layers. Deterministic, instant and 
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `from` | string \| integer | ✓ | Color as "#rrggbb" / "#rrggbbaa", a palette index, or "transparent" |
 | `to` | string \| integer | ✓ | Color as "#rrggbb" / "#rrggbbaa", a palette index, or "transparent" |
 | `layer` | string |  | Only this layer (default all) |
@@ -205,7 +209,7 @@ Map the artwork onto a palette preset (pico8, sweetie16, db16, gameboy, grayscal
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `palette` | string \| string[] | ✓ |  |
 | `dither` | boolean |  |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -216,7 +220,7 @@ Reduce the artwork to at most n colors (perceptual k-means). Deterministic, inst
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `n` | integer | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -226,7 +230,7 @@ Draw a 1px outline around the visible sprite (outer) or along its inner edge. Wr
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `color` | string \| integer | ✓ | Color as "#rrggbb" / "#rrggbbaa", a palette index, or "transparent" |
 | `mode` | "outer" \| "inner" |  |  (mặc định `"outer"`) |
 | `diagonal` | boolean |  | Also outline diagonally (thicker look) |
@@ -239,7 +243,7 @@ Clear the flat background color connected to the canvas edges. Deterministic, in
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `layer` | string |  | Only this layer (default all) |
 | `tolerance` | number |  |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -250,7 +254,7 @@ Change canvas size without scaling the art (crop or pad around an anchor). Deter
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `width` | integer | ✓ |  |
 | `height` | integer | ✓ |  |
 | `anchor` | "center" \| "top-left" \| "top" \| "top-right" \| "left" \| "right" \| "bottom-left" \| "bottom" \| "bottom-right" |  |  (mặc định `"center"`) |
@@ -262,7 +266,7 @@ Nearest-neighbor scale the whole artwork (integer factor or exact size). Determi
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `factor` | number |  |  |
 | `width` | integer |  |  |
 | `height` | integer |  |  |
@@ -274,7 +278,7 @@ Mirror horizontally or vertically (one layer or all). Deterministic, instant and
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `axis` | "horizontal" \| "vertical" | ✓ |  |
 | `layer` | string |  | Layer id or name (default depends on the tool) |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
@@ -285,7 +289,7 @@ Rotate the whole canvas 90° clockwise or counter-clockwise. Deterministic, inst
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `direction` | "cw" \| "ccw" |  |  (mặc định `"cw"`) |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -295,7 +299,7 @@ Trim empty borders (optionally keep padding). Deterministic, instant and free (n
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `padding` | integer |  |  (mặc định `0`) |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -305,14 +309,14 @@ Rotate the hue of all palette colors (or selected indices). Deterministic, insta
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `degrees` | number | ✓ |  |
 | `indices` | integer[] |  |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
 ## `photo_to_pixel` — Photo → pixel art
 
-Convert a local image (photo, drawing, screenshot) into pixel art without AI: resize, reduce colors, clean specks. Creates a new project or adds a layer to the active one. Free.
+Convert a local image (photo, drawing, screenshot) into pixel art without AI: resize, reduce colors, clean specks. Creates a new art or adds a layer to the active one. Free.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
@@ -324,17 +328,17 @@ Convert a local image (photo, drawing, screenshot) into pixel art without AI: re
 | `remove_background` | boolean |  |  (mặc định `false`) |
 | `as_new_project` | boolean |  |  (mặc định `true`) |
 | `name` | string |  |  |
-| `purpose` | "game" \| "print" \| "digital" \| "craft" |  | Purpose of a new project (default: the workspace default, else digital) |
-| `project` | string |  | Target project when as_new_project is false |
+| `purpose` | "game" \| "print" \| "digital" \| "craft" |  | Purpose of a new art (default: the workspace default, else digital) |
+| `art` | string |  | Target art when as_new_project is false |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
 ## `generate_image` — Generate pixel art (AI)
 
-Generate pixel-art variants for the active project's canvas size. Results are cleaned to a true pixel grid and palette and stored as a PROPOSAL (canvas unchanged until accept_variant). quality "free" uses free providers (Cloudflare free tier / local GPU / mock). quality "high" uses Retro Diffusion (paid): the first call returns a price, ask the user, then call again with confirm_cost: true.
+Generate pixel-art variants for the active art's canvas size. Results are cleaned to a true pixel grid and palette and stored as a PROPOSAL (canvas unchanged until accept_variant). quality "free" uses free providers (Cloudflare free tier / local GPU / mock). quality "high" uses Retro Diffusion (paid): the first call returns a price, ask the user, then call again with confirm_cost: true.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `prompt` | string | ✓ | Subject and style, in English for best results |
 | `palette` | string \| string[] |  | "auto" (default), "doc" = current palette, a preset name, or colors |
 | `max_colors` | integer |  |  (mặc định `16`) |
@@ -352,7 +356,7 @@ Change the current artwork from an instruction ("give him a red cape"), optional
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `instruction` | string | ✓ |  |
 | `region` | object |  | Only change this rectangle (pixels outside stay untouched) |
 | `keep_palette` | boolean |  | Snap the result to the current palette (mặc định `true`) |
@@ -371,7 +375,7 @@ Generate an animation (walk cycle, idle, attack…) at the canvas size. Stored a
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `prompt` | string | ✓ | What the character looks like |
 | `action` | string | ✓ | e.g. "walking", "idle", "attack" |
 | `frames` | integer |  |  (mặc định `4`) |
@@ -389,7 +393,7 @@ Put a proposal variant onto the canvas as a NEW layer (never overwrites existing
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `proposal` | string | ✓ |  |
 | `variant` | integer | ✓ |  |
 | `layer_name` | string |  |  |
@@ -401,16 +405,16 @@ Mark an AI proposal as discarded (files are kept for reference).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `proposal` | string | ✓ |  |
 
 ## `proposal_list` — List proposals
 
-List AI proposals of a project (open ones first).
+List AI proposals of an art (open ones first).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `status` | "open" \| "accepted" \| "discarded" |  |  |
 
 _chỉ đọc_
@@ -421,7 +425,7 @@ List recent versions (newest first) with who changed what.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `limit` | integer |  |  (mặc định `15`) |
 
 _chỉ đọc_
@@ -432,7 +436,7 @@ Go back one step. Creates a new version with the previous content; history is ne
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
 ## `restore_version` — Restore version
@@ -441,7 +445,7 @@ Bring back any earlier version (as a new version on top).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `version` | string | ✓ |  |
 | `preview` | integer |  | Size (px, longest side) of the preview image returned; 0 = no image. Default 256. |
 
@@ -457,22 +461,22 @@ _chỉ đọc_
 
 ## `export` — Export files
 
-Write production-ready files to the project exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. When the art belongs to a workspace with an export folder, the files are also copied there. Returns absolute file paths.
+Write production-ready files to the art exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. When the art belongs to a workspace with an export folder, the files are also copied there. Returns absolute file paths.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 | `preset` | string | ✓ | One of: game-png, game-spritesheet, game-gif, print-png, print-svg, print-pdf, social-avatar, social-emoji, social-sticker, social-anim, craft-beads |
 | `options` | object |  |  |
-| `name` | string |  | Base file name (default: project slug) |
+| `name` | string |  | Base file name (default: art id) |
 
 ## `open_in_editor` — Open in Aseprite
 
-Show the project in Aseprite for hand drawing. Changes made there sync back automatically (with the Squarel extension) or when the file is saved.
+Show the art in Aseprite for hand drawing. Changes made there sync back automatically (with the Squarel extension) or when the file is saved.
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `project` | string |  | Project slug. Defaults to the project opened with project_open / project_create. |
+| `art` | string |  | Art id in this project. Defaults to the art opened with art_open / art_create. |
 
 ## `usage_today` — Image API usage
 

@@ -13,7 +13,7 @@ import { renderRGBA } from '../core/preview.ts'
 import { MAX_SIDE, PURPOSES, type Purpose } from '../shared/types.ts'
 import { resolveExportDir, writeCatalog } from '../store/workspace.ts'
 import { SQUAREL_VERSION } from '../version.ts'
-import { artStore, currentWorkspace, mutate, preview, previewArg, projectArg, projectSlug } from './common.ts'
+import { artArg, artSlug, artStore, currentWorkspace, mutate, preview, previewArg } from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'])
@@ -23,10 +23,10 @@ export const historyTools = [
     name: 'history',
     title: 'History',
     description: 'List recent versions (newest first) with who changed what.',
-    input: z.object({ project: projectArg, limit: z.number().int().min(1).max(200).default(15) }),
+    input: z.object({ art: artArg, limit: z.number().int().min(1).max(200).default(15) }),
     annotations: { readOnly: true },
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const list = await artStore(ctx).history(slug, i.limit)
       return {
         text: list
@@ -41,9 +41,9 @@ export const historyTools = [
     title: 'Undo',
     description:
       'Go back one step. Creates a new version with the previous content; history is never lost (call again to keep going back).',
-    input: z.object({ project: projectArg, preview: previewArg }),
+    input: z.object({ art: artArg, preview: previewArg }),
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       try {
         const r = await artStore(ctx).undo(slug, ctx.source)
         ctx.onCommit?.(slug, r.versionId)
@@ -61,9 +61,9 @@ export const historyTools = [
     name: 'restore_version',
     title: 'Restore version',
     description: 'Bring back any earlier version (as a new version on top).',
-    input: z.object({ project: projectArg, version: z.string().regex(/^v\d{6}$/), preview: previewArg }),
+    input: z.object({ art: artArg, version: z.string().regex(/^v\d{6}$/), preview: previewArg }),
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       const r = await artStore(ctx).restore(slug, i.version, ctx.source)
       ctx.onCommit?.(slug, r.versionId)
       return { text: `Restored ${i.version} as ${r.versionId}.`, images: preview(ctx, r.doc, i.preview) }
@@ -96,19 +96,19 @@ export const exportTools = [
     name: 'export',
     title: 'Export files',
     description:
-      'Write production-ready files to the project exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. When the art belongs to a workspace with an export folder, the files are also copied there. Returns absolute file paths.',
+      'Write production-ready files to the art exports/ folder: sprite sheets + JSON, GIF, 300-DPI print PNG, SVG, PDF, avatars, WebP stickers, bead patterns. When the art belongs to a workspace with an export folder, the files are also copied there. Returns absolute file paths.',
     input: z.object({
-      project: projectArg,
+      art: artArg,
       preset: z.string().describe(`One of: ${PRESETS.map((p) => p.id).join(', ')}`),
       options: z.record(z.string(), z.unknown()).optional(),
       name: z
         .string()
         .regex(/^[\w-]{1,60}$/)
         .optional()
-        .describe('Base file name (default: project slug)'),
+        .describe('Base file name (default: art id)'),
     }),
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       let preset: ReturnType<typeof findPreset>
       try {
         preset = findPreset(i.preset)
@@ -170,7 +170,7 @@ export const importTools = [
     name: 'photo_to_pixel',
     title: 'Photo → pixel art',
     description:
-      'Convert a local image (photo, drawing, screenshot) into pixel art without AI: resize, reduce colors, clean specks. Creates a new project or adds a layer to the active one. Free.',
+      'Convert a local image (photo, drawing, screenshot) into pixel art without AI: resize, reduce colors, clean specks. Creates a new art or adds a layer to the active one. Free.',
     input: z.object({
       path: z.string().describe('Absolute path, or a file name inside DATA_DIR/inbox'),
       width: z.number().int().min(4).max(MAX_SIDE),
@@ -186,8 +186,8 @@ export const importTools = [
       purpose: z
         .enum(PURPOSES as ['game', 'print', 'digital', 'craft'])
         .optional()
-        .describe('Purpose of a new project (default: the workspace default, else digital)'),
-      project: projectArg.describe('Target project when as_new_project is false'),
+        .describe('Purpose of a new art (default: the workspace default, else digital)'),
+      art: artArg.describe('Target art when as_new_project is false'),
       preview: previewArg,
     }),
     async handler(ctx, i) {
@@ -252,13 +252,13 @@ export const importTools = [
         ctx.session.activeProject = info2.slug
         ctx.onCommit?.(info2.slug, info2.head)
         return {
-          text: `Created project "${info2.slug}" from ${basename(file)} (${r.report.colorCount} colors).\n${docSummary(doc)}`,
+          text: `Created art "${info2.slug}" from ${basename(file)} (${r.report.colorCount} colors).\n${docSummary(doc)}`,
           images: preview(ctx, doc, i.preview),
         }
       }
       return mutate(
         ctx,
-        i.project,
+        i.art,
         `photo ${basename(file)}`,
         (doc) => {
           const layer = addLayer(doc, { name: 'Photo', origin: 'user' })
@@ -279,10 +279,10 @@ export const editorTools = [
     name: 'open_in_editor',
     title: 'Open in Aseprite',
     description:
-      'Show the project in Aseprite for hand drawing. Changes made there sync back automatically (with the Squarel extension) or when the file is saved.',
-    input: z.object({ project: projectArg }),
+      'Show the art in Aseprite for hand drawing. Changes made there sync back automatically (with the Squarel extension) or when the file is saved.',
+    input: z.object({ art: artArg }),
     async handler(ctx, i) {
-      const slug = await projectSlug(ctx, i.project)
+      const slug = await artSlug(ctx, i.art)
       if (!ctx.editor)
         throw new ToolError('UNAVAILABLE', 'no editor integration in this process (run `pnpm bridge`)')
       return { text: await ctx.editor.open(slug) }

@@ -47,6 +47,7 @@ async function main() {
   })
   ctx.log = { debug() {}, info() {}, warn: (m) => console.error(m), error: (m) => console.error(m) }
   const input = parseArgs(rest)
+  if (typeof input.art === 'string') ctx.session.activeProject = input.art
   try {
     const r = await runTool(cmd, input, ctx)
     console.log(r.text)

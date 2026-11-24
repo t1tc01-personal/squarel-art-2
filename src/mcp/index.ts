@@ -21,6 +21,7 @@ async function main() {
   const workspace = ctx.session.workspace
   // Cheap: reads each art's project.json only (no document decode), so it can run before connect.
   const arts = ctx.arts ? await workspaceArts(ctx.arts).catch(() => []) : []
+  const legacyCount = workspace ? 0 : (await ctx.legacy.listProjects().catch(() => [])).length
   // The catalog decodes every art's head; run it in the background so a large library never delays
   // startup. writeCatalog never rejects (failures are logged).
   if (workspace && ctx.arts) void writeCatalog(ctx.arts, workspace, ctx.log)
@@ -58,7 +59,12 @@ async function main() {
   const server = createMcpServer(ctx, {
     version: VERSION,
     onToolCall: (name) => presence.touch(name),
-    instructions: serverInstructions(workspace && { workspace, arts }),
+    instructions: serverInstructions({
+      workspace,
+      arts,
+      legacyCount,
+      duplicateOf: ctx.session.duplicateOf,
+    }),
   })
   await server.connect(new StdioServerTransport())
   ctx.log.info('mcp server ready', {

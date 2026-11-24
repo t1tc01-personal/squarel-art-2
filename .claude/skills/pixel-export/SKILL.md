@@ -1,11 +1,11 @@
 ---
 name: pixel-export
-description: Export the active Squarel pixel-art project as production-ready files (game sprite sheets, 300-DPI print files, SVG/PDF, avatars, WebP stickers, bead patterns). Use when the user says "/pixel-export" or asks for final/print/game files.
+description: Export the active Squarel pixel-art as production-ready files (game sprite sheets, 300-DPI print files, SVG/PDF, avatars, WebP stickers, bead patterns). Use when the user says "/pixel-export" or asks for final/print/game files.
 ---
 
 Follow the `pixel-art` skill's export checklist.
 
-1. `project_info` (and `canvas_view` if unsure) to confirm what is being exported.
+1. `art_info` (and `canvas_view` if unsure) to confirm what is being exported.
 2. Ask for the target if it is not clear. Examples:
    - which game engine;
    - print width in mm and the product;

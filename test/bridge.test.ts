@@ -79,8 +79,8 @@ beforeEach(async () => {
   bridge = new BridgeServer(ctx, { port: 0 })
   expect(await bridge.start()).toBe(true)
   ctx.editor = bridge
-  ctx.onCommit = (slug, v) => void bridge.notify(slug, v)
-  await runTool('project_create', { name: 'Bridge', width: 8, height: 8 }, ctx)
+  ctx.onCommit = (slug, v) => void bridge.notify(slug, v).catch(() => {}) // a late notify may outlive the temp dir
+  await runTool('art_create', { name: 'Bridge', width: 8, height: 8 }, ctx)
 })
 afterEach(async () => {
   for (const s of sockets.splice(0)) s.terminate()
@@ -119,7 +119,7 @@ describe('bridge', () => {
     expect(d.versionId).toBe('v000001')
     await runTool(
       'draw_pixels',
-      { project: 'bridge', ops: [{ op: 'set', points: [[1, 1]], color: '#ff004d' }] },
+      { art: 'bridge', ops: [{ op: 'set', points: [[1, 1]], color: '#ff004d' }] },
       ctx,
     )
     const up = await c.next('doc.updated')
@@ -136,7 +136,7 @@ describe('bridge', () => {
     const editorDoc = deserializeDoc(d.doc)
     editorDoc.cels[celKey(editorDoc.layers[0].id, editorDoc.frames[0].id)][0] = 1
     // meanwhile Claude commits v2 (pixel at the other corner)
-    await runTool('draw_pixels', { project: 'bridge', ops: [{ op: 'set', points: [[7, 7]], color: 2 }] }, ctx)
+    await runTool('draw_pixels', { art: 'bridge', ops: [{ op: 'set', points: [[7, 7]], color: 2 }] }, ctx)
     await c.next('doc.updated')
     c.send({
       type: 'cels',
@@ -176,12 +176,12 @@ describe('bridge', () => {
     const r = await c.next('tool_result')
     expect(r.ok).toBe(true)
     expect(r.files?.[0]).toMatch(/bridge@1x\.png$/)
-    const msg = await runTool('open_in_editor', { project: 'bridge' }, ctx)
+    const msg = await runTool('open_in_editor', { art: 'bridge' }, ctx)
     expect(msg.text).toContain('live sync on')
     expect((await c.next('open.request')).slug).toBe('bridge')
     // the same request coming over the socket (e.g. from another client) must reach the editor too
     const driver = await connect()
-    driver.send({ type: 'tool', id: '2', name: 'open_in_editor', input: { project: 'bridge' } })
+    driver.send({ type: 'tool', id: '2', name: 'open_in_editor', input: { art: 'bridge' } })
     expect((await driver.next('tool_result')).ok).toBe(true)
     expect((await c.next('open.request')).slug).toBe('bridge')
     c.send({ type: 'nope' })
@@ -244,7 +244,7 @@ describe('bridge', () => {
   })
 
   it('explains setup when no Aseprite is connected', async () => {
-    const r = await runTool('open_in_editor', { project: 'bridge' }, ctx)
+    const r = await runTool('open_in_editor', { art: 'bridge' }, ctx)
     expect(r.text).toContain('ASEPRITE_PATH')
   })
   it('openViaBridge asks the running bridge to open the project in the connected editor', async () => {

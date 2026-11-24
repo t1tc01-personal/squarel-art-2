@@ -114,7 +114,7 @@ Chỉ năm biến sau, viết `{tên}`. Biến khác bị từ chối khi nạp 
 | `default` | `true` cho nút Mở chính |
 | `run` | Chạy argv |
 | `env` | Biến môi trường thêm cho `run` |
-| `bridgeTool` | Gọi tool này qua bridge như Claude gọi. Launcher gửi `tool { name: bridgeTool, input: { project } }`, với `project` là project người dùng chọn khi có `pickProject`, nếu không thì `{recentProject}`. Biến thay thế không áp dụng cho giá trị `bridgeTool` và `env` |
+| `bridgeTool` | Gọi tool này qua bridge như Claude gọi. Launcher gửi `tool { name: bridgeTool, input: { art } }`, với `art` là art người dùng chọn khi có `pickProject`, nếu không thì `{recentProject}`. Biến thay thế không áp dụng cho giá trị `bridgeTool` và `env` |
 | `pickProject` | Hỏi người dùng chọn project trước, rồi truyền cho `bridgeTool` |
 | `reveal` | Mở thư mục này trong trình quản lý file |
 
@@ -207,7 +207,7 @@ Bridge nghe `ws://127.0.0.1:4321/bridge` (cổng 4321, hoặc `BRIDGE_PORT`) (xe
 | bridge → client | `error { code, message }` | Lỗi |
 
 - Có thể gửi `status` mà không cần `hello` trước. Client chưa gửi `hello` có `name` là `unknown`.
-- `bridgeTool` trong `launch` gửi `tool`. Ví dụ `open_in_editor` với `input: { project: "<slug>" }`.
+- `bridgeTool` trong `launch` gửi `tool`. Ví dụ `open_in_editor` với `input: { art: "<slug>" }`.
 - Chỉ thêm loại tin nhắn hoặc trường mới. Hình dạng tin nhắn đã có không đổi, để client cũ vẫn chạy.
 - Bridge chỉ nghe `127.0.0.1` và chặn Origin của trang web (xem [aseprite.md](aseprite.md#bảo-mật)).
 

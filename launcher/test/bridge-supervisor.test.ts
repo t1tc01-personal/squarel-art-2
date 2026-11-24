@@ -189,7 +189,7 @@ describe('bridge supervisor', () => {
     await asepriteClient(bridge.port)
     await until(() => sup.state().clients.length === 2, 2000, 'second client')
     // tool calls go over the same socket
-    const text = await sup.sendTool('project_list', {})
+    const text = await sup.sendTool('art_list', {})
     expect(typeof text).toBe('string')
     await expect(sup.sendTool('no_such_tool', {})).rejects.toThrow()
   })
@@ -207,7 +207,7 @@ describe('bridge supervisor', () => {
     expect(spawn.calls).toHaveLength(1)
     expect(spawn.calls[0]?.squarelDir).toBe(SQ)
     expect(spawn.calls[0]?.env?.BRIDGE_PORT).toBe(String(port))
-    await expect(sup.sendTool('project_list', {})).rejects.toThrow(/chưa kết nối/)
+    await expect(sup.sendTool('art_list', {})).rejects.toThrow(/chưa kết nối/)
   })
 
   it('takes over when the attached bridge goes away', async () => {
@@ -456,7 +456,7 @@ describe('bridge supervisor', () => {
 describe('toolTimeoutMs', () => {
   it('waits about a minute for open_in_editor (it may start the editor), 5 s for other tools', () => {
     expect(toolTimeoutMs('open_in_editor')).toBe(60_000)
-    expect(toolTimeoutMs('project_list')).toBe(5000)
+    expect(toolTimeoutMs('art_list')).toBe(5000)
     expect(toolTimeoutMs('constructor')).toBe(5000)
   })
 })
