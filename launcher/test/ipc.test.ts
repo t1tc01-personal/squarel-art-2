@@ -518,6 +518,24 @@ describe('launch actions (from the manifest only)', () => {
     expect(done).toHaveLength(2)
   })
 
+  it('actions and components resolve the newest ref without reading any version file', async () => {
+    const { h, d } = withAseprite({
+      files: { [join(FOLDER_B, 'squarel_art', 'hero', 'versions', 'v000001.json.gz')]: 'not gzip' },
+    })
+    const reads: string[] = []
+    const readFile = d.fs.readFile.bind(d.fs)
+    d.fs.readFile = ((p: string, ...rest: unknown[]) => {
+      reads.push(String(p))
+      return (readFile as (...a: unknown[]) => unknown)(p, ...rest)
+    }) as typeof d.fs.readFile
+    await h.handle('state:set', APP, { selected: ['aseprite'] })
+    await h.handle('components:list', APP, undefined)
+    await h.handle('action:run', APP, ref('open-recent'))
+    await h.idle()
+    expect(reads.some((r) => r.endsWith('project.json'))).toBe(true)
+    expect(reads.filter((r) => r.includes('versions'))).toEqual([])
+  })
+
   it('a pickProject action refuses a ref that does not exist', async () => {
     const { h, bridgeTools, events } = withAseprite()
     await h.handle('state:set', APP, { selected: ['aseprite'] })

@@ -616,6 +616,11 @@ async function allArts(ctx: WorkspaceCtx): Promise<{ ref: string; entry: IndexEn
   return out.sort((a, b) => b.art.updatedAt.localeCompare(a.art.updatedAt) || a.ref.localeCompare(b.ref))
 }
 
+/** Ref of the newest art of all indexed projects: project.json files only, no version is read. */
+export async function newestArtRef(ctx: WorkspaceCtx): Promise<string | undefined> {
+  return (await allArts(ctx))[0]?.ref
+}
+
 /** Refs of all arts of all indexed projects (checks a `pickProject` choice). */
 export async function artRefs(ctx: WorkspaceCtx): Promise<string[]> {
   return (await allArts(ctx)).map((x) => x.ref)

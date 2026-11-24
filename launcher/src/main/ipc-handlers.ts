@@ -57,6 +57,7 @@ import {
   inspectFolder,
   legacyArts,
   listWorkspaces,
+  newestArtRef,
   openClaude,
   recentArts,
   removeWorkspace,
@@ -541,8 +542,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     const s = await getState()
     const env = await readEnv(s)
     const p = paths()
-    const wc = await wsCtx()
-    const recent = (await recentArts(wc, 1))[0]?.ref
+    const wc = wsCtxFor(s, env)
+    const recent = await newestArtRef(wc)
     return {
       actx: {
         d,
@@ -614,13 +615,16 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   }
 
   // ---- Dự án (workspaces) ------------------------------------------------------------------
-  async function wsCtx(): Promise<WorkspaceCtx> {
-    const s = await getState()
+  function wsCtxFor(s: LauncherState, env: EnvDoc): WorkspaceCtx {
     return {
       d,
-      dataDir: dataDir(s, await readEnv(s)),
+      dataDir: dataDir(s, env),
       chosen: (p) => [...picked].some((k) => samePath(k, p)),
     }
+  }
+  async function wsCtx(): Promise<WorkspaceCtx> {
+    const s = await getState()
+    return wsCtxFor(s, await readEnv(s))
   }
   /** One write at a time (unique ids, index files); WorkspaceError messages reach the user. */
   let wsChain: Promise<unknown> = Promise.resolve()
@@ -657,7 +661,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     'components:list': async () => {
       const s = await getState()
       const env = await readEnv(s)
-      const recent = (await recentArts(await wsCtx(), 1))[0]?.ref
+      const recent = await newestArtRef(wsCtxFor(s, env))
       const ready = launcherReady().launcherUpdateReady
       return viewComponents(await registry(s), s, env, d, {
         launcherVersion: ctx.launcherVersion,
