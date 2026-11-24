@@ -173,6 +173,19 @@ describe('workspace detection', () => {
       expect(serverInstructions({ workspace: await readWorkspace(folder), arts: [] })).not.toMatch(/worktree/)
     })
 
+    it('project_info prints the main checkout art folder and the stale-checkout note', async () => {
+      const ctx = await createToolContext({
+        config: { dataDir, imageProvider: 'mock', previewPx: 0 },
+        providers: { mock: new MockProvider() },
+        log: silentLogger,
+        projectStart: join(wt, 'app'),
+      })
+      const info = await runTool('project_info', {}, ctx)
+      expect(info.text).toContain(`Art lives in the main checkout: ${join(main, 'app', 'squarel_art')}`)
+      expect(info.text).toMatch(/stale checkout/)
+      expect(ctx.session.workspace?.home).toBe(join(main, 'app'))
+    })
+
     it('stays in the worktree when main has another project id or none', async () => {
       writeConfig(join(main, 'app'), { id: 'other', name: 'Other' })
       expect((await detectWorkspace({ start: join(wt, 'app') }))?.home).toBe(join(wt, 'app'))
@@ -446,9 +459,9 @@ describe('MCP instructions and presence', () => {
     const ws = ctx.session.workspace!
     const text = serverInstructions({ workspace: ws, arts: await ctx.arts!.listProjects() })
     expect(text.startsWith(SERVER_INSTRUCTIONS)).toBe(true)
-    expect(text).toContain('Active workspace: "Game dungeon"')
+    expect(text).toContain('Active project (Dự án): "Game dungeon"')
     expect(text).toContain('game, 32×32, palette sweetie16')
-    expect(text).toContain('1 art in this workspace; newest: hero')
+    expect(text).toContain('1 art in this project; newest: hero')
     expect(text).toContain('AGENTS.md')
     expect(text).toContain('.squarel/arts.md')
     expect(serverInstructions({ arts: [] })).toContain(NO_PROJECT_TEXT)
@@ -495,7 +508,7 @@ describe('MCP instructions and presence', () => {
     })
     const client = new Client({ name: 'ws-test', version: '1.0.0' })
     await client.connect(transport)
-    expect(client.getInstructions()).toContain('Active workspace: "Game dungeon"')
+    expect(client.getInstructions()).toContain('Active project (Dự án): "Game dungeon"')
     // The startup catalog is written in the background.
     for (let i = 0; i < 100 && !existsSync(catalogPath(folder)); i++)
       await new Promise((r) => setTimeout(r, 50))

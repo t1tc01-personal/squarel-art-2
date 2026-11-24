@@ -27,7 +27,7 @@ export const workspaceTools = [
         `Project "${ws.name}" (id ${ws.id})`,
         `Folder: ${ws.folder}`,
         ws.home !== ws.folder
-          ? `Art lives in the main checkout: ${artsDirOf(ws)}`
+          ? `Art lives in the main checkout: ${artsDirOf(ws)}. This worktree's squarel_art/ is a stale checkout: do not read or edit it with file tools.`
           : `Art folder: ${artsDirOf(ws)}`,
         c.description ? `Description: ${c.description}` : '',
         `Defaults for new art: ${describeDefaults(c.defaults)}`,

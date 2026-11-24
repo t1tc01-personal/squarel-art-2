@@ -40,6 +40,7 @@ export const ART_GITIGNORE = `*/.lock
 */exports/
 */work.aseprite
 */thumb.png
+.*.importing/
 `
 
 /** A problem the user can fix; the message is shown as is. */

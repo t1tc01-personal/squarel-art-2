@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc } from '../src/core/index.ts'
@@ -137,9 +137,28 @@ describe('importLegacyArt', () => {
           }
         },
       }
-      await expect(importLegacyArt(legacy, target, 'hero', { fs, log })).rejects.toThrow('rm broke')
+      const err = await importLegacyArt(legacy, target, 'hero', { fs, log }).catch((e) => e)
+      expect(err).toMatchObject({ code: 'UNAVAILABLE' })
+      expect(err.message).toContain(`moved to ${target.projectPath('hero')}`)
+      expect(err.message).toContain(`old folder ${legacy.projectPath('hero')} could not be fully removed`)
+      expect(err.message).toContain('rm broke')
       expect(await target.hasProject('hero')).toBe(true)
       expect(warns.length).toBe(1)
+    })
+
+    it('removes the source with retries', async () => {
+      const r = await real()
+      const calls: unknown[] = []
+      const fs = {
+        cp: r.cp,
+        rename: r.rename,
+        rm: async (...a: Parameters<typeof r.rm>) => {
+          if (String(a[0]) === legacy.projectPath('hero')) calls.push(a[1])
+          return r.rm(...a)
+        },
+      }
+      await importLegacyArt(legacy, target, 'hero', { fs })
+      expect(calls).toEqual([{ recursive: true, force: true, maxRetries: 3 }])
     })
   })
 
@@ -164,6 +183,25 @@ describe('importLegacyArt', () => {
     expect(await legacy.hasProject('hero')).toBe(true)
     expect(existsSync(target.projectPath('hero'))).toBe(false)
   }, 20_000)
+
+  it('refuses a read-only target (duplicate project id) with its reason', async () => {
+    const ro = new Store(target.root, {
+      readOnly: 'writes are blocked: duplicate id',
+      project: target.project,
+    })
+    await expect(importLegacyArt(legacy, ro, 'hero')).rejects.toThrow('writes are blocked: duplicate id')
+    expect(await legacy.hasProject('hero')).toBe(true)
+    expect(existsSync(ro.projectPath('hero'))).toBe(false)
+  })
+
+  it('refuses a legacy art whose head is not a version id', async () => {
+    const file = legacy.projectPath('hero', 'project.json')
+    const pj = JSON.parse(readFileSync(file, 'utf8'))
+    writeFileSync(file, JSON.stringify({ ...pj, head: '../../x' }))
+    await expect(importLegacyArt(legacy, target, 'hero')).rejects.toThrow(/invalid head/)
+    expect(await legacy.hasProject('hero')).toBe(true)
+    expect(existsSync(join(target.root, '.hero.importing'))).toBe(false)
+  })
 
   it('refuses an unknown slug', async () => {
     mkdirSync(target.root, { recursive: true })

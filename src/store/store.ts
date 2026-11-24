@@ -114,7 +114,8 @@ export class Store {
     }
   }
 
-  private assertWritable(): void {
+  /** Throws the store's read-only reason when writes are blocked (duplicate id, legacy store). */
+  assertWritable(): void {
     if (this.readOnly) throw new Error(this.readOnly)
   }
 
@@ -193,7 +194,10 @@ export class Store {
   /** `base`, or `base-2`, `base-3`… (clipped to 64 chars): the first id with no folder in this store. */
   async freeSlug(base: string): Promise<string> {
     let slug = base
-    for (let i = 2; await exists(this.projectDir(slug)); i++) slug = `${base}-${i}`.slice(0, 64)
+    for (let i = 2; await exists(this.projectDir(slug)); i++) {
+      const suffix = `-${i}`
+      slug = `${base.slice(0, 64 - suffix.length)}${suffix}`
+    }
     return slug
   }
 

@@ -28,6 +28,7 @@ export const ART_GITIGNORE = `*/.lock
 */exports/
 */work.aseprite
 */thumb.png
+.*.importing/
 `
 
 export type WorkspaceDefaults = {

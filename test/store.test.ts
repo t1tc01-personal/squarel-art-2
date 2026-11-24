@@ -138,6 +138,9 @@ describe('store', () => {
     const fresh = join(t.dir, 'fresh', 'squarel_art')
     await new Store(fresh, { project: ws, hooks: false }).init()
     expect(readFileSync(join(fresh, '.gitignore'), 'utf8')).toBe(ART_GITIGNORE)
+    expect(ART_GITIGNORE).toBe(
+      '*/.lock\n*.tmp\n*/.work-*.json\n*/proposals/\n*/exports/\n*/work.aseprite\n*/thumb.png\n.*.importing/\n',
+    )
   })
 
   it('listProjects on a missing root returns [] and creates nothing', async () => {
@@ -145,6 +148,16 @@ describe('store', () => {
     expect(await new Store(root).listProjects()).toEqual([])
     expect(existsSync(root)).toBe(false)
   })
+
+  it('freeSlug stays within 64 chars and terminates when a 64-char id is taken', async () => {
+    const long = 'a'.repeat(64)
+    mkdirSync(store.projectDir(long), { recursive: true })
+    const next = await store.freeSlug(long)
+    expect(next).toBe(`${'a'.repeat(62)}-2`)
+    expect(next.length).toBeLessThanOrEqual(64)
+    mkdirSync(store.projectDir(next), { recursive: true })
+    expect(await store.freeSlug(long)).toBe(`${'a'.repeat(62)}-3`)
+  }, 5000)
 
   it('a readOnly store refuses writes with its reason', async () => {
     const s = new Store(join(t.dir, 'legacy'), { readOnly: 'legacy art is read-only' })

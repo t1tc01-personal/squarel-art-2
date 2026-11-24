@@ -38,6 +38,7 @@ export async function importLegacyArt(
   o: { log?: Logger; fs?: ImportFs } = {},
 ): Promise<{ slug: string; from: string; to: string }> {
   const fs: ImportFs = o.fs ?? { cp, rename, rm }
+  target.assertWritable()
   if (!(await legacy.hasProject(slug)))
     throw new ToolError('NOT_FOUND', `legacy art "${slug}" not found (art_list { legacy: true })`)
   const from = legacy.projectPath(slug)
@@ -52,6 +53,8 @@ export async function importLegacyArt(
       const before = await tree(from)
       if (!sameTree(before, await tree(temp))) throw new Error('copy does not match the source')
       const { head } = await readJson<{ head: string }>(join(temp, 'project.json'))
+      if (typeof head !== 'string' || !/^v\d{6}$/.test(head))
+        throw new Error(`invalid head version "${head}"`)
       await readVersionFile(join(temp, 'versions', `${head}.json.gz`))
 
       final = await target.freeSlug(slug)
@@ -73,12 +76,16 @@ export async function importLegacyArt(
       await writeAtomic(join(dest, 'project.json'), JSON.stringify(info, null, 2))
 
       try {
-        await fs.rm(from, { recursive: true, force: true })
+        await fs.rm(from, { recursive: true, force: true, maxRetries: 3 })
       } catch (e) {
         // Never lose data: drop the copy only while the source is still whole.
         if (!(await exists(from)) || !sameTree(before, await tree(from).catch(() => new Map()))) {
           partial.clear()
           o.log?.warn('art import: source only partly removed; the copy is kept', { slug, to: dest })
+          throw new ToolError(
+            'UNAVAILABLE',
+            `Art "${slug}" was moved to ${dest}, but the old folder ${from} could not be fully removed (delete it by hand): ${e instanceof Error ? e.message : String(e)}`,
+          )
         }
         throw e
       }

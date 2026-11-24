@@ -57,6 +57,7 @@ export async function currentWorkspace(ctx: ToolContext): Promise<Workspace | un
   try {
     const fresh = await readWorkspace(ws.folder)
     if (fresh.id === ws.id) {
+      fresh.home = ws.home // resolved at detection (worktree → main checkout)
       ctx.session.workspace = fresh
       return fresh
     }

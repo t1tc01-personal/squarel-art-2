@@ -21,9 +21,9 @@ export function workspaceInstructions(ws: Workspace, arts: ProjectInfo[]): strin
     .map((p) => `${p.slug} ("${p.name}")`)
     .join(', ')
   const lines = [
-    `Active workspace: "${ws.name}" (id ${ws.id}), folder ${ws.folder}. The user calls it their project ("Dự án"); each art is one pixel-art canvas inside it, and art tools take an \`art\` id.`,
-    `Defaults for new art: ${describeDefaults(ws.config.defaults)}. art_create fills in missing width/height/purpose/palette from them, and new art joins this workspace.`,
-    `${arts.length} art${arts.length === 1 ? '' : 's'} in this workspace${newest ? `; newest: ${newest}` : ''}.`,
+    `Active project (Dự án): "${ws.name}" (id ${ws.id}), folder ${ws.folder}. Each art is one pixel-art canvas inside it, and art tools take an \`art\` id.`,
+    `Defaults for new art: ${describeDefaults(ws.config.defaults)}. art_create fills in missing width/height/purpose/palette from them, and new art joins this project.`,
+    `${arts.length} art${arts.length === 1 ? '' : 's'} in this project${newest ? `; newest: ${newest}` : ''}.`,
     'The brief is in AGENTS.md in the project folder (project_info shows it too); the art catalog is .squarel/arts.md. Follow the brief and do not ask again for what it already decides.',
     'art_list shows the arts of this project.',
   ]

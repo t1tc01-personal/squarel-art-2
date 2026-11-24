@@ -619,7 +619,7 @@ describe('squarel_art, worktree, id', () => {
     await createWorkspace(w.ctx, { name: 'P', folder: 'D:\\p' })
     expect(await w.read('D:\\p\\squarel_art\\.gitignore')).toBe(ART_GITIGNORE)
     expect(ART_GITIGNORE).toBe(
-      '*/.lock\n*.tmp\n*/.work-*.json\n*/proposals/\n*/exports/\n*/work.aseprite\n*/thumb.png\n',
+      '*/.lock\n*.tmp\n*/.work-*.json\n*/proposals/\n*/exports/\n*/work.aseprite\n*/thumb.png\n.*.importing/\n',
     )
   })
 
