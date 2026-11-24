@@ -21,6 +21,7 @@ import {
   readWorkspaceIndex,
   workspaceIndexPath,
 } from '../src/store/workspace.ts'
+import { NO_PROJECT_TEXT } from '../src/tools/common.ts'
 import { createToolContext } from '../src/tools/context.ts'
 import { runTool } from '../src/tools/registry.ts'
 import type { ToolContext } from '../src/tools/types.ts'
@@ -267,8 +268,9 @@ describe('workspace tools', () => {
 
   it('project_create needs a size without workspace defaults', async () => {
     const ctx = await makeCtx(false)
-    await expect(runTool('project_create', { name: 'x', width: 4, height: 4 }, ctx)).rejects.toMatchObject({
+    await expect(runTool('project_create', { name: 'x' }, ctx)).rejects.toMatchObject({
       code: 'NO_PROJECT',
+      message: NO_PROJECT_TEXT,
     })
     writeConfig(folder, { ...CONFIG, defaults: undefined })
     const ctx1 = await makeCtx()

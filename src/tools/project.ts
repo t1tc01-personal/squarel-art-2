@@ -72,6 +72,7 @@ export const projectTools = [
       preview: previewArg,
     }),
     async handler(ctx, i) {
+      artStore(ctx)
       const ws = await currentWorkspace(ctx)
       const d = ws?.config.defaults
       const width = i.width ?? d?.width

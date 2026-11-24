@@ -71,11 +71,11 @@ describe('project context', () => {
     ).catch((e) => e)
     expect(err.code).toBe('NO_PROJECT')
     expect(err.message).toBe(NO_PROJECT_TEXT)
-    await expect(
-      runTool('project_create', { name: 'X', width: 8, height: 8 }, outside),
-    ).rejects.toMatchObject({
-      code: 'NO_PROJECT',
-    })
+    for (const input of [{ name: 'X', width: 8, height: 8 }, { name: 'X' }])
+      await expect(runTool('project_create', input, outside)).rejects.toMatchObject({
+        code: 'NO_PROJECT',
+        message: NO_PROJECT_TEXT,
+      })
   })
 
   it('usage_today works outside a project', async () => {

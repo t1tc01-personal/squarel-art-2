@@ -191,6 +191,7 @@ export const importTools = [
       preview: previewArg,
     }),
     async handler(ctx, i) {
+      artStore(ctx)
       const file = isAbsolute(i.path) ? resolve(i.path) : join(inboxDir(ctx.config), basename(i.path))
       if (!IMAGE_EXT.has(extname(file).toLowerCase()))
         throw new ToolError('INVALID', 'only image files (png, jpg, webp, gif, bmp, tif) are accepted')
