@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-24
+
 ### Fixed
 
 - Launcher: the Squarel row no longer offers "Cập nhật" when Squarel already matches the launcher. Squarel only moves to the launcher's own tag, so the button did nothing and still reported success. The row now says "Cập nhật launcher trước", and the task text explains it.
@@ -132,7 +134,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.2.0...v0.3.0

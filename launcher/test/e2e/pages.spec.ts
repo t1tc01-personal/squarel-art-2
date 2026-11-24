@@ -170,9 +170,9 @@ test('system → components: Squarel at the launcher version waits for a launche
     const rows = content(page).getByTestId('component-row')
     await expect(rows.first()).toBeVisible()
     const squarel = rows.and(page.locator('[data-id="squarel"]'))
-    await expect(squarel).toContainText('0.4.1')
     await expect(squarel).toContainText('0.4.2')
-    // Squarel 0.4.1 = the launcher's version: the newer tag 0.4.2 comes with a launcher update, so
+    await expect(squarel).toContainText('0.4.3')
+    // Squarel 0.4.2 = the launcher's version: the newer tag 0.4.3 comes with a launcher update, so
     // the row says so and offers no button (Squarel only ever moves to the launcher's own tag).
     await expect(squarel).toContainText('Cập nhật launcher trước')
     const node = rows.and(page.locator('[data-id="node"]'))
@@ -274,8 +274,8 @@ test('about section shows both versions and opens the bundled LICENSE.md', async
   try {
     await rail(page).getByRole('button', { name: 'Cài đặt' }).click()
     const about = content(page).getByTestId('about')
-    await expect(about).toContainText('Launcherv0.4.1')
-    await expect(about).toContainText('Squarelv0.4.1')
+    await expect(about).toContainText('Launcherv0.4.2')
+    await expect(about).toContainText('Squarelv0.4.2')
     await about.getByRole('button', { name: /LICENSE\.md/ }).click()
     await expect
       .poll(async () => (await sink(app)).opened)
@@ -343,7 +343,7 @@ test('screenshots: home and library', async () => {
     await expect(content(page).getByRole('list', { name: 'Art gần đây' }).getByRole('listitem')).toHaveCount(
       2,
     )
-    await expect(content(page)).toContainText('Squarel Art v0.4.1 đã sẵn sàng')
+    await expect(content(page)).toContainText('Squarel Art v0.4.2 đã sẵn sàng')
     await settle(page)
     await page.screenshot({ path: `${SHOTS}/task-13-home.png` })
     await rail(page).getByRole('button', { name: 'Thư viện tích hợp' }).click()

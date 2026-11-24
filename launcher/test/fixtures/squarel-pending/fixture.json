@@ -4,9 +4,9 @@
   "state": { "setupStep": "done", "selected": [], "closeToTray": true },
   "env": { "DATA_DIR": "{root}\\data", "BRIDGE_PORT": "4321" },
   "files": {
-    "{root}/squarel/package.json": { "name": "squarel-art", "version": "0.4.1" },
+    "{root}/squarel/package.json": { "name": "squarel-art", "version": "0.4.2" },
     "{root}/squarel/node_modules/.modules.yaml": "layoutVersion: 5",
-    "{root}/squarel/.git/squarel-update-pending": "0.4.1\n"
+    "{root}/squarel/.git/squarel-update-pending": "0.4.2\n"
   },
   "copy": {
     "{root}/squarel/integrations/aseprite/integration.json": "../../../../integrations/aseprite/integration.json",
@@ -21,15 +21,15 @@
     "claude --version": { "code": 0, "lines": ["2.1.330 (Claude Code)"] },
     "git rev-parse --show-prefix": { "code": 0, "lines": [""] },
     "git rev-parse --abbrev-ref HEAD": { "code": 0, "lines": ["HEAD"] },
-    "git describe --tags --exact-match HEAD": { "code": 0, "lines": ["v0.4.1"] },
+    "git describe --tags --exact-match HEAD": { "code": 0, "lines": ["v0.4.2"] },
     "git rev-parse --git-path squarel-update-pending": { "code": 0, "lines": [".git/squarel-update-pending"] },
     "git status --porcelain --untracked-files=no": { "code": 0, "lines": [] },
     "git fetch --tags --force": { "code": 0 },
-    "git checkout --detach refs/tags/v0.4.1": { "code": 0 },
+    "git checkout --detach refs/tags/v0.4.2": { "code": 0 },
     "pnpm install": { "code": 0, "lines": ["Already up to date"] },
     "git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git": {
       "code": 0,
-      "lines": ["0000000000000000000000000000000000000000\trefs/tags/v0.4.1"]
+      "lines": ["0000000000000000000000000000000000000000\trefs/tags/v0.4.2"]
     }
   },
   "bridge": { "mode": "down", "port": 4321, "since": "2026-01-01T11:00:00.000Z", "clients": [] }

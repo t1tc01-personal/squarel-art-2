@@ -69,7 +69,7 @@ test('fresh mode walks steps 1→4 with fake deps and ends on Home', async () =>
     await rows.filter({ hasText: 'Squarel Art' }).getByRole('button', { name: 'Tải về' }).click()
     await consent(
       page,
-      /^git clone --branch v0.4.1 --depth 1 -- https:\/\/github\.com\/t1tc01-personal\/squarel-art-2\.git .+SquarelArt\\app$/,
+      /^git clone --branch v0.4.2 --depth 1 -- https:\/\/github\.com\/t1tc01-personal\/squarel-art-2\.git .+SquarelArt\\app$/,
     )
     await expect(rows.filter({ hasText: 'Squarel Art' })).toContainText('Xong')
     await rows.filter({ hasText: 'pnpm install' }).getByRole('button', { name: 'Cài' }).click()
