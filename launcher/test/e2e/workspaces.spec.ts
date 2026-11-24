@@ -90,7 +90,7 @@ test('workspaces API: list, create with files, open Claude in the folder, remove
     expect(await file(app, `${folder}\\AGENTS.md`)).toContain('## Art brief\n\nViền đen 1px')
     expect(await file(app, `${folder}\\CLAUDE.md`)).toBe('@AGENTS.md\n')
     expect(await file(app, `${folder}\\squarel_art\\.gitignore`)).toBe(
-      '*/.lock\n*.tmp\n*/.work-*.json\n*/proposals/\n*/exports/\n*/work.aseprite\n*/thumb.png\n',
+      '*/.lock\n*.tmp\n*/.work-*.json\n*/proposals/\n*/exports/\n*/work.aseprite\n*/thumb.png\n.*.importing/\n',
     )
     expect(await file(app, `${ROOT}\\data\\workspaces\\tro-choi-moi.json`)).toContain('"id": "tro-choi-moi"')
     expect((await api<any[]>('listWorkspaces')).map((w) => w.id)).toContain('tro-choi-moi')
