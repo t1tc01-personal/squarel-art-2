@@ -79,12 +79,18 @@ export function slugify(name: string): string {
   return s || 'project'
 }
 
+/** Decode a `versions/<id>.json.gz` file. */
+export async function readVersionFile(path: string): Promise<PixelDoc> {
+  const json = JSON.parse(new TextDecoder().decode(gunzipSync(await readFile(path)))) as { doc: PixelDocJSON }
+  return deserializeDoc(json.doc)
+}
+
 export class Store {
   /** Folder holding one sub-folder per art (a project's `squarel_art/`, or a legacy DATA_DIR/projects). */
   readonly root: string
   /** Where thumb/catalog failures are reported (they never fail a commit). */
   log?: Logger
-  private readonly project?: Workspace
+  readonly project?: Workspace
   private readonly readOnly?: string
   private readonly commitListeners: CommitListener[] = []
 
@@ -184,6 +190,13 @@ export class Store {
     return SLUG_RE.test(slug) && exists(this.projectPath(slug, 'project.json'))
   }
 
+  /** `base`, or `base-2`, `base-3`… (clipped to 64 chars): the first id with no folder in this store. */
+  async freeSlug(base: string): Promise<string> {
+    let slug = base
+    for (let i = 2; await exists(this.projectDir(slug)); i++) slug = `${base}-${i}`.slice(0, 64)
+    return slug
+  }
+
   async createProject(o: {
     name: string
     doc: PixelDoc
@@ -193,9 +206,7 @@ export class Store {
     this.assertWritable()
     await this.init()
     validateDoc(o.doc)
-    const base = o.slug ?? slugify(o.name)
-    let slug = base
-    for (let i = 2; await exists(this.projectDir(slug)); i++) slug = `${base}-${i}`.slice(0, 64)
+    const slug = await this.freeSlug(o.slug ?? slugify(o.name))
     const dir = this.projectDir(slug)
     await mkdir(join(dir, 'versions'), { recursive: true })
     const now = new Date().toISOString()
@@ -226,9 +237,7 @@ export class Store {
     if (!/^v\d{6}$/.test(id)) throw new Error(`invalid version id "${id}"`)
     const file = this.projectPath(slug, 'versions', `${id}.json.gz`)
     if (!(await exists(file))) throw new Error(`version ${id} not found in ${slug}`)
-    const raw = await readFile(file)
-    const json = JSON.parse(new TextDecoder().decode(gunzipSync(raw))) as { doc: PixelDocJSON }
-    return deserializeDoc(json.doc)
+    return readVersionFile(file)
   }
 
   /** Append a version. Throws ConflictError if head !== baseVersion. */

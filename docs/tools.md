@@ -2,7 +2,7 @@
 
 > File này được sinh bởi `pnpm docs:tools` từ schema zod trong `src/tools`. Đừng sửa tay.
 
-Tổng cộng **42 tool**. Mọi tool art đều nhận `art` (id của art trong dự án này, mặc định là art đang mở bằng art_open / art_create) nếu có liên quan.
+Tổng cộng **43 tool**. Mọi tool art đều nhận `art` (id của art trong dự án này, mặc định là art đang mở bằng art_open / art_create) nếu có liên quan.
 
 ## `art_list` — List arts
 
@@ -79,6 +79,14 @@ _chỉ đọc_
 The current project ("Dự án": a folder whose squarel_art/ holds the arts of one game, sticker set or print): name, folder, description, brief, defaults for new art, repos, export folder and its arts.
 
 _chỉ đọc_
+
+## `art_import` — Import legacy art
+
+Move an older art from DATA_DIR/projects (see art_list { legacy: true }) into the current project, with its whole history. The old copy is removed only after the new one is verified. The id gets a -2, -3… suffix when the project already has that id.
+
+| Tham số | Kiểu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `slug` | string | ✓ | Id of the legacy art |
 
 ## `draw_pixels` — Draw pixels
 

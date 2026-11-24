@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from 'node:path'
 import { z } from 'zod'
+import { importLegacyArt } from '../store/import.ts'
 import { artsDirOf, describeDefaults, workspaceArts } from '../store/workspace.ts'
 import { artStore, currentWorkspace, NO_PROJECT_TEXT } from './common.ts'
 import { defineTool } from './types.ts'
@@ -55,6 +56,23 @@ export const workspaceTools = [
           },
           arts,
         },
+      }
+    },
+  }),
+  defineTool({
+    name: 'art_import',
+    title: 'Import legacy art',
+    description:
+      'Move an older art from DATA_DIR/projects (see art_list { legacy: true }) into the current project, with its whole history. The old copy is removed only after the new one is verified. The id gets a -2, -3… suffix when the project already has that id.',
+    input: z.object({ slug: z.string().describe('Id of the legacy art') }),
+    async handler(ctx, i) {
+      const target = artStore(ctx)
+      const old = await ctx.legacy.info(i.slug).catch(() => undefined)
+      const r = await importLegacyArt(ctx.legacy, target, i.slug, { log: ctx.log })
+      const ws = ctx.session.workspace
+      return {
+        text: `Moved "${old?.name ?? i.slug}" into ${ws?.name ?? 'the project'} as "${r.slug}" (${r.to}).`,
+        data: r,
       }
     },
   }),
