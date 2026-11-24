@@ -28,7 +28,7 @@ export function renderToolsDoc(): string {
     '',
     '> File này được sinh bởi `pnpm docs:tools` từ schema zod trong `src/tools`. Đừng sửa tay.',
     '',
-    `Tổng cộng **${ALL_TOOLS.length} tool**. Mọi tool đều nhận \`project\` (slug, mặc định là project đang mở) nếu có liên quan.`,
+    `Tổng cộng **${ALL_TOOLS.length} tool**. Mọi tool art đều nhận \`art\` (id của art trong dự án này, mặc định là art đang mở bằng art_open / art_create) nếu có liên quan.`,
     '',
   ]
   for (const t of ALL_TOOLS) {

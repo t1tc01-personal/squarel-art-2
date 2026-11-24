@@ -13,7 +13,7 @@ const h1 = (page: Page) => page.getByRole('heading', { level: 1 })
 
 interface Sink {
   launched: { argv: string[]; cwd: string; env?: Record<string, string> }[]
-  bridgeTools: { name: string; input: { project: string } }[]
+  bridgeTools: { name: string; input: { art: string } }[]
   opened: string[]
   folders: string[]
   external: string[]
@@ -112,7 +112,7 @@ test('launch menu lists all non-default actions and runs the chosen one', async 
     await page.getByRole('menuitem', { name: 'Mở thu-sync' }).click()
     await expect
       .poll(async () => (await sink(app)).bridgeTools)
-      .toEqual([{ name: 'open_in_editor', input: { project: 'thu-sync' } }])
+      .toEqual([{ name: 'open_in_editor', input: { art: 'thu-sync' } }])
 
     await more.click()
     await page.getByRole('menuitem', { name: 'Mở project…' }).click()
@@ -120,7 +120,7 @@ test('launch menu lists all non-default actions and runs the chosen one', async 
     await dialog.getByRole('button', { name: /Hiệp sĩ dungeon/ }).click()
     await expect
       .poll(async () => (await sink(app)).bridgeTools.at(-1))
-      .toEqual({ name: 'open_in_editor', input: { project: 'hiep-si' } })
+      .toEqual({ name: 'open_in_editor', input: { art: 'hiep-si' } })
 
     await more.click()
     await page.getByRole('menuitem', { name: 'Mở thư mục cài đặt' }).click()

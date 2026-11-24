@@ -8,4 +8,10 @@ describe('docs', () => {
     const file = readFileSync(join(import.meta.dirname, '..', 'docs', 'tools.md'), 'utf8')
     expect(file.replace(/\r\n/g, '\n')).toBe(renderToolsDoc())
   })
+
+  it('header names the art parameter, not project', () => {
+    const doc = renderToolsDoc()
+    expect(doc).toContain('`art`')
+    expect(doc).not.toContain('nhận `project`')
+  })
 })
