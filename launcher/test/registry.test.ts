@@ -383,6 +383,68 @@ describe('registry hardening', () => {
     expect(t).toMatchObject({ iconKind: 'name', icon: 'box' })
     expect(t?.note).toBeTruthy()
   })
+
+  describe('installedIcon: the logo read from the installed tool', () => {
+    const EXE = 'C:/Program Files/Tool/tool.exe'
+    const LOGO = 'C:/Program Files/Tool/data/icons/logo.png'
+    const detect = `{"candidates": ["${EXE}"]}, "installedIcon": "data/icons/logo.png"`
+    const dataUrl = (s: string) => `data:image/png;base64,${Buffer.from(s, 'latin1').toString('base64')}`
+    const own = dataUrl(`${PNG}own`)
+    const tool = async (files: Record<string, string>, selected = ['tool']) => {
+      const { d, reg } = await setup(detect, {
+        '/sq/integrations/tool/icon.png': `${PNG}own`,
+        [EXE]: 'x',
+        ...files,
+      })
+      const view = async () =>
+        (await viewComponents(reg, { ...state, selected }, parseEnv(''), d, ctx)).find((c) => c.id === 'tool')
+      return { d, view }
+    }
+
+    it('shows the PNG next to the detected exe instead of the bundled icon', async () => {
+      const t = await (await tool({ [LOGO]: `${PNG}logo` })).view()
+      expect(t).toMatchObject({ iconKind: 'data', icon: dataUrl(`${PNG}logo`) })
+    })
+
+    it('keeps the bundled icon when the tool is not selected or its logo is missing or bad', async () => {
+      expect((await (await tool({ [LOGO]: `${PNG}logo` }, [])).view())?.icon).toBe(own)
+      for (const files of <Record<string, string>[]>[
+        {},
+        { [LOGO]: 'not a png' },
+        { [LOGO]: PNG + 'a'.repeat(70 * 1024) },
+      ]) {
+        expect(await (await tool(files)).view()).toMatchObject({ iconKind: 'data', icon: own })
+      }
+    })
+
+    it('ignores a logo whose real path leaves the tool folder', async () => {
+      const { d, view } = await tool({ [LOGO]: `${PNG}logo`, 'C:/secret/x.png': `${PNG}zzz` })
+      d.fs.realpath = (async (p: unknown) =>
+        String(p).endsWith('logo.png') ? 'C:/secret/x.png' : String(p)) as never
+      expect((await view())?.icon).toBe(own)
+    })
+
+    it('the manifest rejects an installedIcon path that climbs out or is absolute', async () => {
+      for (const bad of [
+        '../x.png',
+        'data/../../x.png',
+        'C:/x.png',
+        '/x.png',
+        'data/x.gif',
+        '.hidden/x.png',
+      ]) {
+        const d = createDeps('fake', {
+          files: {
+            '/sq/integrations/tool/integration.json': exeOf(
+              `"detect": {}, "installedIcon": ${JSON.stringify(bad)}`,
+            ),
+          },
+        })
+        const reg = await loadRegistry({ squarelDir: '/sq', userIntegrationsDir: '/u', platform: 'win32' }, d)
+        expect(reg.problems.length, bad).toBeGreaterThan(0)
+      }
+    })
+  })
 })
 
 describe('launcher and Squarel update rows', () => {

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/logo.svg" alt="Squarel Art logo" width="96" height="96">
+
 # Squarel Art
 
 **話しかけて作るピクセルアート。** Claude Code とチャットしながら、本格的なピクセルアートの作成・編集・書き出しを行い、仕上げは Aseprite で手描きできます。両者は常に同期されます。

@@ -135,6 +135,12 @@ export type IntegrationManifestT = {
   description: string
   /** 16×16 PNG file, relative to the integration folder. */
   icon: string
+  /**
+   * PNG of the installed tool, relative to the folder of the detected exe (for example its own
+   * logo). Shown instead of `icon` once the tool is installed and the file is readable; Squarel
+   * never ships it.
+   */
+  installedIcon?: string
   /** `#RRGGBB`. */
   accent: string
   platforms: Platform[]
@@ -171,6 +177,14 @@ const accent = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'accent must be #RRGGBB')
 const text = z.string().min(1)
 const run = z.array(templ).min(1)
 const iconFile = z.string().regex(/^[\w.-]+\.png$/, 'icon must be a .png file name in the integration folder')
+/** Relative path whose segments never start with a dot: no `..`, no drive, no leading slash. */
+const installedIconFile = z
+  .string()
+  .max(200)
+  .regex(
+    /^(?:[\w-][\w.-]*\/)*[\w-][\w.-]*\.png$/,
+    'installedIcon must be a relative .png path inside the tool folder',
+  )
 
 /** Exactly one of the given keys is present. */
 function exactlyOne<T extends object>(keys: (keyof T & string)[]) {
@@ -262,6 +276,7 @@ export const IntegrationManifest: z.ZodType<IntegrationManifestT> = z
     name: text,
     description: text,
     icon: iconFile,
+    installedIcon: installedIconFile.optional(),
     accent,
     platforms: z.array(z.enum(PLATFORMS)).min(1),
     detect: DetectSchema,

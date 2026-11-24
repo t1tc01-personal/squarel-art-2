@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/logo.svg" alt="Squarel Art logo" width="96" height="96">
+
 # Squarel Art
 
 **대화로 만드는 픽셀 아트.** Claude Code와 대화하며 진짜 픽셀 아트를 만들고, 편집하고, 내보낸 다음 Aseprite에서 직접 마무리하세요. 양쪽은 항상 동기화됩니다.

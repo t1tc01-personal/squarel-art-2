@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/logo.svg" alt="Squarel Art logo" width="96" height="96">
+
 # Squarel Art
 
 **Pixel art you can talk to.** Create, edit and export real pixel art by chatting with Claude Code, then finish it by hand in Aseprite. Both sides stay in sync.

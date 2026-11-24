@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/logo.svg" alt="Squarel Art logo" width="96" height="96">
+
 # Squarel Art
 
 **能对话的像素画。** 通过与 Claude Code 聊天来创建、编辑和导出真正的像素画，再在 Aseprite 中亲手收尾。两边始终保持同步。

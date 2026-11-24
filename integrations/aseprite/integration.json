@@ -4,6 +4,7 @@
   "name": "Aseprite",
   "description": "Vẽ tay, đồng bộ trực tiếp hai chiều với Claude.",
   "icon": "icon.png",
+  "installedIcon": "data/icons/ase64.png",
   "accent": "#FF77A8",
   "platforms": ["win32"],
   "detect": {

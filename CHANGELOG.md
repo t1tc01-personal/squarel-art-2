@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-24
+
+### Changed
+
+- README: the Squarel Art logo heads every language version (`docs/images/logo.svg`).
+- Launcher: once Aseprite is installed, its rows and pages show Aseprite's own logo, read from the install folder (`data/icons/ase64.png`). Squarel does not ship the logo; without a readable file the old icon stays. Integration manifests can do the same with the new optional `installedIcon` field.
+
 ## [0.4.3] - 2026-11-24
 
 ### Fixed
@@ -140,7 +147,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.0...v0.4.1

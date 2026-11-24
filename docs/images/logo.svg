@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" shape-rendering="crispEdges" role="img" aria-labelledby="t">
+  <title id="t">Squarel Art</title>
+  <rect width="128" height="128" rx="24" fill="#0D0E12" shape-rendering="geometricPrecision"/>
+  <g fill="#FFEC27">
+    <rect x="36" y="15" width="14" height="14"/>
+    <rect x="50" y="15" width="14" height="14"/>
+    <rect x="64" y="15" width="14" height="14"/>
+    <rect x="78" y="15" width="14" height="14"/>
+    <rect x="22" y="29" width="14" height="14"/>
+    <rect x="92" y="29" width="14" height="14"/>
+    <rect x="22" y="43" width="14" height="14"/>
+    <rect x="36" y="57" width="14" height="14"/>
+    <rect x="50" y="57" width="14" height="14"/>
+    <rect x="64" y="57" width="14" height="14"/>
+    <rect x="78" y="57" width="14" height="14"/>
+    <rect x="92" y="71" width="14" height="14"/>
+    <rect x="22" y="85" width="14" height="14"/>
+    <rect x="92" y="85" width="14" height="14"/>
+    <rect x="36" y="99" width="14" height="14"/>
+    <rect x="50" y="99" width="14" height="14"/>
+    <rect x="64" y="99" width="14" height="14"/>
+    <rect x="78" y="99" width="14" height="14"/>
+  </g>
+</svg>

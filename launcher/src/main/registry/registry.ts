@@ -186,28 +186,42 @@ export async function detectIntegration(i: LoadedIntegration, envDoc: EnvDoc, d:
 const MAX_ICON = 64 * 1024
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
+/** A PNG of at most 64 KB whose real path lies inside `dir`, as a data URL, or why not. */
+async function readPngIcon(
+  dir: string,
+  rel: string,
+  d: Deps,
+): Promise<{ ok: true; url: string } | { ok: false; note: string }> {
+  const no = (note: string) => ({ ok: false as const, note })
+  if (!isInsideDir(dir, rel)) return no('Tên file icon không hợp lệ')
+  try {
+    const realIcon = await d.fs.realpath(join(dir, rel))
+    const realDir = await d.fs.realpath(dir)
+    if (!isInsideDir(realDir, realIcon)) return no('Icon nằm ngoài thư mục cho phép')
+    if ((await d.fs.stat(realIcon)).size > MAX_ICON) return no('Icon quá lớn (tối đa 64 KB)')
+    const raw = await d.fs.readFile(realIcon)
+    const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'latin1')
+    if (buf.length > MAX_ICON) return no('Icon quá lớn (tối đa 64 KB)')
+    if (buf.length < PNG_SIG.length || !buf.subarray(0, PNG_SIG.length).equals(PNG_SIG))
+      return no('Icon không phải file PNG')
+    return { ok: true, url: `data:image/png;base64,${buf.toString('base64')}` }
+  } catch {
+    return no('Không đọc được file icon')
+  }
+}
+
 /** Reads the integration icon as a data URL; any problem falls back to the 'box' icon with a note. */
 async function loadIcon(
   i: LoadedIntegration,
   d: Deps,
 ): Promise<{ icon: string; iconKind: 'name' | 'data'; note?: string }> {
-  const fallback = (note: string) => ({ icon: 'box', iconKind: 'name' as const, note })
   const name = i.manifest.icon
-  if (!ICON_FILE.test(name) || !isInsideDir(i.dir, name)) return fallback('Tên file icon không hợp lệ')
-  try {
-    const realIcon = await d.fs.realpath(join(i.dir, name))
-    const realDir = await d.fs.realpath(i.dir)
-    if (!isInsideDir(realDir, realIcon)) return fallback('Icon nằm ngoài thư mục tích hợp')
-    if ((await d.fs.stat(realIcon)).size > MAX_ICON) return fallback('Icon quá lớn (tối đa 64 KB)')
-    const raw = await d.fs.readFile(realIcon)
-    const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'latin1')
-    if (buf.length > MAX_ICON) return fallback('Icon quá lớn (tối đa 64 KB)')
-    if (buf.length < PNG_SIG.length || !buf.subarray(0, PNG_SIG.length).equals(PNG_SIG))
-      return fallback('Icon không phải file PNG')
-    return { icon: `data:image/png;base64,${buf.toString('base64')}`, iconKind: 'data' }
-  } catch {
-    return fallback('Không đọc được file icon')
-  }
+  const r = ICON_FILE.test(name)
+    ? await readPngIcon(i.dir, name, d)
+    : { ok: false as const, note: 'Tên file icon không hợp lệ' }
+  return r.ok
+    ? { icon: r.url, iconKind: 'data' }
+    : { icon: 'box', iconKind: 'name', note: r.note.replace('thư mục cho phép', 'thư mục tích hợp') }
 }
 
 /** Display form of the winget install the terminal runs (see setup.ts wingetTerminalArgv). */
@@ -352,6 +366,11 @@ async function viewIntegration(
   if (!state.selected.includes(m.id))
     return { ...base, installed: false, level: 'idle', levelLabel: 'Chưa chọn', actions: [] }
   const det = await detectIntegration(i, envDoc, d)
+  // The tool's own logo, read from its install folder (Squarel does not ship it).
+  if (det.path && m.installedIcon) {
+    const own = await readPngIcon(dirname(det.path), m.installedIcon, d)
+    if (own.ok) Object.assign(base, { icon: own.url, iconKind: 'data' as const })
+  }
   let latest: Latest | undefined
   if (det.installed && m.latest) {
     latest = await latestGitTag(m.latest.repo, d).catch(

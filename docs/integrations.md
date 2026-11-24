@@ -61,6 +61,7 @@ Chỉ năm biến sau, viết `{tên}`. Biến khác bị từ chối khi nạp 
 | `id` | có | Trùng tên thư mục |
 | `name`, `description` | có | Chuỗi không rỗng |
 | `icon` | có | Tên file PNG 16×16 |
+| `installedIcon` | không | Đường dẫn tương đối tới một PNG trong thư mục của file exe đã dò được, ví dụ logo của chính công cụ. Khi công cụ đã cài và file đọc được (PNG, tối đa 64 KB, không ra ngoài thư mục đó), launcher hiện ảnh này thay cho `icon`. Squarel không kèm file này. |
 | `accent` | có | Màu nhấn `#RRGGBB` |
 | `platforms` | có | Hệ điều hành hỗ trợ |
 | `detect` | có | Cách tìm bản đã cài |
