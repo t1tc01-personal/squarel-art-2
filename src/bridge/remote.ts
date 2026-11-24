@@ -1,17 +1,17 @@
 import WebSocket from 'ws'
-import type { ServerMessage } from './protocol.ts'
+import { BRIDGE_PROTOCOL, type ServerMessage } from './protocol.ts'
 
 /**
- * Ask a bridge owned by another process to open a project in its connected editor.
+ * Ask a bridge owned by another process to open an art (`<project id>/<art id>`) in its connected editor.
  * Always settles within `timeoutMs` and always terminates the socket.
  */
 export function openViaBridge(opts: {
   port: number
   token?: string
-  slug: string
+  ref: string
   timeoutMs?: number
 }): Promise<string> {
-  const { port, token, slug, timeoutMs = 3000 } = opts
+  const { port, token, ref, timeoutMs = 3000 } = opts
   const prefix = `bridge on port ${port} did not answer`
   return new Promise<string>((resolve, reject) => {
     const query = token ? `?token=${encodeURIComponent(token)}` : ''
@@ -29,8 +29,8 @@ export function openViaBridge(opts: {
     }
     const timer = setTimeout(() => finish(new Error(`${prefix} within ${timeoutMs} ms`)), timeoutMs)
     ws.on('open', () => {
-      ws.send(JSON.stringify({ type: 'hello', client: 'squarel-mcp' }))
-      ws.send(JSON.stringify({ type: 'tool', id: 'open', name: 'open_in_editor', input: { art: slug } }))
+      ws.send(JSON.stringify({ type: 'hello', client: 'squarel-mcp', protocol: BRIDGE_PROTOCOL }))
+      ws.send(JSON.stringify({ type: 'tool', id: 'open', name: 'open_in_editor', ref, input: {} }))
     })
     ws.on('message', (raw) => {
       let m: ServerMessage

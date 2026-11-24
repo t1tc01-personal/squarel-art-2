@@ -4,8 +4,10 @@
  * stdout carries the MCP protocol: never print to it — log via createLogger (stderr + file).
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { ProjectDirectory } from '../bridge/projects.ts'
 import { openViaBridge } from '../bridge/remote.ts'
 import { BridgeServer, readBridgeToken } from '../bridge/server.ts'
+import { artRef } from '../shared/ref.ts'
 import { workspaceArts, writeCatalog } from '../store/workspace.ts'
 import { createToolContext } from '../tools/context.ts'
 import { SQUAREL_VERSION as VERSION } from '../version.ts'
@@ -28,6 +30,7 @@ async function main() {
   const bridge = new BridgeServer(ctx, {
     port: ctx.config.bridgePort,
     token: readBridgeToken(ctx.config.dataDir),
+    projects: new ProjectDirectory({ dataDir: ctx.config.dataDir, log: ctx.log }),
   })
   let bridgeUp = false
   let startThrew = false
@@ -42,13 +45,17 @@ async function main() {
   if (bridgeUp) {
     ctx.editor = bridge
     ctx.onCommit = (slug, versionId) => {
-      bridge.notify(slug, versionId).catch((e) => ctx.log.warn('bridge notify failed', { error: String(e) }))
+      const id = ctx.session.workspace?.id
+      if (!id) return
+      Promise.resolve()
+        .then(() => bridge.notify(artRef(id, slug), versionId))
+        .catch((e) => ctx.log.warn('bridge notify failed', { error: String(e) }))
     }
   } else {
     // Another process owns the port (e.g. `pnpm bridge`); it sees our commits through its file watcher.
     const port = ctx.config.bridgePort
     const token = readBridgeToken(ctx.config.dataDir)
-    ctx.editor = { open: (slug) => openViaBridge({ port, token, slug }) }
+    ctx.editor = { open: (ref) => openViaBridge({ port, token, ref }) }
   }
   const presence = startPresence({
     dataDir: ctx.config.dataDir,

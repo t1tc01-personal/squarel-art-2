@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-/** Standalone bridge: lets Aseprite sync with Squarel projects without Claude Code running. */
+/** Standalone bridge: lets Aseprite sync with the art of every Squarel project without Claude Code running. */
 import { createToolContext } from '../tools/context.ts'
+import { ProjectDirectory } from './projects.ts'
 import { BridgeServer, readBridgeToken } from './server.ts'
 
 async function main() {
@@ -8,6 +9,7 @@ async function main() {
   const bridge = new BridgeServer(ctx, {
     port: ctx.config.bridgePort,
     token: readBridgeToken(ctx.config.dataDir),
+    projects: new ProjectDirectory({ dataDir: ctx.config.dataDir, log: ctx.log }),
   })
   ctx.editor = bridge
   if (!(await bridge.start())) {

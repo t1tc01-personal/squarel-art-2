@@ -10,10 +10,20 @@ import { normalize } from '../core/normalize.ts'
 import { pasteIndexed } from '../core/ops.ts'
 import { decodePng, encodePng } from '../core/png.ts'
 import { renderRGBA } from '../core/preview.ts'
+import { artRef } from '../shared/ref.ts'
 import { MAX_SIDE, PURPOSES, type Purpose } from '../shared/types.ts'
 import { resolveExportDir, writeCatalog } from '../store/workspace.ts'
 import { SQUAREL_VERSION } from '../version.ts'
-import { artArg, artSlug, artStore, currentWorkspace, mutate, preview, previewArg } from './common.ts'
+import {
+  artArg,
+  artSlug,
+  artStore,
+  currentWorkspace,
+  mutate,
+  NO_PROJECT_TEXT,
+  preview,
+  previewArg,
+} from './common.ts'
 import { defineTool, ToolError } from './types.ts'
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'])
@@ -285,7 +295,9 @@ export const editorTools = [
       const slug = await artSlug(ctx, i.art)
       if (!ctx.editor)
         throw new ToolError('UNAVAILABLE', 'no editor integration in this process (run `pnpm bridge`)')
-      return { text: await ctx.editor.open(slug) }
+      const ws = ctx.session.workspace
+      if (!ws) throw new ToolError('NO_PROJECT', NO_PROJECT_TEXT)
+      return { text: await ctx.editor.open(artRef(ws.id, slug)) }
     },
   }),
   defineTool({

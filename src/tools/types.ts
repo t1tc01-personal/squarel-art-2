@@ -42,8 +42,8 @@ export interface ToolResult {
 }
 
 export interface EditorHost {
-  /** Ask the editor integration (Aseprite bridge) to show a project. */
-  open(slug: string): Promise<string>
+  /** Ask the editor integration (Aseprite bridge) to show an art, by ref (`<project id>/<art id>`). */
+  open(ref: string): Promise<string>
 }
 
 export interface ToolContext {
