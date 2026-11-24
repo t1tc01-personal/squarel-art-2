@@ -22,11 +22,24 @@ import {
   type WorkspaceSummary,
 } from '../shared/ipc'
 import type { Deps, DetachedSpec } from './deps'
-import { liveSessions, sessionSubtitle } from './presence'
+import { type LiveSession, liveSessions, sessionSubtitle } from './presence'
 import { SAFE_PATH_ITEM, terminalArgvWith } from './setup'
 import { system32 } from './system-root'
+import { worktreeMain } from './worktree'
 
-const { dirname, isAbsolute, join, relative, resolve, sep } = win32
+const { basename, dirname, isAbsolute, join, relative, resolve, sep } = win32
+
+/** Where a project folder keeps its art (folder contract with Squarel, duplicated: no src import). */
+export const ART_DIR = 'squarel_art'
+/** Exact content of `squarel_art/.gitignore`: heavy and machine-local files stay out of git. */
+export const ART_GITIGNORE = `*/.lock
+*.tmp
+*/.work-*.json
+*/proposals/
+*/exports/
+*/work.aseprite
+*/thumb.png
+`
 
 /** A problem the user can fix; the message is shown as is. */
 export class WorkspaceError extends Error {}
@@ -443,6 +456,22 @@ interface FolderWrite {
   text: string
 }
 
+/** What `squarel_art/` and its `.gitignore` need in this folder (an existing .gitignore is never touched). */
+async function artFiles(
+  d: Deps,
+  folder: string,
+): Promise<{ art: 'create' | 'keep'; artIgnore: 'create' | 'keep' }> {
+  const exists = (p: string) =>
+    d.fs.lstat(p).then(
+      () => true,
+      () => false,
+    )
+  return {
+    art: (await exists(join(folder, ART_DIR))) ? 'keep' : 'create',
+    artIgnore: (await exists(join(folder, ART_DIR, '.gitignore'))) ? 'keep' : 'create',
+  }
+}
+
 /**
  * Every file the folder needs, computed before anything is written: the AGENTS.md block,
  * (`claude`) the CLAUDE.md import, and project.json last, so a failed write never leaves a folder
@@ -454,6 +483,7 @@ async function planFolderFiles(
   raw: Record<string, unknown>,
   cfg: WorkspaceConfig,
   claude: boolean,
+  art = false,
 ): Promise<FolderWrite[]> {
   const out: FolderWrite[] = []
   const agents = join(folder, 'AGENTS.md')
@@ -464,6 +494,8 @@ async function planFolderFiles(
     const c = await planClaude(d, folder)
     if (c.text !== undefined) out.push({ path: c.path, text: c.text })
   }
+  if (art && (await artFiles(d, folder)).artIgnore === 'create')
+    out.push({ path: join(folder, ART_DIR, '.gitignore'), text: ART_GITIGNORE })
   out.push({ path: projectFile(folder), text: configJson(raw, cfg) })
   // Fail before writing anything when a target is a dangling link or not a file.
   for (const w of out) await writeTarget(d, w.path)
@@ -472,7 +504,10 @@ async function planFolderFiles(
 
 async function writeFolderFiles(d: Deps, folder: string, writes: FolderWrite[]): Promise<void> {
   await d.fs.mkdir(join(folder, '.squarel'), { recursive: true })
-  for (const w of writes) await writeAtomic(d, w.path, w.text)
+  for (const w of writes) {
+    await d.fs.mkdir(dirname(w.path), { recursive: true })
+    await writeAtomic(d, w.path, w.text)
+  }
 }
 
 // ---- index (DATA_DIR/workspaces) ---------------------------------------------------------------
@@ -527,7 +562,7 @@ async function entry(ctx: WorkspaceCtx, id: string): Promise<IndexEntry> {
   return e
 }
 
-// ---- arts (DATA_DIR/projects) -----------------------------------------------------------------
+// ---- arts (<folder>/squarel_art) --------------------------------------------------------------
 
 interface ArtMeta {
   slug: string
@@ -535,11 +570,13 @@ interface ArtMeta {
   purpose?: string
   head: string
   updatedAt: string
-  workspace?: string
 }
 
-async function readArts(ctx: WorkspaceCtx): Promise<ArtMeta[]> {
-  const dir = join(ctx.dataDir, 'projects')
+const artsDirOf = (folder: string) => join(folder, ART_DIR)
+/** Art of Squarel before the move into project folders (Chưa phân loại). */
+const legacyArtsDir = (ctx: WorkspaceCtx) => join(ctx.dataDir, 'projects')
+
+async function readArtsIn(ctx: WorkspaceCtx, dir: string): Promise<ArtMeta[]> {
   let names: string[]
   try {
     names = (await ctx.d.fs.readdir(dir)).map(String).filter((n) => SLUG.test(n))
@@ -557,9 +594,6 @@ async function readArts(ctx: WorkspaceCtx): Promise<ArtMeta[]> {
         ...(typeof raw.purpose === 'string' ? { purpose: raw.purpose.slice(0, 20) } : {}),
         head: VERSION_ID.test(raw.head) ? raw.head : '',
         updatedAt: raw.updatedAt.slice(0, 40),
-        ...(typeof raw.workspace === 'string' && WORKSPACE_ID.test(raw.workspace)
-          ? { workspace: raw.workspace }
-          : {}),
       })
     } catch {
       /* broken art: skip */
@@ -568,14 +602,19 @@ async function readArts(ctx: WorkspaceCtx): Promise<ArtMeta[]> {
   return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
 }
 
+/** The arts of a project folder: `<folder>/squarel_art/<id>/project.json`. */
+export function readArts(ctx: WorkspaceCtx, folder: string): Promise<ArtMeta[]> {
+  return readArtsIn(ctx, artsDirOf(folder))
+}
+
 const asBuffer = (raw: unknown) => (Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'latin1'))
 
-/** thumb.png as a data URL: a PNG of at most 64 KB that really lies inside DATA_DIR. */
-export async function readThumb(ctx: WorkspaceCtx, slug: string): Promise<string | undefined> {
+/** thumb.png of an art as a data URL: a PNG of at most 64 KB that really lies inside `artsDir`. */
+async function thumbIn(ctx: WorkspaceCtx, artsDir: string, slug: string): Promise<string | undefined> {
   if (!SLUG.test(slug)) return undefined
   try {
-    const real = await ctx.d.fs.realpath(join(ctx.dataDir, 'projects', slug, 'thumb.png'))
-    const root = await ctx.d.fs.realpath(ctx.dataDir)
+    const real = await ctx.d.fs.realpath(join(artsDir, slug, 'thumb.png'))
+    const root = join(await ctx.d.fs.realpath(dirname(artsDir)), basename(artsDir))
     if (!within(root, real) || samePath(root, real)) return undefined
     const st = await ctx.d.fs.stat(real)
     if (!st.isFile() || st.size > MAX_THUMB) return undefined
@@ -587,11 +626,20 @@ export async function readThumb(ctx: WorkspaceCtx, slug: string): Promise<string
   }
 }
 
+/** thumb.png of an art of a project folder: only a real path inside `<folder>/squarel_art`. */
+export function readThumb(ctx: WorkspaceCtx, folder: string, slug: string): Promise<string | undefined> {
+  return thumbIn(ctx, artsDirOf(folder), slug)
+}
+
 /** Size and frame count of the head version (optional: unknown when the file is odd or large). */
-async function docSize(ctx: WorkspaceCtx, a: ArtMeta): Promise<Pick<ArtView, 'width' | 'height' | 'frames'>> {
+async function docSize(
+  ctx: WorkspaceCtx,
+  artsDir: string,
+  a: ArtMeta,
+): Promise<Pick<ArtView, 'width' | 'height' | 'frames'>> {
   if (!a.head) return {}
   try {
-    const file = join(ctx.dataDir, 'projects', a.slug, 'versions', `${a.head}.json.gz`)
+    const file = join(artsDir, a.slug, 'versions', `${a.head}.json.gz`)
     if ((await ctx.d.fs.stat(file)).size > MAX_VERSION_GZ) return {}
     const json = JSON.parse(
       gunzipSync(asBuffer(await ctx.d.fs.readFile(file)), { maxOutputLength: 64 * 1024 * 1024 }).toString(
@@ -609,26 +657,34 @@ async function docSize(ctx: WorkspaceCtx, a: ArtMeta): Promise<Pick<ArtView, 'wi
   }
 }
 
-async function artView(ctx: WorkspaceCtx, a: ArtMeta, withSize: boolean): Promise<ArtView> {
-  const thumb = await readThumb(ctx, a.slug)
+async function artView(ctx: WorkspaceCtx, artsDir: string, a: ArtMeta, withSize: boolean): Promise<ArtView> {
+  const thumb = await thumbIn(ctx, artsDir, a.slug)
   return {
     slug: a.slug,
     name: a.name,
     ...(a.purpose ? { purpose: a.purpose } : {}),
     head: a.head,
     updatedAt: a.updatedAt,
-    ...(withSize ? await docSize(ctx, a) : {}),
+    ...(withSize ? await docSize(ctx, artsDir, a) : {}),
     ...(thumb ? { thumb } : {}),
   }
 }
 
 // ---- views ------------------------------------------------------------------------------------
 
-async function sessionCounts(ctx: WorkspaceCtx): Promise<Map<string, number>> {
+function sessionCounts(live: LiveSession[]): Map<string, number> {
   const counts = new Map<string, number>()
-  for (const s of await liveSessions(ctx.dataDir, ctx.d))
-    if (s.workspace) counts.set(s.workspace.id, (counts.get(s.workspace.id) ?? 0) + 1)
+  for (const s of live) if (s.workspace) counts.set(s.workspace.id, (counts.get(s.workspace.id) ?? 0) + 1)
   return counts
+}
+
+/** The other folder a live session declares for this id (its art home differs from the index folder). */
+function duplicateFolder(live: LiveSession[], e: IndexEntry): string | undefined {
+  for (const s of live) {
+    const f = s.workspace?.folder
+    if (s.workspace?.id === e.id && f && DRIVE_ABS.test(f) && !samePath(f, e.folder)) return resolve(f)
+  }
+  return undefined
 }
 
 const lastName = (p: string) =>
@@ -645,7 +701,7 @@ export function sessionTitle(folder: string, cwd: string): string {
   return relative(folder, full).replace(/\\/g, '/') || lastName(folder)
 }
 
-function base(e: IndexEntry, c: ConfigRead, arts: ArtMeta[], sessions: number) {
+function base(e: IndexEntry, c: ConfigRead, arts: ArtMeta[], sessions: number, duplicate?: string) {
   const cfg = c.status === 'ok' ? c.cfg : undefined
   return {
     id: e.id,
@@ -657,16 +713,21 @@ function base(e: IndexEntry, c: ConfigRead, arts: ArtMeta[], sessions: number) {
     artCount: arts.length,
     updatedAt: arts[0]?.updatedAt ?? e.createdAt,
     sessions,
+    ...(duplicate ? { duplicate } : {}),
   }
 }
 
 export async function listWorkspaces(ctx: WorkspaceCtx): Promise<WorkspaceSummary[]> {
-  const [index, arts, counts] = await Promise.all([readIndex(ctx), readArts(ctx), sessionCounts(ctx)])
+  const [index, live] = await Promise.all([readIndex(ctx), liveSessions(ctx.dataDir, ctx.d)])
+  const counts = sessionCounts(live)
   const out: WorkspaceSummary[] = []
   for (const e of index) {
-    const mine = arts.filter((a) => a.workspace === e.id)
-    const recent = await Promise.all(mine.slice(0, 3).map((a) => artView(ctx, a, false)))
-    out.push({ ...base(e, await readConfig(ctx.d, e.folder), mine, counts.get(e.id) ?? 0), recent })
+    const mine = await readArts(ctx, e.folder)
+    const recent = await Promise.all(mine.slice(0, 3).map((a) => artView(ctx, artsDirOf(e.folder), a, false)))
+    out.push({
+      ...base(e, await readConfig(ctx.d, e.folder), mine, counts.get(e.id) ?? 0, duplicateFolder(live, e)),
+      recent,
+    })
   }
   return out.sort(
     (a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.name.localeCompare(b.name),
@@ -675,7 +736,7 @@ export async function listWorkspaces(ctx: WorkspaceCtx): Promise<WorkspaceSummar
 
 async function detail(ctx: WorkspaceCtx, e: IndexEntry): Promise<WorkspaceDetail> {
   const c = await readConfig(ctx.d, e.folder)
-  const mine = (await readArts(ctx)).filter((a) => a.workspace === e.id)
+  const mine = await readArts(ctx, e.folder)
   const cfg = c.status === 'ok' ? c.cfg : undefined
   const repos = []
   for (const r of cfg?.repos ?? []) {
@@ -683,15 +744,16 @@ async function detail(ctx: WorkspaceCtx, e: IndexEntry): Promise<WorkspaceDetail
     repos.push({ path: r, outside, exists: await isDirectory(ctx.d, resolve(e.folder, r)) })
   }
   const arts = []
-  for (const a of mine) arts.push(await artView(ctx, a, true))
-  const live = (await liveSessions(ctx.dataDir, ctx.d)).filter((s) => s.workspace?.id === e.id)
+  for (const a of mine) arts.push(await artView(ctx, artsDirOf(e.folder), a, true))
+  const all = await liveSessions(ctx.dataDir, ctx.d)
+  const live = all.filter((s) => s.workspace?.id === e.id)
   const sessionList = live.slice(0, 200).map((s) => ({
     title: sessionTitle(e.folder, s.cwd).slice(0, 300),
     busy: !!s.busyWith,
     subtitle: sessionSubtitle(s).slice(0, 300),
   }))
   return {
-    ...base(e, c, mine, live.length),
+    ...base(e, c, mine, live.length, duplicateFolder(all, e)),
     sessionList,
     brief: cfg?.brief ?? '',
     defaults: cfg?.defaults ?? {},
@@ -706,28 +768,33 @@ export async function getWorkspace(ctx: WorkspaceCtx, id: string): Promise<Works
   return detail(ctx, await entry(ctx, id))
 }
 
-/** Arts without a `workspace` field ("Chưa phân loại"), newest first. */
+/** Arts still in DATA_DIR/projects ("Chưa phân loại"), newest first; Task 11 replaces this with legacy arts. */
 export async function unassignedArts(ctx: WorkspaceCtx): Promise<ArtView[]> {
-  const arts = (await readArts(ctx)).filter((a) => a.workspace === undefined).slice(0, 2000)
+  const arts = (await readArtsIn(ctx, legacyArtsDir(ctx))).slice(0, 2000)
   const out: ArtView[] = []
-  for (const a of arts) out.push(await artView(ctx, a, false))
+  for (const a of arts) out.push(await artView(ctx, legacyArtsDir(ctx), a, false))
   return out
 }
 
 // ---- create / update / remove -----------------------------------------------------------------
 
 /** The folder of a new workspace: chosen with the dialog, or a new folder right inside a chosen one. */
-function checkChosenFolder(ctx: WorkspaceCtx, folder: string, index: IndexEntry[]): string {
+async function checkChosenFolder(ctx: WorkspaceCtx, folder: string, index: IndexEntry[]): Promise<string> {
   const full = checkFolder(folder)
   const known = index.some((e) => samePath(e.folder, full))
   if (!known && !ctx.chosen(full) && !ctx.chosen(dirname(full)))
     throw new WorkspaceError('Hãy chọn thư mục dự án bằng nút Chọn…')
+  // Art lives in the folder's squarel_art/ and is committed with the project: a linked worktree
+  // would hold a second, diverging copy, so only the main checkout is accepted.
+  const main = await worktreeMain(ctx.d, full)
+  if (main)
+    throw new WorkspaceError(`Thư mục này là một git worktree. Hãy chọn thư mục dự án ở bản chính: ${main}`)
   return full
 }
 
 export async function inspectFolder(ctx: WorkspaceCtx, folder: string): Promise<WorkspaceFolderInfo> {
   const index = await readIndex(ctx)
-  const full = checkChosenFolder(ctx, folder, index)
+  const full = await checkChosenFolder(ctx, folder, index)
   const folderExists = await isDirectory(ctx.d, full)
   const c = await readConfig(ctx.d, full)
   if (c.status === 'broken')
@@ -738,10 +805,14 @@ export async function inspectFolder(ctx: WorkspaceCtx, folder: string): Promise<
     return {
       folderExists,
       existing: { id: c.cfg.id, name: c.cfg.name },
-      files: { project: 'keep', agents: 'keep', claude: 'keep' },
+      files: { project: 'keep', agents: 'keep', claude: 'keep', art: 'keep', artIgnore: 'keep' },
     }
   if (!folderExists)
-    return { folderExists, existing: null, files: { project: 'create', agents: 'create', claude: 'create' } }
+    return {
+      folderExists,
+      existing: null,
+      files: { project: 'create', agents: 'create', claude: 'create', art: 'create', artIgnore: 'create' },
+    }
   const agents = await readText(ctx.d, join(full, 'AGENTS.md'), MAX_MD)
   // Refuses an AGENTS.md whose Squarel block has no end line now, not only when creating.
   if (agents !== undefined) mergeAgentsBlock(agents, BLOCK_END)
@@ -752,31 +823,31 @@ export async function inspectFolder(ctx: WorkspaceCtx, folder: string): Promise<
       project: 'create',
       agents: agents === undefined ? 'create' : 'update',
       claude: (await planClaude(ctx.d, full)).action,
+      ...(await artFiles(ctx.d, full)),
     },
   }
 }
 
-/**
- * A fresh id: not in the index (nor a leftover index file), and not in any art's `workspace` field,
- * so arts of a removed workspace never silently join a new one with the same name.
- */
-async function uniqueId(ctx: WorkspaceCtx, name: string, index: IndexEntry[]): Promise<string> {
-  const baseId = slugify(name)
-  const used = new Set([
-    ...index.map((e) => e.id),
-    ...(await readArts(ctx)).flatMap((a) => a.workspace ?? []),
-  ])
+/** Ids that must not be handed out: the index, the config id of every known folder, leftover index files. */
+async function usedIds(ctx: WorkspaceCtx, index: IndexEntry[]): Promise<(id: string) => Promise<boolean>> {
+  const used = new Set(index.map((e) => e.id))
   // A known folder whose project.json was edited to another id holds that id too.
   for (const e of index) {
     const c = await readConfig(ctx.d, e.folder)
     if (c.status === 'ok') used.add(c.cfg.id)
   }
-  const taken = async (id: string) =>
+  return async (id) =>
     used.has(id) ||
     (await ctx.d.fs.lstat(indexFile(ctx, id)).then(
       () => true,
       () => false,
     ))
+}
+
+/** A fresh id: not in the index (nor a leftover index file) and not held by a known folder. */
+async function uniqueId(ctx: WorkspaceCtx, name: string, index: IndexEntry[]): Promise<string> {
+  const baseId = slugify(name)
+  const taken = await usedIds(ctx, index)
   let id = baseId
   for (let i = 2; await taken(id); i++) id = `${baseId.slice(0, 64 - String(i).length - 1)}-${i}`
   return id
@@ -789,7 +860,7 @@ async function uniqueId(ctx: WorkspaceCtx, name: string, index: IndexEntry[]): P
 export async function createWorkspace(ctx: WorkspaceCtx, input: WorkspaceCreate): Promise<WorkspaceDetail> {
   const { d } = ctx
   const index = await readIndex(ctx)
-  const folder = checkChosenFolder(ctx, input.folder, index)
+  const folder = await checkChosenFolder(ctx, input.folder, index)
   const registered = index.find((e) => samePath(e.folder, folder))
   if (registered) return detail(ctx, registered)
   if (
@@ -824,7 +895,7 @@ export async function createWorkspace(ctx: WorkspaceCtx, input: WorkspaceCreate)
     repos: await checkRepos(ctx, folder, input.repos ?? []),
     exportDir: input.exportDir ? checkExportDir(folder, input.exportDir) : null,
   }
-  const writes = await planFolderFiles(d, folder, {}, cfg, true)
+  const writes = await planFolderFiles(d, folder, {}, cfg, true, true)
   await d.fs.mkdir(folder, { recursive: true })
   await writeFolderFiles(d, folder, writes)
   const e = { id: cfg.id, name: cfg.name, folder, createdAt: now }
@@ -845,8 +916,16 @@ export async function updateWorkspace(
   if (c.status === 'broken')
     throw new WorkspaceError('File .squarel/project.json bị hỏng; sửa nó rồi thử lại')
   if (c.cfg.id !== id) throw new WorkspaceError('Thư mục này giờ chứa một dự án khác; gỡ rồi thêm lại')
+  const newId = patch.id ?? id
+  if (newId !== id) {
+    if (!WORKSPACE_ID.test(newId))
+      throw new WorkspaceError('Mã dự án chỉ gồm chữ thường a-z, số và dấu gạch ngang')
+    if (await (await usedIds(ctx, await readIndex(ctx)))(newId))
+      throw new WorkspaceError(`Mã dự án "${newId}" đã được dùng; hãy chọn mã khác`)
+  }
   const cfg: WorkspaceConfig = {
     ...c.cfg,
+    id: newId,
     ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
     ...(patch.brief !== undefined ? { brief: patch.brief.trim() } : {}),
@@ -859,8 +938,12 @@ export async function updateWorkspace(
       : {}),
   }
   await writeFolderFiles(ctx.d, e.folder, await planFolderFiles(ctx.d, e.folder, c.raw, cfg, false))
-  if (cfg.name !== e.name) await writeIndex(ctx, { ...e, name: cfg.name })
-  return detail(ctx, { ...e, name: cfg.name })
+  const next = { ...e, id: newId, name: cfg.name }
+  if (newId !== id) {
+    await writeIndex(ctx, next)
+    await ctx.d.fs.rm(indexFile(ctx, id), { force: true })
+  } else if (cfg.name !== e.name) await writeIndex(ctx, next)
+  return detail(ctx, next)
 }
 
 /** Forgets the workspace: only its index file goes; the folder, its files and the arts stay. */

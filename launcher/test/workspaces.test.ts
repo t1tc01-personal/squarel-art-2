@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createDeps, type DetachedSpec, type Fixtures } from '../src/main/deps'
 import {
+  ART_GITIGNORE,
   BLOCK_BEGIN,
   BLOCK_END,
   checkExportDir,
@@ -28,6 +29,8 @@ import {
   mergeAgentsBlock,
   normalizePalette,
   openClaude,
+  readArts,
+  readThumb,
   removeWorkspace,
   renderAgentsBlock,
   sessionTitle,
@@ -37,6 +40,7 @@ import {
   type WorkspaceConfig,
   type WorkspaceCtx,
 } from '../src/main/workspaces'
+import { worktreeMain } from '../src/main/worktree'
 import { exportDirError } from '../src/renderer/pages/project-paths'
 
 const DATA = 'D:\\data'
@@ -64,14 +68,14 @@ function world(files: Record<string, string> = {}, fx: Partial<Fixtures> = {}) {
   return { d, ctx, chosen, launched, read }
 }
 
-const art = (slug: string, updatedAt: string, workspace?: string) => ({
-  [`${DATA}\\projects\\${slug}\\project.json`]: json({
+/** An art in a project folder (`<folder>\\squarel_art\\<slug>`), or in DATA_DIR/projects when no folder. */
+const art = (slug: string, updatedAt: string, folder?: string) => ({
+  [`${folder ? `${folder}\\squarel_art` : `${DATA}\\projects`}\\${slug}\\project.json`]: json({
     slug,
     name: slug.toUpperCase(),
     purpose: 'game',
     updatedAt,
     head: 'v000001',
-    ...(workspace ? { workspace } : {}),
   }),
 })
 
@@ -244,6 +248,8 @@ describe('create / update / remove', () => {
       project: 'create',
       agents: 'update',
       claude: 'update',
+      art: 'create',
+      artIgnore: 'create',
     })
     await createWorkspace(w.ctx, { name: 'P', folder: 'D:\\p' })
     expect(await w.read('D:\\p\\AGENTS.md')).toMatch(/<!-- squarel:end -->\n\n# Team rules\n$/)
@@ -315,25 +321,6 @@ describe('create / update / remove', () => {
       'game-dungeon-3',
     )
     expect(slugify('***')).toBe('du-an')
-  })
-
-  it('a removed workspace id still used by arts is not reused, so its arts do not join the new one', async () => {
-    const w = world({
-      'D:\\old\\.squarel\\project.json': json({ schema: 1, id: 'game-a', name: 'Game A' }),
-      [`${DATA}\\workspaces\\game-a.json`]: json({
-        schema: 1,
-        id: 'game-a',
-        name: 'Game A',
-        folder: 'D:\\old',
-      }),
-      ...art('a1', '2026-01-01T00:00:00Z', 'game-a'),
-    })
-    await removeWorkspace(w.ctx, 'game-a')
-    w.chosen.push('D:\\new')
-    const r = await createWorkspace(w.ctx, { name: 'Game A', folder: 'D:\\new' })
-    expect(r.id).toBe('game-a-2')
-    expect(r.artCount).toBe(0)
-    expect(JSON.parse((await w.read('D:\\new\\.squarel\\project.json')) ?? '').id).toBe('game-a-2')
   })
 
   it('an id held by a known folder (project.json edited) is not reused', async () => {
@@ -436,7 +423,7 @@ describe('create / update / remove', () => {
       'D:\\p\\.squarel\\project.json': json({ schema: 1, id: 'p', name: 'P' }),
       'D:\\p\\AGENTS.md': 'a',
       [`${DATA}\\workspaces\\p.json`]: json({ schema: 1, id: 'p', name: 'P', folder: 'D:\\p' }),
-      ...art('a1', '2026-01-01T00:00:00Z', 'p'),
+      ...art('a1', '2026-01-01T00:00:00Z', 'D:\\p'),
     }
     const w = world(files)
     await removeWorkspace(w.ctx, 'p')
@@ -465,15 +452,15 @@ describe('list / get / unassigned', () => {
       name: 'A real',
       defaults: { purpose: 'print' },
     }),
-    ...art('a1', '2026-01-01T00:00:00Z', 'a'),
-    ...art('a2', '2026-01-03T00:00:00Z', 'a'),
-    ...art('a3', '2026-01-02T00:00:00Z', 'a'),
-    ...art('a4', '2025-12-01T00:00:00Z', 'a'),
-    ...art('g1', '2026-01-05T00:00:00Z', 'gone'),
+    ...art('a1', '2026-01-01T00:00:00Z', 'D:\\a'),
+    ...art('a2', '2026-01-03T00:00:00Z', 'D:\\a'),
+    ...art('a3', '2026-01-02T00:00:00Z', 'D:\\a'),
+    ...art('a4', '2025-12-01T00:00:00Z', 'D:\\a'),
+    ...art('g1', '2026-01-05T00:00:00Z', 'D:\\gone'),
     ...art('free', '2026-01-04T00:00:00Z'),
-    [`${DATA}\\projects\\a2\\thumb.png`]: PNG.toString('latin1'),
-    [`${DATA}\\projects\\a3\\thumb.png`]: big.toString('latin1'),
-    [`${DATA}\\projects\\a1\\thumb.png`]: 'not a png',
+    'D:\\a\\squarel_art\\a2\\thumb.png': PNG.toString('latin1'),
+    'D:\\a\\squarel_art\\a3\\thumb.png': big.toString('latin1'),
+    'D:\\a\\squarel_art\\a1\\thumb.png': 'not a png',
     [`${DATA}\\run\\mcp-7.json`]: json({
       pid: 7,
       cwd: 'D:\\a\\sub',
@@ -497,7 +484,7 @@ describe('list / get / unassigned', () => {
     expect(a?.recent[2]?.thumb).toBeUndefined() // not a PNG
   })
 
-  it('get returns config and every art; unassigned are the arts without workspace', async () => {
+  it('get returns config and every art; unassigned are the arts still in DATA_DIR/projects', async () => {
     const w = world(files)
     const a = await getWorkspace(w.ctx, 'a')
     expect(a.arts.map((x) => x.slug)).toEqual(['a2', 'a3', 'a1', 'a4'])
@@ -538,13 +525,176 @@ describe('list / get / unassigned', () => {
     expect(sessionTitle('D:\\a', 'E:\\elsewhere\\repo')).toBe('repo')
   })
 
-  it('a thumb that resolves outside DATA_DIR is not read', async () => {
+  it('readThumb refuses a path outside squarel_art', async () => {
     const w = world(
-      { ...files, 'E:\\evil.png': PNG.toString('latin1') },
-      { realpaths: { [`${DATA}\\projects\\a2\\thumb.png`]: 'E:\\evil.png' } },
+      { ...files, 'E:\\evil.png': PNG.toString('latin1'), 'D:\\a\\other.png': PNG.toString('latin1') },
+      {
+        realpaths: {
+          'D:\\a\\squarel_art\\a2\\thumb.png': 'E:\\evil.png',
+          'D:\\a\\squarel_art\\a3\\thumb.png': 'D:\\a\\other.png',
+        },
+      },
     )
-    const a = await getWorkspace(w.ctx, 'a')
-    expect(a.arts[0]?.thumb).toBeUndefined()
+    expect((await getWorkspace(w.ctx, 'a')).arts[0]?.thumb).toBeUndefined()
+    expect(await readThumb(w.ctx, 'D:\\a', 'a2')).toBeUndefined()
+    expect(await readThumb(w.ctx, 'D:\\a', 'a3')).toBeUndefined()
+    expect(await readThumb(w.ctx, 'D:\\a', '..')).toBeUndefined()
+    const ok = world(files)
+    expect(await readThumb(ok.ctx, 'D:\\a', 'a2')).toBe(`data:image/png;base64,${PNG.toString('base64')}`)
+  })
+
+  it('arts come from <folder>/squarel_art, not from DATA_DIR', async () => {
+    const w = world({
+      ...files,
+      ...art('only-in-data', '2026-02-01T00:00:00Z'),
+    })
+    expect((await readArts(w.ctx, 'D:\\a')).map((x) => x.slug)).toEqual(['a2', 'a3', 'a1', 'a4'])
+    expect(await readArts(w.ctx, 'D:\\nothing')).toEqual([])
+    expect((await getWorkspace(w.ctx, 'a')).arts.map((x) => x.slug)).not.toContain('only-in-data')
+  })
+
+  it('a live session declaring the id from another folder marks duplicate', async () => {
+    const run = (pid: number, folder?: string) => ({
+      [`${DATA}\\run\\mcp-${pid}.json`]: json({
+        pid,
+        cwd: 'D:\\x',
+        updatedAt: NOW.toISOString(),
+        workspace: { id: 'a', name: 'A real', ...(folder ? { folder } : {}) },
+      }),
+    })
+    const base = Object.fromEntries(Object.entries(files).filter(([k]) => !k.includes('\\run\\')))
+    const same = world({ ...base, ...run(11, 'd:\\A') }, { alivePids: [11] })
+    expect((await listWorkspaces(same.ctx)).find((x) => x.id === 'a')?.duplicate).toBeUndefined()
+    const none = world({ ...base, ...run(12) }, { alivePids: [12] })
+    expect((await listWorkspaces(none.ctx)).find((x) => x.id === 'a')?.duplicate).toBeUndefined()
+    const dup = world({ ...base, ...run(13, 'D:\\copy\\a') }, { alivePids: [13] })
+    expect((await listWorkspaces(dup.ctx)).find((x) => x.id === 'a')).toMatchObject({
+      id: 'a',
+      duplicate: 'D:\\copy\\a',
+    })
+    expect((await getWorkspace(dup.ctx, 'a')).duplicate).toBe('D:\\copy\\a')
+    // A session that is dead no longer counts.
+    const dead = world({ ...base, ...run(14, 'D:\\copy\\a') }, { alivePids: [] })
+    expect((await listWorkspaces(dead.ctx)).find((x) => x.id === 'a')?.duplicate).toBeUndefined()
+  })
+})
+
+describe('squarel_art, worktree, id', () => {
+  it('inspectFolder plans squarel_art and its .gitignore', async () => {
+    const fresh = world()
+    fresh.chosen.push('D:\\p')
+    expect((await inspectFolder(fresh.ctx, 'D:\\p')).files).toMatchObject({
+      art: 'create',
+      artIgnore: 'create',
+    })
+    const had = world({ 'D:\\p\\squarel_art\\.gitignore': '*.tmp\n' })
+    had.chosen.push('D:\\p')
+    expect((await inspectFolder(had.ctx, 'D:\\p')).files).toMatchObject({ art: 'keep', artIgnore: 'keep' })
+    const dirOnly = world({ 'D:\\p\\squarel_art\\x\\project.json': '{}' })
+    dirOnly.chosen.push('D:\\p')
+    expect((await inspectFolder(dirOnly.ctx, 'D:\\p')).files).toMatchObject({
+      art: 'keep',
+      artIgnore: 'create',
+    })
+  })
+
+  it('create writes squarel_art/.gitignore with the exact text', async () => {
+    const w = world()
+    w.chosen.push('D:\\p')
+    await createWorkspace(w.ctx, { name: 'P', folder: 'D:\\p' })
+    expect(await w.read('D:\\p\\squarel_art\\.gitignore')).toBe(ART_GITIGNORE)
+    expect(ART_GITIGNORE).toBe(
+      '*/.lock\n*.tmp\n*/.work-*.json\n*/proposals/\n*/exports/\n*/work.aseprite\n*/thumb.png\n',
+    )
+  })
+
+  it('create keeps an existing squarel_art/.gitignore', async () => {
+    const w = world({ 'D:\\p\\squarel_art\\.gitignore': 'mine\n' })
+    w.chosen.push('D:\\p')
+    await createWorkspace(w.ctx, { name: 'P', folder: 'D:\\p' })
+    expect(await w.read('D:\\p\\squarel_art\\.gitignore')).toBe('mine\n')
+    expect(await w.read('D:\\p\\.squarel\\project.json')).toBeDefined()
+  })
+
+  it('update does not create squarel_art', async () => {
+    const w = world({
+      'D:\\p\\.squarel\\project.json': json({ schema: 1, id: 'p', name: 'P' }),
+      [`${DATA}\\workspaces\\p.json`]: json({ schema: 1, id: 'p', name: 'P', folder: 'D:\\p' }),
+    })
+    await updateWorkspace(w.ctx, 'p', { brief: 'x' })
+    expect(await w.read('D:\\p\\squarel_art\\.gitignore')).toBeUndefined()
+  })
+
+  const WT = {
+    'D:\\main\\.git\\HEAD': 'ref: refs/heads/main\n',
+    'D:\\main\\.git\\worktrees\\wt\\commondir': '../..\n',
+    'D:\\wt\\.git': 'gitdir: D:/main/.git/worktrees/wt\n',
+    'D:\\wt\\sub\\readme.txt': '',
+  }
+
+  it('a linked worktree folder is refused with the main folder named', async () => {
+    const w = world(WT)
+    w.chosen.push('D:\\wt', 'D:\\wt\\sub')
+    await expect(inspectFolder(w.ctx, 'D:\\wt')).rejects.toThrow(
+      'Thư mục này là một git worktree. Hãy chọn thư mục dự án ở bản chính: D:\\main',
+    )
+    await expect(createWorkspace(w.ctx, { name: 'S', folder: 'D:\\wt\\sub' })).rejects.toThrow(
+      'ở bản chính: D:\\main\\sub',
+    )
+    expect(await w.read('D:\\wt\\.squarel\\project.json')).toBeUndefined()
+    // The main checkout itself, and a plain folder, are fine.
+    w.chosen.push('D:\\main')
+    await expect(inspectFolder(w.ctx, 'D:\\main')).resolves.toMatchObject({ existing: null })
+  })
+
+  it('worktreeMain: relative gitdir, bare repo and broken files are not worktrees', async () => {
+    const d = world().d
+    const rel = world({
+      'D:\\main\\.git\\HEAD': '',
+      'D:\\main\\.git\\worktrees\\wt\\commondir': '../..',
+      'D:\\main\\wt\\.git': 'gitdir: ../.git/worktrees/wt',
+    })
+    expect(await worktreeMain(rel.d, 'D:\\main\\wt')).toBe('D:\\main')
+    const bare = world({
+      'D:\\bare\\worktrees\\wt\\commondir': '../..',
+      'D:\\wt\\.git': 'gitdir: D:/bare/worktrees/wt',
+    })
+    expect(await worktreeMain(bare.d, 'D:\\wt')).toBeUndefined()
+    const junk = world({ 'D:\\wt\\.git': 'nonsense' })
+    expect(await worktreeMain(junk.d, 'D:\\wt')).toBeUndefined()
+    expect(await worktreeMain(d, 'D:\\nowhere\\x')).toBeUndefined()
+  })
+
+  const idWorld = () =>
+    world({
+      'D:\\p\\.squarel\\project.json': json({ schema: 1, id: 'p', name: 'P', future: 1 }),
+      'D:\\q\\.squarel\\project.json': json({ schema: 1, id: 'q', name: 'Q' }),
+      [`${DATA}\\workspaces\\p.json`]: json({ schema: 1, id: 'p', name: 'P', folder: 'D:\\p' }),
+      [`${DATA}\\workspaces\\q.json`]: json({ schema: 1, id: 'q', name: 'Q', folder: 'D:\\q' }),
+      ...art('a1', '2026-01-01T00:00:00Z', 'D:\\p'),
+    })
+
+  it('changing the id rewrites project.json and the index; a taken id is refused', async () => {
+    const w = idWorld()
+    const r = await updateWorkspace(w.ctx, 'p', { id: 'p-new' })
+    expect(r).toMatchObject({ id: 'p-new', name: 'P', artCount: 1 })
+    const cfg = JSON.parse((await w.read('D:\\p\\.squarel\\project.json')) ?? '')
+    expect(cfg).toMatchObject({ id: 'p-new', future: 1 })
+    expect(await w.read(`${DATA}\\workspaces\\p.json`)).toBeUndefined()
+    expect(JSON.parse((await w.read(`${DATA}\\workspaces\\p-new.json`)) ?? '')).toMatchObject({
+      id: 'p-new',
+      folder: 'D:\\p',
+    })
+    expect((await listWorkspaces(w.ctx)).map((x) => x.id).sort()).toEqual(['p-new', 'q'])
+
+    await expect(updateWorkspace(w.ctx, 'p-new', { id: 'q' })).rejects.toThrow(/đã được dùng/)
+    await expect(updateWorkspace(w.ctx, 'p-new', { id: 'Bad Id' })).rejects.toThrow(/Mã dự án/)
+    expect(JSON.parse((await w.read('D:\\p\\.squarel\\project.json')) ?? '').id).toBe('p-new')
+    // The same id is a plain save.
+    await expect(updateWorkspace(w.ctx, 'p-new', { id: 'p-new', brief: 'x' })).resolves.toMatchObject({
+      id: 'p-new',
+      brief: 'x',
+    })
   })
 })
 

@@ -19,13 +19,17 @@ function baseName(p: string): string {
   return parts[parts.length - 1] ?? p
 }
 
-/** `workspace: {id, name}` that Squarel writes when the session belongs to a workspace. */
-function sessionWorkspace(w: unknown): { id: string; name: string } | undefined {
+/** `workspace: {id, name, folder}` that Squarel writes when the session belongs to a workspace. */
+function sessionWorkspace(w: unknown): { id: string; name: string; folder?: string } | undefined {
   if (!w || typeof w !== 'object') return undefined
-  const { id, name } = w as { id?: unknown; name?: unknown }
+  const { id, name, folder } = w as { id?: unknown; name?: unknown; folder?: unknown }
   if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return undefined
   if (typeof name !== 'string' || !name.trim()) return undefined
-  return { id, name: name.trim().slice(0, 80) }
+  return {
+    id,
+    name: name.trim().slice(0, 80),
+    ...(typeof folder === 'string' && folder.length > 0 ? { folder: folder.slice(0, 1000) } : {}),
+  }
 }
 
 function ms(s: unknown): number {
@@ -36,8 +40,8 @@ function ms(s: unknown): number {
 export interface LiveSession {
   pid: number
   cwd: string
-  /** The workspace Squarel found for the session, if any. */
-  workspace?: { id: string; name: string }
+  /** The workspace Squarel found for the session, if any; `folder` is its art home (the project folder). */
+  workspace?: { id: string; name: string; folder?: string }
   /** Tool called in the last 15 s. */
   busyWith?: string
 }

@@ -35,7 +35,8 @@ function subError(v: string): string | undefined {
 }
 
 type Verb = 'create' | 'update' | 'keep'
-const WRITES: { file: string; key: 'agents' | 'claude' | 'project' | null; text: Record<Verb, string> }[] = [
+type WriteKey = keyof WorkspaceFolderInfo['files']
+const WRITES: { file: string; key: WriteKey | null; text: Record<Verb, string> }[] = [
   {
     file: 'AGENTS.md',
     key: 'agents',
@@ -60,6 +61,16 @@ const WRITES: { file: string; key: 'agents' | 'claude' | 'project' | null; text:
     text: { create: 'tạo mới · id dự án, repo, nơi xuất', update: 'cập nhật', keep: 'giữ nguyên' },
   },
   {
+    file: 'squarel_art/',
+    key: 'art',
+    text: { create: 'tạo mới · nơi lưu art của dự án', update: 'cập nhật', keep: 'giữ nguyên' },
+  },
+  {
+    file: 'squarel_art/.gitignore',
+    key: 'artIgnore',
+    text: { create: 'tạo mới · git bỏ qua file nặng', update: 'cập nhật', keep: 'giữ nguyên' },
+  },
+  {
     file: '.squarel/arts.md',
     key: null,
     text: {
@@ -70,15 +81,7 @@ const WRITES: { file: string; key: 'agents' | 'claude' | 'project' | null; text:
   },
 ]
 
-function WritesCard({
-  info,
-  error,
-  folder,
-}: {
-  info: WorkspaceFolderInfo | null
-  error: string | null
-  folder: string | null
-}) {
+function WritesCard({ info, folder }: { info: WorkspaceFolderInfo | null; folder: string | null }) {
   const existing = info?.existing
   return (
     <WsCard title="Launcher sẽ ghi" testId="ws-writes">
@@ -88,12 +91,6 @@ function WritesCard({
           <span>
             Thư mục này đã là dự án “{existing.name}”. Launcher chỉ đăng ký lại, không ghi file nào.
           </span>
-        </p>
-      )}
-      {error && (
-        <p className="ws-notice is-error" role="alert">
-          <Icon name="alert" />
-          <span>{error}</span>
         </p>
       )}
       <ul className="ws-writes">
@@ -247,8 +244,10 @@ export function ProjectNew() {
               value={folder ?? ''}
               readOnly
               placeholder="Chưa chọn"
-              state={show('folder') ? 'error' : 'default'}
-              hint={show('folder') ?? 'Mở Claude ở thư mục này. Chưa có thì launcher tạo mới.'}
+              state={show('folder') || inspectError ? 'error' : 'default'}
+              hint={
+                show('folder') ?? inspectError ?? 'Mở Claude ở thư mục này. Chưa có thì launcher tạo mới.'
+              }
               action={{ label: 'Chọn…', onClick: () => void pickParent() }}
             />
             {parent && (
@@ -311,7 +310,7 @@ export function ProjectNew() {
               onError={(text) => notify({ label: 'Repo gắn kèm', kind: 'error', text })}
             />
           </WsCard>
-          <WritesCard info={info} error={inspectError} folder={folder} />
+          <WritesCard info={info} folder={folder} />
         </div>
       </div>
       <div className="ws-footer">

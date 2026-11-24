@@ -389,11 +389,13 @@ export function ReposEditor({
 /** Asks before forgetting a workspace; says that nothing on disk is deleted. */
 export function ConfirmRemove({
   name,
+  folder,
   busy,
   onConfirm,
   onClose,
 }: {
   name: string
+  folder: string
   busy?: boolean
   onConfirm(): void
   onClose(): void
@@ -412,8 +414,8 @@ export function ConfirmRemove({
           Gỡ “{name}” khỏi launcher?
         </h2>
         <p id="ws-remove-text" className="modal-text">
-          Launcher thôi hiện dự án này. Thư mục, AGENTS.md, CLAUDE.md, .squarel/ và mọi art vẫn giữ nguyên;
-          thêm lại bằng Dự án mới với cùng thư mục là có lại.
+          Gỡ khỏi launcher không xoá gì. Art của dự án vẫn nằm trong {folder}\squarel_art. Xoá thư mục dự án
+          là mất art.
         </p>
         <div className="modal-actions">
           <Button type="ghost" autoFocus onClick={onClose}>

@@ -137,6 +137,10 @@ test('Dự án: list, create through the form, detail, brief, remove', async () 
     await expect(writes.getByTestId('write-AGENTS.md')).toContainText('tạo mới · brief cho mọi agent')
     await expect(writes.getByTestId('write-CLAUDE.md')).toContainText('tạo mới · dòng @AGENTS.md')
     await expect(writes.getByTestId('write-.squarel/project.json')).toContainText('tạo mới')
+    await expect(writes.getByTestId('write-squarel_art/')).toContainText('tạo mới · nơi lưu art của dự án')
+    await expect(writes.getByTestId('write-squarel_art/.gitignore')).toContainText(
+      'tạo mới · git bỏ qua file nặng',
+    )
 
     // 300 is refused inline; fixed to 16 the form goes through.
     await content(page).getByRole('button', { name: 'Tạo và mở Claude' }).click()
@@ -156,6 +160,7 @@ test('Dự án: list, create through the form, detail, brief, remove', async () 
     expect(agents).toContain('## Art brief\n\nSprite 16×16, viền tím đậm')
     expect(await file(app, `${folder}\\CLAUDE.md`)).toBe('@AGENTS.md\n')
     const cfg = JSON.parse((await file(app, `${folder}\\.squarel\\project.json`)) ?? 'null')
+    expect(await file(app, `${folder}\\squarel_art\\.gitignore`)).toContain('*/.lock\n')
     expect(cfg).toMatchObject({
       id: 'rung-dem',
       name: 'Rừng đêm',
@@ -229,7 +234,9 @@ test('Dự án: list, create through the form, detail, brief, remove', async () 
     await content(page).getByRole('button', { name: 'Gỡ khỏi launcher' }).click()
     const dlg = page.getByRole('dialog')
     await expect(dlg).toContainText('Gỡ “Game dungeon” khỏi launcher?')
-    await expect(dlg).toContainText('vẫn giữ nguyên')
+    await expect(dlg).toContainText(
+      `Gỡ khỏi launcher không xoá gì. Art của dự án vẫn nằm trong ${ROOT}\\work\\game-dungeon\\squarel_art. Xoá thư mục dự án là mất art.`,
+    )
     await dlg.getByRole('button', { name: 'Gỡ khỏi launcher' }).click()
     await expect(h1(page)).toHaveText('Dự án')
     await expect(content(page).getByRole('listitem', { name: 'Rừng đêm' })).toBeVisible()

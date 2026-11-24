@@ -344,6 +344,8 @@ export type WorkspaceCreate = z.infer<typeof workspaceCreateSchema>
 
 /** Fields Brief / Cài đặt may change; `exportDir: null` removes it. */
 export const workspacePatchSchema = z.strictObject({
+  /** Mã dự án; the art ref of every art in the folder changes with it. */
+  id: workspaceId.optional(),
   name: oneLine(1, 80)
     .refine((s) => s.trim() !== '')
     .optional(),
@@ -355,7 +357,7 @@ export const workspacePatchSchema = z.strictObject({
 })
 export type WorkspacePatch = z.infer<typeof workspacePatchSchema>
 
-/** One art (a Squarel "project"); `thumb` is a data:image/png URL of DATA_DIR/projects/<slug>/thumb.png. */
+/** One art (a Squarel "project"); `thumb` is a data:image/png URL of <folder>/squarel_art/<slug>/thumb.png. */
 export const artViewSchema = z.object({
   slug: str(64),
   name: str(300),
@@ -386,6 +388,8 @@ export const workspaceSummarySchema = z.object({
   recent: z.array(artViewSchema).max(3),
   /** Live Claude Code sessions whose Squarel found this workspace. */
   sessions: z.number().int().min(0),
+  /** A live session declares this id for another folder (art home): that folder. */
+  duplicate: str(1000).optional(),
 })
 export type WorkspaceSummary = z.infer<typeof workspaceSummarySchema>
 
@@ -412,6 +416,9 @@ export const workspaceFolderInfoSchema = z.object({
     project: z.enum(['create', 'keep']),
     agents: z.enum(['create', 'update', 'keep']),
     claude: z.enum(['create', 'update', 'keep']),
+    /** `squarel_art/` and its `.gitignore`. */
+    art: z.enum(['create', 'keep']),
+    artIgnore: z.enum(['create', 'keep']),
   }),
 })
 export type WorkspaceFolderInfo = z.infer<typeof workspaceFolderInfoSchema>

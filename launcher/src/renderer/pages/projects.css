@@ -97,6 +97,22 @@
   line-height: 16px;
   color: var(--status-error);
 }
+.ws-warn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--status-warn-soft);
+  font-size: 12px;
+  line-height: 16px;
+}
+.ws-warn .icon {
+  flex: none;
+  color: var(--status-warn);
+}
 .ws-card.is-broken {
   border-color: var(--status-error-soft);
 }

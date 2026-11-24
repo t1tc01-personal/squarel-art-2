@@ -56,23 +56,21 @@
     },
     "{root}/work/game-dungeon/AGENTS.md": "# Quy ước nhóm\n",
     "{root}/work/game-dungeon/CLAUDE.md": "@AGENTS.md\n",
-    "{root}/data/projects/slime/project.json": {
+    "{root}/work/game-dungeon/squarel_art/slime/project.json": {
       "slug": "slime",
       "name": "Slime xanh",
       "purpose": "game",
       "createdAt": "2025-12-02T09:00:00.000Z",
       "updatedAt": "2025-12-20T09:00:00.000Z",
-      "head": "v000003",
-      "workspace": "game-dungeon"
+      "head": "v000003"
     },
-    "{root}/data/projects/kiem-sat/project.json": {
+    "{root}/work/game-dungeon/squarel_art/kiem-sat/project.json": {
       "slug": "kiem-sat",
       "name": "Kiếm sắt",
       "purpose": "game",
       "createdAt": "2025-12-03T09:00:00.000Z",
       "updatedAt": "2025-12-10T09:00:00.000Z",
-      "head": "v000001",
-      "workspace": "game-dungeon"
+      "head": "v000001"
     },
     "{root}/data/projects/hiep-si/project.json": {
       "slug": "hiep-si",
@@ -87,7 +85,8 @@
       "updatedAt": "2026-01-01T11:59:58.000Z",
       "workspace": {
         "id": "game-dungeon",
-        "name": "Game dungeon"
+        "name": "Game dungeon",
+        "folder": "{root}\\work\\game-dungeon"
       }
     }
   },
@@ -96,7 +95,7 @@
     "{root}/squarel/integrations/aseprite/icon.png": "../../../../integrations/aseprite/icon.png",
     "{root}/squarel/integrations/aseprite/squarel/package.json": "../../../../integrations/aseprite/squarel/package.json",
     "{root}/squarel/integrations/catalog.json": "../../../../integrations/catalog.json",
-    "{root}/data/projects/slime/thumb.png": "../demo-tool/icon.png"
+    "{root}/work/game-dungeon/squarel_art/slime/thumb.png": "../demo-tool/icon.png"
   },
   "run": {
     "{root}\\tools\\aseprite\\Aseprite.exe -b --version": {

@@ -1,6 +1,6 @@
 /** One Dự án: header with Mở Claude, tabs Tổng quan (arts, sessions, repos, brief) | Brief | Cài đặt. */
 import { useCallback, useEffect, useState } from 'react'
-import type { WorkspaceDetail } from '../../shared/ipc'
+import { WORKSPACE_ID, type WorkspaceDetail } from '../../shared/ipc'
 import { api } from '../api'
 import { errorText, useTasks } from '../app-context'
 import { Button } from '../components/Button'
@@ -162,6 +162,7 @@ function SettingsTab({ w, onSaved }: { w: WorkspaceDetail; onSaved(d: WorkspaceD
   const { notify } = useTasks()
   const { go } = useNav()
   const [name, setName] = useState(w.name)
+  const [artId, setArtId] = useState(w.id)
   const [defaults, setDefaults] = useState(toDraft(w.defaults))
   const [repos, setRepos] = useState<RepoDraft[]>(w.repos)
   const [exportDir, setExportDir] = useState(w.exportDir ?? '')
@@ -170,8 +171,15 @@ function SettingsTab({ w, onSaved }: { w: WorkspaceDetail; onSaved(d: WorkspaceD
   const [removing, setRemoving] = useState(false)
 
   const nameErr = !name.trim() ? 'Nhập tên dự án' : undefined
+  const idErr = !WORKSPACE_ID.test(artId.trim())
+    ? 'Mã chỉ gồm chữ thường a-z, số và dấu gạch ngang, tối đa 64 ký tự'
+    : undefined
   const invalid =
-    !!nameErr || !!sizeError(defaults.width) || !!sizeError(defaults.height) || !!exportDirError(exportDir)
+    !!nameErr ||
+    !!idErr ||
+    !!sizeError(defaults.width) ||
+    !!sizeError(defaults.height) ||
+    !!exportDirError(exportDir)
   const pick = async () => {
     try {
       return await api.pickFolder()
@@ -185,17 +193,18 @@ function SettingsTab({ w, onSaved }: { w: WorkspaceDetail; onSaved(d: WorkspaceD
     if (invalid) return
     setBusy(true)
     try {
-      onSaved(
-        await api.updateWorkspace({
-          id: w.id,
-          patch: {
-            name: name.trim(),
-            defaults: fromDraft(defaults),
-            repos: repos.map((r) => r.path),
-            exportDir: exportDir.trim() ? exportDir.trim() : null,
-          },
-        }),
-      )
+      const saved = await api.updateWorkspace({
+        id: w.id,
+        patch: {
+          ...(artId.trim() !== w.id ? { id: artId.trim() } : {}),
+          name: name.trim(),
+          defaults: fromDraft(defaults),
+          repos: repos.map((r) => r.path),
+          exportDir: exportDir.trim() ? exportDir.trim() : null,
+        },
+      })
+      onSaved(saved)
+      if (saved.id !== w.id) go({ project: saved.id, tab: 'settings' })
       notify({ label: 'Cài đặt dự án', kind: 'done', text: 'Đã ghi .squarel/project.json và AGENTS.md' })
     } catch (e) {
       notify({ label: 'Cài đặt dự án', kind: 'error', text: errorText(e) })
@@ -226,6 +235,17 @@ function SettingsTab({ w, onSaved }: { w: WorkspaceDetail; onSaved(d: WorkspaceD
               state={tried && nameErr ? 'error' : 'default'}
               hint={tried ? nameErr : undefined}
               onChange={(e) => setName(e.target.value)}
+            />
+            <Field
+              label="Mã dự án"
+              value={artId}
+              maxLength={64}
+              state={tried && idErr ? 'error' : 'default'}
+              hint={
+                (tried ? idErr : undefined) ??
+                'Art tham chiếu dự án bằng mã này. Đổi mã khi hai thư mục trùng mã, hoặc khi muốn tên gọn hơn.'
+              }
+              onChange={(e) => setArtId(e.target.value)}
             />
           </WsCard>
           <WsCard title="Mặc định cho art mới">
@@ -258,8 +278,8 @@ function SettingsTab({ w, onSaved }: { w: WorkspaceDetail; onSaved(d: WorkspaceD
           </div>
           <WsCard title="Gỡ khỏi launcher" className="ws-danger">
             <p className="row-sub">
-              Launcher thôi hiện dự án này. Thư mục, AGENTS.md, CLAUDE.md, .squarel/ và mọi art vẫn giữ
-              nguyên.
+              Gỡ khỏi launcher không xoá gì. Art của dự án vẫn nằm trong {w.folder}\squarel_art. Xoá thư mục
+              dự án là mất art.
             </p>
             <div>
               <Button type="danger" disabled={busy} onClick={() => setRemoving(true)}>
@@ -272,6 +292,7 @@ function SettingsTab({ w, onSaved }: { w: WorkspaceDetail; onSaved(d: WorkspaceD
       {removing && (
         <ConfirmRemove
           name={w.name}
+          folder={w.folder}
           busy={busy}
           onConfirm={() => void remove()}
           onClose={() => setRemoving(false)}

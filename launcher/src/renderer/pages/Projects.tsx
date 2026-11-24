@@ -49,6 +49,17 @@ function ProjectCard({ w, onRemove }: { w: WorkspaceSummary; onRemove(): void })
         ) : null}
       </div>
       <h3 className="ws-name">{w.name}</h3>
+      {w.duplicate && (
+        <p className="ws-warn" role="alert" data-testid="ws-duplicate" title={w.duplicate}>
+          <Icon name="alert" />
+          <span>
+            Trùng mã với <span className="mono-small">{w.duplicate}</span>
+          </span>
+          <button type="button" className="link" onClick={() => go({ project: w.id, tab: 'settings' })}>
+            Đổi mã
+          </button>
+        </p>
+      )}
       <p className="ws-folder mono-small" title={w.folder}>
         <Icon name="folder" />
         <span className="ws-path">{w.folder}</span>
@@ -224,6 +235,7 @@ export function Projects() {
       {removing && (
         <ConfirmRemove
           name={removing.name}
+          folder={removing.folder}
           busy={busy}
           onConfirm={() => void remove()}
           onClose={() => setRemoving(null)}
