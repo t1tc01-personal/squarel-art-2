@@ -44,7 +44,7 @@ body:
     attributes:
       label: Version
       description: Launcher version (Settings → About) or the commit you run from source.
-      placeholder: v0.4.4
+      placeholder: v0.4.5
     validations:
       required: true
   - type: input

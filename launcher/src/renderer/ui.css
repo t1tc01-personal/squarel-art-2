@@ -680,6 +680,18 @@ button:disabled {
   color: var(--text-muted);
 }
 
+/* The table owns the columns; every row (and its test wrapper) is a subgrid, so the action column
+   grows to the widest button ("Khởi động lại để cập nhật") and all rows stay aligned. */
+.comp-table {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1.7fr) 96px 96px minmax(0, 1fr) auto;
+  column-gap: 16px;
+}
+.comp-table > * {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
 .row-comp {
   display: grid;
   grid-template-columns: 32px minmax(0, 1.7fr) 110px 110px minmax(0, 1fr) 100px;
@@ -687,6 +699,26 @@ button:disabled {
   gap: 0 16px;
   padding: 12px 16px;
   border-top: 1px solid var(--border-default);
+}
+.comp-table .row-comp {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.row-comp-status {
+  min-width: 0;
+}
+/* A long status ("Cập nhật launcher trước") wraps inside its column instead of running under the
+   button. */
+.row-comp-status .pill {
+  max-width: 100%;
+  white-space: normal;
+}
+.row-comp-status .pill-dot {
+  flex: none;
+}
+.pill-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .row-comp-icon {
   width: 32px;

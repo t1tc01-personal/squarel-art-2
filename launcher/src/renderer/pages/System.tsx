@@ -69,7 +69,7 @@ function Components() {
           {squarelPlanText(plan)}
         </p>
       )}
-      <section className="card table-card" aria-label="Thành phần">
+      <section className="card table-card comp-table" aria-label="Thành phần">
         <div className="row-comp row-head caption">
           <span />
           <span>Thành phần</span>

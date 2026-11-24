@@ -3,9 +3,9 @@ import type { Level } from '../../shared/model'
 /** Small status label: soft background, 6px square dot, uppercase-free UI/Label text. */
 export function StatusPill({ level, label }: { level: Level; label: string }) {
   return (
-    <span className={`pill pill-${level}`}>
+    <span className={`pill pill-${level}`} title={label}>
       <span className="pill-dot" aria-hidden="true" />
-      {label}
+      <span className="pill-label">{label}</span>
     </span>
   )
 }
