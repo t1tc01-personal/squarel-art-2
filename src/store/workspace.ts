@@ -12,12 +12,23 @@ import { PALETTES } from '../shared/palettes.ts'
 import { MAX_SIDE, PURPOSES } from '../shared/types.ts'
 import { exists, readJson, writeAtomic } from './fsutil.ts'
 import type { ProjectInfo, Store } from './store.ts'
+import { mainCheckoutOf } from './worktree.ts'
 
 export const WORKSPACE_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 export const WORKSPACE_DIR = '.squarel'
 export const WORKSPACE_FILE = 'project.json'
 export const CATALOG_FILE = 'arts.md'
 const MAX_WALK = 32
+/** Folder inside a workspace's home that holds its arts. */
+export const ART_DIR = 'squarel_art'
+export const ART_GITIGNORE = `*/.lock
+*.tmp
+*/.work-*.json
+*/proposals/
+*/exports/
+*/work.aseprite
+*/thumb.png
+`
 
 export type WorkspaceDefaults = {
   purpose?: (typeof PURPOSES)[number]
@@ -146,7 +157,16 @@ export interface Workspace {
   name: string
   /** Absolute path of the workspace folder (the one holding `.squarel/`). */
   folder: string
+  /**
+   * Folder whose `squarel_art/` holds the arts: `folder`, or the same folder in the main checkout
+   * when `folder` is in a linked git worktree of the same project.
+   */
+  home: string
   config: WorkspaceConfig
+}
+
+export function artsDirOf(ws: Workspace): string {
+  return join(ws.home, ART_DIR)
 }
 
 /** DATA_DIR/workspaces/<id>.json */
@@ -194,7 +214,7 @@ export async function readWorkspace(folder: string, log?: Logger): Promise<Works
   if (parsed.warnings.length)
     log?.warn('workspace file has invalid fields; they are ignored', { file, issues: parsed.warnings })
   const { config } = parsed
-  return { id: config.id, name: config.name, folder: abs, config }
+  return { id: config.id, name: config.name, folder: abs, home: abs, config }
 }
 
 /**
@@ -221,6 +241,7 @@ export async function detectWorkspace(o: {
         await ensureWorkspaceIndex(o.dataDir, ws).catch((e) =>
           o.log?.warn('workspace index update failed', { id: ws.id, error: String(e) }),
         )
+      ws.home = await resolveHome(ws)
       return ws
     }
     const parent = dirname(dir)
@@ -228,6 +249,16 @@ export async function detectWorkspace(o: {
     dir = parent
   }
   return undefined
+}
+
+/**
+ * Where the arts live: the main checkout's folder when `ws.folder` is in a linked git worktree and
+ * that folder holds the same project id; otherwise `ws.folder`.
+ */
+export async function resolveHome(ws: Workspace): Promise<string> {
+  const main = await mainCheckoutOf(ws.folder)
+  if (main && (await folderWorkspaceId(main)) === ws.id) return main
+  return ws.folder
 }
 
 export async function readWorkspaceIndex(

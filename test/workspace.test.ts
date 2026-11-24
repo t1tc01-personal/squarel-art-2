@@ -10,12 +10,14 @@ import { SERVER_INSTRUCTIONS, serverInstructions } from '../src/mcp/server.ts'
 import { MockProvider } from '../src/providers/mock.ts'
 import { Store } from '../src/store/store.ts'
 import {
+  artsDirOf,
   catalogPath,
   detectWorkspace,
   ensureWorkspaceIndex,
   exportDirProblem,
   normalizePaletteName,
   parseWorkspaceConfig,
+  readWorkspace,
   readWorkspaceIndex,
   workspaceIndexPath,
 } from '../src/store/workspace.ts'
@@ -138,6 +140,40 @@ describe('workspace detection', () => {
     writeConfig(join(t.dir, 'broken'), { ...CONFIG, id: 'Bad Id' })
     expect(await detectWorkspace({ start: broken, dataDir, log })).toBeUndefined()
     expect(log.warnings).toHaveLength(2)
+  })
+
+  describe('home (git worktrees)', () => {
+    let main: string
+    let wt: string
+    beforeEach(() => {
+      main = join(t.dir, 'main')
+      wt = join(t.dir, 'wt')
+      mkdirSync(join(main, '.git', 'worktrees', 'wt'), { recursive: true })
+      writeFileSync(join(main, '.git', 'worktrees', 'wt', 'commondir'), '../..\n')
+      mkdirSync(wt, { recursive: true })
+      writeFileSync(join(wt, '.git'), `gitdir: ${join(main, '.git', 'worktrees', 'wt')}\n`)
+      writeConfig(join(main, 'app'), { id: 'game', name: 'Game' })
+      writeConfig(join(wt, 'app'), { id: 'game', name: 'Game' })
+    })
+
+    it('is the main checkout folder from a linked worktree', async () => {
+      const ws = await detectWorkspace({ start: join(wt, 'app') })
+      expect(ws?.folder).toBe(join(wt, 'app'))
+      expect(ws?.home).toBe(join(main, 'app'))
+      expect(artsDirOf(ws!)).toBe(join(main, 'app', 'squarel_art'))
+    })
+
+    it('stays in the worktree when main has another project id or none', async () => {
+      writeConfig(join(main, 'app'), { id: 'other', name: 'Other' })
+      expect((await detectWorkspace({ start: join(wt, 'app') }))?.home).toBe(join(wt, 'app'))
+      rmSync(join(main, 'app', '.squarel'), { recursive: true })
+      expect((await detectWorkspace({ start: join(wt, 'app') }))?.home).toBe(join(wt, 'app'))
+    })
+
+    it('is the folder itself for a plain folder', async () => {
+      expect((await detectWorkspace({ start: folder }))?.home).toBe(folder)
+      expect((await readWorkspace(folder)).home).toBe(folder)
+    })
   })
 })
 
