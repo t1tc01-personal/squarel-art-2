@@ -92,14 +92,12 @@ export class CloudflareProvider implements ImageProvider {
 
   async generate(req: GenRequest, signal?: AbortSignal): Promise<RawImage[]> {
     const prompt = generalPrompt(req.prompt, req)
-    const base = req.seed ?? Math.floor(Math.random() * 1e9)
+    // flux-1-schnell accepts only prompt and steps (extra properties are rejected), so no seed:
+    // each call is already random, and the variants have no reproducible seed to report.
     return mapLimit(
-      Array.from({ length: req.variants }, (_, i) => base + i * 101),
+      Array.from({ length: req.variants }, (_, i) => i),
       2,
-      async (seed) => ({
-        bytes: await this.run(MODELS.generate, { prompt, steps: FLUX_STEPS, seed }, signal),
-        seed,
-      }),
+      async () => ({ bytes: await this.run(MODELS.generate, { prompt, steps: FLUX_STEPS }, signal) }),
     )
   }
 

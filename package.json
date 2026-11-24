@@ -1,6 +1,6 @@
 {
   "name": "squarel-art",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Pixel art toolkit plugged into Claude Code (MCP) with two-way Aseprite sync",
   "license": "PolyForm-Shield-1.0.0",

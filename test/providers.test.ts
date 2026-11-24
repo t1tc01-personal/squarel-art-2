@@ -42,6 +42,9 @@ describe('CloudflareProvider', () => {
     expect(body.prompt).toContain('pixel art sprite of knight')
     expect(body.prompt).toContain('magenta')
     expect(body.steps).toBe(4)
+    // flux-1-schnell's schema rejects unknown properties ("'/seed' not allowed").
+    expect(Object.keys(body).sort()).toEqual(['prompt', 'steps'])
+    expect(out[0].seed).toBeUndefined()
   })
   it('retries 429 then succeeds; binary image responses for img2img', async () => {
     const { fetch, calls } = fakeFetch([

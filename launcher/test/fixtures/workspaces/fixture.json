@@ -15,7 +15,7 @@
   "files": {
     "{root}/squarel/package.json": {
       "name": "squarel-art",
-      "version": "0.4.0"
+      "version": "0.4.1"
     },
     "{root}/squarel/node_modules/.modules.yaml": "layoutVersion: 5",
     "{root}/tools/aseprite/Aseprite.exe": "",
@@ -169,8 +169,8 @@
     "git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git": {
       "code": 0,
       "lines": [
-        "0000000000000000000000000000000000000000\trefs/tags/v0.4.0",
-        "1111111111111111111111111111111111111111\trefs/tags/v0.4.1"
+        "0000000000000000000000000000000000000000\trefs/tags/v0.4.1",
+        "1111111111111111111111111111111111111111\trefs/tags/v0.4.2"
       ]
     },
     "git ls-remote --tags --refs https://github.com/aseprite/aseprite.git": {

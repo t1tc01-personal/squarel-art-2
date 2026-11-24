@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-24
+
+### Fixed
+
+- Cloudflare Workers AI: `generate_image` no longer sends `seed` to `flux-1-schnell`, whose input schema rejects it ("Additional or unevaluated properties '/seed' … not allowed"). Every free generation failed with that error. Variants from this model are random and report no seed.
+
 ## [0.4.0] - 2026-11-24
 
 ### Changed (breaking)
@@ -121,7 +127,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/t1tc01-personal/squarel-art-2/releases/tag/v0.2.0
