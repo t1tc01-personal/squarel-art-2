@@ -473,7 +473,17 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
   /** What holds the Squarel folder now (message for refused actions). */
   let squarelBusyText = ''
   let seq = 0
-  function startTask(resolved: Resolved, secrets: string[]): string {
+  /**
+   * After a fix succeeds, run the checks again so Health shows the new state (the row that offered
+   * the fix would otherwise keep its old failure). Only when Health already has results: the setup
+   * wizard verifies each step on its own.
+   */
+  async function recheckAfterFix(): Promise<void> {
+    if (!lastChecks) return
+    await checksInFlight?.catch(() => {}) // a run that started before the fix saw the old state
+    await runChecksOnce().catch(() => {})
+  }
+  function startTask(resolved: Resolved, secrets: string[], afterSuccess?: () => Promise<void>): string {
     if ('error' in resolved) throw new IpcError(resolved.error)
     const { key, body } = resolved
     if (running.has(key)) throw new IpcError('Thao tác này đang chạy')
@@ -502,9 +512,11 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       push('task:event', { ...ev, taskId, ...(ev.text !== undefined ? { text: redact(ev.text) } : {}) })
     }
     const p = (async () => {
+      let ok = false
       try {
         await body(taskId, emit, abort.signal)
         if (!finished) emit({ taskId, kind: 'done', code: 0 })
+        ok = !abort.signal.aborted
       } catch (e) {
         emit({ taskId, kind: 'error', text: errMsg(e) })
       } finally {
@@ -512,6 +524,10 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
           squarelBusy = false
           squarelBusyText = ''
         }
+      }
+      try {
+        if (ok && afterSuccess) await afterSuccess()
+      } finally {
         running.delete(key)
         push('components:changed', null)
       }
@@ -757,7 +773,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     },
     'action:run': async (ref) => {
       const { actx, secrets } = await actionCtx()
-      return startTask(resolveAction(ref, actx), secrets)
+      return startTask(resolveAction(ref, actx), secrets, ref.kind === 'fix' ? recheckAfterFix : undefined)
     },
     'action:cancel': async ({ taskId }) => {
       for (const t of running.values()) if (t.taskId === taskId) t.abort.abort()
@@ -920,7 +936,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     },
     async runAction(ref) {
       const { actx, secrets } = await actionCtx()
-      return startTask(resolveAction(ref, actx), secrets)
+      return startTask(resolveAction(ref, actx), secrets, ref.kind === 'fix' ? recheckAfterFix : undefined)
     },
     runningTasks: () => [...running.values()].map((t) => t.label),
     async abortTasks(waitMs = 5000) {

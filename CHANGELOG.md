@@ -24,6 +24,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Launcher: after a fix button (Đăng ký lại, Chép skill, …) succeeds, Health runs its checks again. Before, the row kept showing the old failure until you pressed "Chạy lại tất cả".
 - Launcher: Health now checks that the `pixel-*` skills (`/pixel-new`, `/pixel-export`, …) are in `~/.claude/skills` and match the Squarel folder. When they are missing or outdated, a button copies them. Before, a setup that never reached step 4 left Claude Code without the skills, and no check reported it.
 - Launcher: the "Claude Code thấy squarel" check runs `claude mcp list` outside the Squarel folder. That folder's own `.mcp.json` no longer stands in for the user-scope registration that Claude Code needs in other folders.
 

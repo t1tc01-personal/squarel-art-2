@@ -351,6 +351,26 @@ describe('ipc handlers', () => {
     expect(mine.at(-1)?.kind).toBe('done')
   })
 
+  it('a fix that succeeds runs the health checks again, so the row shows the new result', async () => {
+    const { h, events } = setup()
+    await h.handle('checks:run', APP, undefined)
+    const before = events.filter((e) => e.event === 'checks:changed').length
+    await h.handle('action:run', APP, { componentId: 'squarel', kind: 'fix', id: 'register-mcp', label: 'x' })
+    await h.idle()
+    const kinds = events.map((e) =>
+      e.event === 'task:event' ? (e.payload as { kind: string }).kind : e.event,
+    )
+    expect(events.filter((e) => e.event === 'checks:changed')).toHaveLength(before + 1)
+    expect(kinds.lastIndexOf('checks:changed')).toBeGreaterThan(kinds.lastIndexOf('done'))
+  })
+
+  it('a fix does not run checks that were never shown (the wizard checks on its own)', async () => {
+    const { h, events } = setup()
+    await h.handle('action:run', APP, { componentId: 'squarel', kind: 'fix', id: 'register-mcp', label: 'x' })
+    await h.idle()
+    expect(events.filter((e) => e.event === 'checks:changed')).toHaveLength(0)
+  })
+
   it('projects:recent lists the newest projects of DATA_DIR', async () => {
     const { h } = setup({
       files: {
