@@ -107,3 +107,22 @@ describe('mcp presence', () => {
     await b.stop()
   })
 })
+
+describe('mcp presence workspace', () => {
+  it('carries the workspace id, name and home as folder', async () => {
+    const p = startPresence({
+      dataDir: t.dir,
+      version: '1',
+      bridge: 'none',
+      intervalMs: 100000,
+      workspace: { id: 'game', name: 'Game', home: join(t.dir, 'Dự án game') },
+    })
+    await sleep(300)
+    expect(read(presenceFile(t.dir)).workspace).toEqual({
+      id: 'game',
+      name: 'Game',
+      folder: join(t.dir, 'Dự án game'),
+    })
+    await p.stop()
+  })
+})

@@ -275,7 +275,7 @@ export async function readWorkspaceIndex(
   }
 }
 
-const samePath = (a: string, b: string) =>
+export const samePath = (a: string, b: string) =>
   process.platform === 'win32'
     ? resolve(a).toLowerCase() === resolve(b).toLowerCase()
     : resolve(a) === resolve(b)

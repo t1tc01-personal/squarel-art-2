@@ -467,14 +467,14 @@ describe('MCP instructions and presence', () => {
       version: '1',
       bridge: 'none',
       intervalMs: 100000,
-      workspace: { id: 'game-dungeon', name: 'Game dungeon' },
+      workspace: { id: 'game-dungeon', name: 'Game dungeon', home: '/x/game' },
     })
     let doc: McpPresence | undefined
     for (let i = 0; i < 100 && !doc; i++) {
       await new Promise((r) => setTimeout(r, 20))
       if (existsSync(presenceFile(dataDir))) doc = JSON.parse(readFileSync(presenceFile(dataDir), 'utf8'))
     }
-    expect(doc?.workspace).toEqual({ id: 'game-dungeon', name: 'Game dungeon' })
+    expect(doc?.workspace).toEqual({ id: 'game-dungeon', name: 'Game dungeon', folder: '/x/game' })
     await p.stop()
   })
 
@@ -507,7 +507,11 @@ describe('MCP instructions and presence', () => {
       const f = existsSync(runDir) ? readdirSync(runDir).find((x) => /^mcp-\d+\.json$/.test(x)) : undefined
       if (f) presence = JSON.parse(readFileSync(join(runDir, f), 'utf8'))
     }
-    expect(presence?.workspace).toEqual({ id: 'game-dungeon', name: 'Game dungeon' })
+    expect(presence?.workspace).toMatchObject({
+      id: 'game-dungeon',
+      name: 'Game dungeon',
+      folder: expect.any(String),
+    })
     const created = await client.callTool({ name: 'art_create', arguments: { name: 'Slime' } })
     expect(created.isError).toBeFalsy()
     expect(readFileSync(catalogPath(folder), 'utf8')).toContain('`slime`')
