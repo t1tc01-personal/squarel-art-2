@@ -216,8 +216,7 @@ describe('bridge supervisor', () => {
     await expect(sup.sendTool('art_list', {})).rejects.toThrow(/NO_PROJECT/)
     const text = await sup.sendTool('art_list', {}, 'game/hero')
     expect(typeof text).toBe('string')
-    await expect(sup.sendTool('no_such_tool', {}, 'game/hero')).rejects.toThrow()
-    await expect(sup.sendTool('no_such_tool', {})).rejects.toThrow()
+    await expect(sup.sendTool('no_such_tool', {}, 'game/hero')).rejects.toThrow(/unknown tool/)
   })
 
   it('the launcher hello declares protocol 2', async () => {

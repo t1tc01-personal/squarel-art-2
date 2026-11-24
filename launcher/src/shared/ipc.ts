@@ -29,6 +29,8 @@ export const IMAGE_PROVIDERS = ['cloudflare', 'local-sd', 'mock'] as const
 
 const CONTROL = /[\r\n\0]/
 const str = (max: number) => z.string().max(max)
+/** Art id: same rule as Squarel's slugs (`^[a-z0-9][a-z0-9-]{0,63}$`). */
+export const ART_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 /** Integration / component id (`^[a-z][a-z0-9-]{1,31}$` like manifests). */
 const compId = z.string().regex(/^[a-z][a-z0-9-]{1,31}$/)
 const actionId = z.string().regex(/^[A-Za-z0-9][\w.-]{0,63}$/)
@@ -481,7 +483,7 @@ export const CHANNELS = {
   'arts:legacy': { input: none, output: z.array(artViewSchema).max(2000) },
   /** Starts the visible task that moves a legacy art into the workspace's squarel_art/; returns the task id. */
   'arts:import': {
-    input: z.strictObject({ slug: str(64), workspaceId }),
+    input: z.strictObject({ slug: z.string().regex(ART_ID_RE), workspaceId }),
     output: taskId,
   },
   'window:minimize': { input: none, output: none },

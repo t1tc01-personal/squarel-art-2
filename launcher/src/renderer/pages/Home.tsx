@@ -82,19 +82,6 @@ export function Home() {
 
       <div className="section-head">
         <h2 className="section-title">Art gần đây</h2>
-        {dataDir && (
-          <button
-            type="button"
-            className="link"
-            onClick={() =>
-              api
-                .reveal({ path: dataDir })
-                .catch((e) => notify({ label: 'Mở thư mục dữ liệu', kind: 'error', text: errorText(e) }))
-            }
-          >
-            Mở thư mục dữ liệu →
-          </button>
-        )}
       </div>
       {arts.length === 0 ? (
         <p className="empty">Chưa có art nào. Thử một câu lệnh bên dưới trong Claude Code.</p>
@@ -132,6 +119,21 @@ export function Home() {
           </li>
         ))}
       </ul>
+      {dataDir && (
+        <p className="row-sub">
+          <button
+            type="button"
+            className="link"
+            onClick={() =>
+              api
+                .reveal({ path: dataDir })
+                .catch((e) => notify({ label: 'Thư mục dữ liệu', kind: 'error', text: errorText(e) }))
+            }
+          >
+            Thư mục dữ liệu (log, art cũ) →
+          </button>
+        </p>
+      )}
     </div>
   )
 }

@@ -605,6 +605,20 @@ describe('squarel_art, worktree, id', () => {
     const had = world({ 'D:\\p\\squarel_art\\.gitignore': '*.tmp\n' })
     had.chosen.push('D:\\p')
     expect((await inspectFolder(had.ctx, 'D:\\p')).files).toMatchObject({ art: 'keep', artIgnore: 'keep' })
+    // An existing project reports the real state, not "keep" for everything.
+    const cfg = JSON.stringify({ schema: 1, id: 'p', name: 'P' })
+    const noArt = world({ 'D:\\p\\.squarel\\project.json': cfg })
+    noArt.chosen.push('D:\\p')
+    expect(await inspectFolder(noArt.ctx, 'D:\\p')).toMatchObject({
+      existing: { id: 'p' },
+      files: { project: 'keep', art: 'create', artIgnore: 'create' },
+    })
+    const withArt = world({ 'D:\\p\\.squarel\\project.json': cfg, 'D:\\p\\squarel_art\\.gitignore': 'x\n' })
+    withArt.chosen.push('D:\\p')
+    expect((await inspectFolder(withArt.ctx, 'D:\\p')).files).toMatchObject({
+      art: 'keep',
+      artIgnore: 'keep',
+    })
     const dirOnly = world({ 'D:\\p\\squarel_art\\x\\project.json': '{}' })
     dirOnly.chosen.push('D:\\p')
     expect((await inspectFolder(dirOnly.ctx, 'D:\\p')).files).toMatchObject({

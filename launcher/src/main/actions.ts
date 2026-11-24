@@ -13,6 +13,7 @@
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { substitute } from '@squarel/integration-schema'
+import { ART_ID_RE } from '../shared/ipc'
 import type { ActionRef, TaskEvent } from '../shared/model'
 import { copySkills, registerMcp } from './claude'
 import type { Deps } from './deps'
@@ -436,25 +437,38 @@ function cloneSquarel(ctx: ActionCtx): Resolved {
 export function resolveImportArt(ctx: ActionCtx, slug: string, folder: string): Resolved {
   const dir = ctx.state.squarelDir
   if (!dir) return { error: 'Chưa chọn thư mục Squarel' }
-  if (!slug || slug.startsWith('-')) return { error: 'Mã art không hợp lệ' }
+  if (!ART_ID_RE.test(slug)) return { error: 'Mã art không hợp lệ' }
   return {
     key: `squarel:import-art:${slug}`,
     squarelDir: true,
     busyText: `Đang chuyển art ${slug}…`,
     body: async (taskId, emit, signal) => {
+      const lines: string[] = []
       const code = await runStep(
         taskId,
         ['pnpm', 'cli', 'art_import', '--slug', slug],
         dir,
-        emit,
+        (e) => {
+          if (e.kind === 'line' && e.text !== undefined) lines.push(e.text)
+          emit(e)
+        },
         ctx.d,
         { SQUAREL_PROJECT_DIR: folder },
         signal,
       )
+      // The CLI's own error line says what happened to the old art; never promise it is intact.
+      const reason =
+        lines.findLast((l) => /^\[[A-Z_]+\] /.test(l)) ??
+        lines.findLast((l) => l.trim() && !l.startsWith('> '))
       emit(
         code === 0
           ? { taskId, kind: 'done', code: 0, text: `Đã chuyển art ${slug}` }
-          : { taskId, kind: 'error', code, text: `Chuyển art thất bại (mã thoát ${code}), art cũ vẫn còn` },
+          : {
+              taskId,
+              kind: 'error',
+              code,
+              text: `Chuyển art chưa xong (mã thoát ${code}): ${reason ?? 'xem nhật ký bên trên'}`,
+            },
       )
     },
   }

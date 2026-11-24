@@ -843,7 +843,7 @@ export async function inspectFolder(ctx: WorkspaceCtx, folder: string): Promise<
     return {
       folderExists,
       existing: { id: c.cfg.id, name: c.cfg.name },
-      files: { project: 'keep', agents: 'keep', claude: 'keep', art: 'keep', artIgnore: 'keep' },
+      files: { project: 'keep', agents: 'keep', claude: 'keep', ...(await artFiles(ctx.d, full)) },
     }
   if (!folderExists)
     return {

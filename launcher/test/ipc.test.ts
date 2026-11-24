@@ -400,6 +400,28 @@ describe('ipc handlers', () => {
       expect(last.kind).toBe('done')
     })
 
+    it('a failed move shows the CLI error and does not claim the old art is intact', async () => {
+      const msg =
+        '[UNAVAILABLE] Art "cat" was moved to D:\\p\\squarel_art\\cat, but the old folder could not be fully removed'
+      const { h, events } = setup({ files, run: { [argv]: { code: 1, lines: ['working…', msg] } } })
+      await h.handle('arts:import', APP, { slug: 'cat', workspaceId: 'p' })
+      await h.idle()
+      const last = events.filter((e) => e.event === 'task:event').at(-1)?.payload as {
+        kind: string
+        text: string
+      }
+      expect(last.kind).toBe('error')
+      expect(last.text).toMatch(/^Chuyển art chưa xong/)
+      expect(last.text).toContain('was moved to D:\\p\\squarel_art\\cat')
+      expect(last.text).not.toContain('art cũ vẫn còn')
+    })
+
+    it('rejects a slug that is not a Squarel art id', async () => {
+      const { h } = setup({ files })
+      for (const slug of ['-rf', 'A', 'a/b', '..', '', 'a'.repeat(65)])
+        await expect(h.handle('arts:import', APP, { slug, workspaceId: 'p' })).rejects.toThrow()
+    })
+
     it('refuses an unknown workspace or slug', async () => {
       const { h } = setup({ files })
       await expect(h.handle('arts:import', APP, { slug: 'cat', workspaceId: 'nope' })).rejects.toThrow(
