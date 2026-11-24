@@ -234,7 +234,7 @@ function M.applyDoc(sprite, doc, env)
     end
   end
   -- a brand-new sprite has one empty default layer without id: reuse it for the first doc layer
-  -- (the extension links the sprite to its slug before the first applyDoc, so don't test the slug here)
+  -- (the extension links the sprite to its ref before the first applyDoc, so don't test the ref here)
   if #unsynced == 1 and next(byId) == nil and layerIsBlank(sprite, unsynced[1]) then
     byId[doc.layers[1].id] = unsynced[1]
     M.setProp(unsynced[1], 'squarel_id', doc.layers[1].id)

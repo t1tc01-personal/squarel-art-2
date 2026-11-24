@@ -419,7 +419,7 @@ export class BridgeServer implements EditorHost {
     const jsonPath = await p.store.writeProjectFile(
       art,
       '.work-in.json',
-      JSON.stringify({ ref, slug: art, baseVersion: versionId, doc: serializeDoc(doc) }),
+      JSON.stringify({ ref, baseVersion: versionId, doc: serializeDoc(doc) }),
     )
     const out = p.store.projectPath(art, 'work.aseprite')
     await runAsepriteScript(exe, CLI_SCRIPTS.docToAseprite, { in: jsonPath, out })

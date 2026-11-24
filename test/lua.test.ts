@@ -116,7 +116,7 @@ describe('Aseprite extension: sync.lua (with a mock Aseprite API)', () => {
       `${prelude}
        local doc = json.decode(DOC)
        local sprite = Sprite(doc.width, doc.height, ColorMode.INDEXED)
-       sync.setProp(sprite, 'squarel_slug', 'demo')
+       sync.setProp(sprite, 'squarel_ref', 'p1/demo')
        sync.applyDoc(sprite, doc, ENV)
        RESULT = json.encode(sync.spriteToDoc(sprite, ENV))`,
       { MOCK, DOC: JSON.stringify(serializeDoc(doc)) },
@@ -227,9 +227,21 @@ describe('Aseprite extension: plugin.lua (fake WebSocket, Timer and clock)', () 
     init(PLUGIN)
     local s1 = SOCKETS[1]
     s1.onreceive(WebSocketMessageType.OPEN, '', '')
-    s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'doc', slug = 'demo', versionId = 'v000001', doc = json.decode(DOC) }), '')`
+    s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'doc', ref = 'p1/demo', versionId = 'v000001', doc = json.decode(DOC) }), '')`
   const sent = (raw: string[]) =>
-    raw.map((t) => JSON.parse(t) as { type: string; slug?: string; baseVersion?: string })
+    raw.map(
+      (t) =>
+        JSON.parse(t) as {
+          type: string
+          ref?: string
+          protocol?: number
+          ext?: string
+          code?: string
+          baseVersion?: string
+          name?: string
+          input?: { preset?: string }
+        },
+    )
 
   it('puts the Squarel menu in File (extensions cannot add top-level menus) and connects on startup', () => {
     const out = runLua(
@@ -245,6 +257,95 @@ describe('Aseprite extension: plugin.lua (fake WebSocket, Timer and clock)', () 
     expect(r.connects).toBe(1)
     expect(sent(r.sent)[0]).toMatchObject({ type: 'hello' })
     expect(r.sprites).toBe(1)
+  })
+
+  it('hello carries protocol 2', () => {
+    const out = runLua(
+      `${boot}
+RESULT = json.encode(s1.sent)`,
+      {
+        MOCK,
+        HARNESS,
+        DOC: JSON.stringify(serializeDoc(spriteDoc())),
+      },
+    )
+    expect(sent(JSON.parse(out))[0]).toMatchObject({
+      type: 'hello',
+      client: 'aseprite',
+      protocol: 2,
+      ext: '0.4.0',
+    })
+  })
+
+  it('open dialog labels are project / art and send the ref', () => {
+    const out = runLua(
+      `${boot}
+       local shown
+       function Dialog()
+         local d = { data = { ok = true } }
+         function d:combobox(o) shown = o; self.data[o.id] = o.options[2] end
+         function d:button() end
+         function d:show() end
+         return d
+       end
+       s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'arts', arts = {
+         { ref = 'p1/a', project = 'p1', projectName = 'Hero', art = 'a', name = 'Idle', head = 'v000001' },
+         { ref = 'p1/b', project = 'p1', projectName = 'Hero', art = 'b', name = 'Run', head = 'v000001' } } }), '')
+       s1.sent = {}
+       PLUGIN.commands.SquarelOpen.onclick()
+       s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'arts', arts = {
+         { ref = 'p1/a', project = 'p1', projectName = 'Hero', art = 'a', name = 'Idle', head = 'v000001' },
+         { ref = 'p1/b', project = 'p1', projectName = 'Hero', art = 'b', name = 'Run', head = 'v000001' } } }), '')
+       RESULT = json.encode({ options = shown.options, sent = s1.sent })`,
+      { MOCK, HARNESS, DOC: JSON.stringify(serializeDoc(spriteDoc())) },
+    )
+    const r = JSON.parse(out)
+    expect(r.options).toEqual(['Hero / Idle', 'Hero / Run'])
+    expect(sent(r.sent)[1]).toMatchObject({ type: 'open', ref: 'p1/b' })
+  })
+
+  it('an empty art list explains how to create one', () => {
+    const out = runLua(
+      `${boot}
+       s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'arts', arts = {} }), '')
+       PLUGIN.commands.SquarelOpen.onclick()
+       s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'arts', arts = {} }), '')
+       RESULT = json.encode(ALERTS)`,
+      { MOCK, HARNESS, DOC: JSON.stringify(serializeDoc(spriteDoc())) },
+    )
+    expect(JSON.parse(out)).toEqual([
+      'No art yet. Open Claude Code in a Squarel project and ask it to create one.',
+    ])
+  })
+
+  it('an outdated-extension error is shown', () => {
+    const out = runLua(
+      `${boot}
+       s1.onreceive(WebSocketMessageType.TEXT, json.encode({ type = 'error', code = 'extension-outdated',
+         message = 'Update the Squarel extension to 0.4.0.' }), '')
+       RESULT = json.encode(ALERTS)`,
+      { MOCK, HARNESS, DOC: JSON.stringify(serializeDoc(spriteDoc())) },
+    )
+    expect(JSON.parse(out)).toEqual(['Update the Squarel extension to 0.4.0.'])
+  })
+
+  it('the export menu sends the art ref with the tool call', () => {
+    const out = runLua(
+      `${boot}
+       function Dialog()
+         local d = { data = { ok = true, preset = 'game-png' } }
+         function d:combobox() end
+         function d:button() end
+         function d:show() end
+         return d
+       end
+       s1.sent = {}
+       PLUGIN.commands.SquarelExport.onclick()
+       RESULT = json.encode(s1.sent)`,
+      { MOCK, HARNESS, DOC: JSON.stringify(serializeDoc(spriteDoc())) },
+    )
+    const tool = sent(JSON.parse(out)).find((m) => m.type === 'tool')
+    expect(tool).toMatchObject({ name: 'export', ref: 'p1/demo', input: { preset: 'game-png' } })
   })
 
   it('pings while alive; a silent bridge (no CLOSE event) is replaced and linked sprites are re-announced', () => {
@@ -267,7 +368,7 @@ describe('Aseprite extension: plugin.lua (fake WebSocket, Timer and clock)', () 
     expect(r.n).toBe(2)
     const s2 = sent(r.s2)
     expect(s2.map((m) => m.type)).toEqual(['hello', 'cels', 'ping'])
-    expect(s2[1]).toMatchObject({ slug: 'demo', baseVersion: 'v000001' })
+    expect(s2[1]).toMatchObject({ ref: 'p1/demo', baseVersion: 'v000001' })
     expect(r.alerts).toBe(0)
   })
 

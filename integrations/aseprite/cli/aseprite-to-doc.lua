@@ -1,6 +1,6 @@
 -- Batch: read an .aseprite file into Squarel PixelDoc JSON.
 -- aseprite -b --script-param in=<file.aseprite> --script-param out=<doc.json> --script aseprite-to-doc.lua
--- Output JSON: { "slug": "...", "baseVersion": "v000001", "doc": PixelDocJSON }
+-- Output JSON: { "ref": "...", "baseVersion": "v000001", "doc": PixelDocJSON }
 -- `dir` param (passed by the bridge) points at the extension folder; fall back to the debug library.
 SQUAREL_DIR = app.params['dir']
 if not SQUAREL_DIR then
@@ -19,7 +19,7 @@ if sprite.colorMode ~= ColorMode.INDEXED then app.command.ChangePixelFormat { fo
 local env = { Sprite = Sprite, Image = Image, Palette = Palette, Color = Color, Point = Point, ColorMode = ColorMode }
 local doc = sync.spriteToDoc(sprite, env)
 local out = {
-  slug = sync.getProp(sprite, 'squarel_slug'),
+  ref = sync.getProp(sprite, 'squarel_ref'),
   baseVersion = sync.getProp(sprite, 'squarel_base'),
   doc = doc,
 }

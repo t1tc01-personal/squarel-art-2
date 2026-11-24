@@ -1,6 +1,6 @@
 -- Batch: write a Squarel PixelDoc JSON to an .aseprite file.
 -- aseprite -b --script-param in=<doc.json> --script-param out=<file.aseprite> --script doc-to-aseprite.lua
--- Input JSON: { "slug": "...", "baseVersion": "v000001", "doc": PixelDocJSON }
+-- Input JSON: { "ref": "...", "baseVersion": "v000001", "doc": PixelDocJSON }
 -- `dir` param (passed by the bridge) points at the extension folder; fall back to the debug library.
 SQUAREL_DIR = app.params['dir']
 if not SQUAREL_DIR then
@@ -22,7 +22,7 @@ local env = { Sprite = Sprite, Image = Image, Palette = Palette, Color = Color, 
 local doc = data.doc
 local sprite = Sprite(doc.width, doc.height, ColorMode.INDEXED)
 sync.applyDoc(sprite, doc, env)
-if data.slug then sync.setProp(sprite, 'squarel_slug', data.slug) end
+if data.ref then sync.setProp(sprite, 'squarel_ref', data.ref) end
 if data.baseVersion then sync.setProp(sprite, 'squarel_base', data.baseVersion) end
 sprite:saveAs(outPath)
 sprite:close()

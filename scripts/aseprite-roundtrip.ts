@@ -35,7 +35,10 @@ try {
   const inJson = join(dir, 'in.json')
   const ase = join(dir, 'work.aseprite')
   const outJson = join(dir, 'out.json')
-  writeFileSync(inJson, JSON.stringify({ slug: 'roundtrip', baseVersion: 'v000001', doc: serializeDoc(doc) }))
+  writeFileSync(
+    inJson,
+    JSON.stringify({ ref: 'roundtrip/roundtrip', baseVersion: 'v000001', doc: serializeDoc(doc) }),
+  )
   await runAsepriteScript(cfg.asepritePath, CLI_SCRIPTS.docToAseprite, { in: inJson, out: ase })
   await runAsepriteScript(cfg.asepritePath, CLI_SCRIPTS.asepriteToDoc, { in: ase, out: outJson })
   const back = JSON.parse(readFileSync(outJson, 'utf8'))

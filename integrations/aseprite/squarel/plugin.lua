@@ -7,10 +7,10 @@ local sync, codec, json
 local state = {
   ws = nil,
   connected = false,
-  projects = {},
-  bound = {},       -- slug -> sprite
+  arts = {},
+  bound = {},       -- ref -> sprite
   applying = false, -- true while we apply a remote doc (ignore our own change events)
-  dirty = {},       -- slug -> true when local edits are waiting to be sent
+  dirty = {},       -- ref -> true when local edits are waiting to be sent
   timer = nil,
   watchdog = nil,
   wantConnection = false, -- true after connect(), false after disconnect()
@@ -68,15 +68,15 @@ local function spriteAlive(sprite)
   return false
 end
 
-local function slugOf(sprite) return sprite and sync.getProp(sprite, 'squarel_slug') end
+local function refOf(sprite) return sprite and sync.getProp(sprite, 'squarel_ref') end
 
 local function flush()
-  for slug in pairs(state.dirty) do
-    local sprite = state.bound[slug]
+  for ref in pairs(state.dirty) do
+    local sprite = state.bound[ref]
     if spriteAlive(sprite) then
       local ok, doc = pcall(sync.spriteToDoc, sprite, env)
       if ok then
-        send({ type = 'cels', slug = slug, baseVersion = sync.getProp(sprite, 'squarel_base'), doc = doc, label = 'Aseprite edit' })
+        send({ type = 'cels', ref = ref, baseVersion = sync.getProp(sprite, 'squarel_base'), doc = doc, label = 'Aseprite edit' })
       else
         app.alert { title = 'Squarel', text = tostring(doc) }
       end
@@ -85,8 +85,8 @@ local function flush()
   state.dirty = {}
 end
 
-local function scheduleFlush(slug)
-  state.dirty[slug] = true
+local function scheduleFlush(ref)
+  state.dirty[ref] = true
   if state.timer then
     state.timer:stop()
     state.timer:start()
@@ -95,29 +95,29 @@ local function scheduleFlush(slug)
   end
 end
 
-local function bind(slug, sprite)
-  state.bound[slug] = sprite
-  sync.setProp(sprite, 'squarel_slug', slug)
+local function bind(ref, sprite)
+  state.bound[ref] = sprite
+  sync.setProp(sprite, 'squarel_ref', ref)
   sprite.events:on('change', function(ev)
     if state.applying then return end
-    scheduleFlush(slug)
+    scheduleFlush(ref)
   end)
 end
 
-local function applyRemote(slug, versionId, doc, label)
-  local sprite = state.bound[slug]
+local function applyRemote(ref, versionId, doc, label)
+  local sprite = state.bound[ref]
   local created = false
   if not spriteAlive(sprite) then
     sprite = nil
     for _, s in ipairs(app.sprites) do
-      if slugOf(s) == slug then sprite = s end
+      if refOf(s) == ref then sprite = s end
     end
     if not sprite then
       sprite = Sprite(doc.width, doc.height, ColorMode.INDEXED)
-      pcall(function() sprite.filename = slug end)
+      pcall(function() sprite.filename = (ref:match('[^/]+$') or ref) end)
       created = true
     end
-    bind(slug, sprite)
+    bind(ref, sprite)
   end
   state.applying = true
   local ok, err = pcall(function()
@@ -130,52 +130,60 @@ local function applyRemote(slug, versionId, doc, label)
   app.refresh()
 end
 
-local function pickProject()
-  if #state.projects == 0 then
-    app.alert { title = 'Squarel', text = 'No projects yet. Ask Claude to create one (art_create).' }
+local function pickArt()
+  if #state.arts == 0 then
+    app.alert { title = 'Squarel', text = 'No art yet. Open Claude Code in a Squarel project and ask it to create one.' }
     return
   end
-  local names = {}
-  for _, p in ipairs(state.projects) do names[#names + 1] = p.slug end
-  local dlg = Dialog { title = 'Open Squarel project' }
-  dlg:combobox { id = 'slug', label = 'Project', options = names, option = names[1] }
+  local names, refs = {}, {}
+  for _, a in ipairs(state.arts) do
+    local label = (a.projectName or a.project) .. ' / ' .. (a.name or a.art)
+    names[#names + 1] = label
+    refs[label] = a.ref
+  end
+  local dlg = Dialog { title = 'Open Squarel art' }
+  dlg:combobox { id = 'art', label = 'Art', options = names, option = names[1] }
   dlg:button { id = 'ok', text = 'Open' }
   dlg:button { id = 'cancel', text = 'Cancel' }
   dlg:show()
-  if dlg.data.ok then send({ type = 'open', slug = dlg.data.slug }) end
+  if dlg.data.ok and refs[dlg.data.art] then send({ type = 'open', ref = refs[dlg.data.art] }) end
 end
 
 local handlers = {}
 function handlers.welcome(m)
-  state.projects = m.projects or {}
+  state.arts = m.arts or {}
 end
-function handlers.projects(m)
-  state.projects = m.projects or {}
+function handlers.arts(m)
+  state.arts = m.arts or {}
   if state.pendingPick then
     state.pendingPick = false
-    pickProject()
+    pickArt()
   end
 end
-handlers['doc'] = function(m) applyRemote(m.slug, m.versionId, m.doc, 'Squarel: open ' .. m.slug) end
+handlers['doc'] = function(m) applyRemote(m.ref, m.versionId, m.doc, 'Squarel: open ' .. m.ref) end
 handlers['doc.updated'] = function(m)
-  if state.dirty[m.slug] then
+  if state.dirty[m.ref] then
     flush() -- our pending strokes go first; the bridge answers with a merged `rebased` doc
     return
   end
-  applyRemote(m.slug, m.versionId, m.doc, (m.source == 'claude' and 'Claude: ' or 'Squarel: ') .. (m.label or ''))
+  applyRemote(m.ref, m.versionId, m.doc, (m.source == 'claude' and 'Claude: ' or 'Squarel: ') .. (m.label or ''))
 end
 function handlers.rebased(m)
-  applyRemote(m.slug, m.versionId, m.doc, 'Squarel: merged')
+  applyRemote(m.ref, m.versionId, m.doc, 'Squarel: merged')
 end
 function handlers.ack(m)
-  local sprite = state.bound[m.slug]
+  local sprite = state.bound[m.ref]
   if spriteAlive(sprite) then sync.setProp(sprite, 'squarel_base', m.versionId) end
 end
-handlers['open.request'] = function(m) send({ type = 'open', slug = m.slug }) end
+handlers['open.request'] = function(m) send({ type = 'open', ref = m.ref }) end
 function handlers.tool_result(m)
   app.alert { title = 'Squarel', text = m.text }
 end
 function handlers.error(m)
+  if m.code == 'extension-outdated' then
+    app.alert { title = 'Squarel', text = m.message or 'Update the Squarel extension.' }
+    return
+  end
   app.alert { title = 'Squarel error', text = (m.code or '') .. ': ' .. (m.message or '') }
 end
 
@@ -184,11 +192,11 @@ local function onReceive(mt, data, err)
   if mt == WebSocketMessageType.OPEN then
     state.connected = true
     trace('connected')
-    send({ type = 'hello', client = 'aseprite', ext = '0.1.1', aseprite = tostring(app.version) })
+    send({ type = 'hello', client = 'aseprite', protocol = 2, ext = '0.4.0', aseprite = tostring(app.version) })
     -- (Re)connected: re-announce every linked sprite with its last known base version. The bridge merges
     -- strokes drawn while offline, and knows to push Claude's changes for these projects again.
-    for slug, sprite in pairs(state.bound) do
-      if spriteAlive(sprite) then state.dirty[slug] = true end
+    for ref, sprite in pairs(state.bound) do
+      if spriteAlive(sprite) then state.dirty[ref] = true end
     end
     flush()
   elseif mt == WebSocketMessageType.TEXT then
@@ -277,23 +285,23 @@ local function setup(plugin)
   if ok then group = 'squarel_menu' end
 
   plugin:newCommand { id = 'SquarelConnect', title = 'Connect', group = group, onclick = connect }
-  plugin:newCommand { id = 'SquarelOpen', title = 'Open project…', group = group, onclick = function()
+  plugin:newCommand { id = 'SquarelOpen', title = 'Open art…', group = group, onclick = function()
     if not state.connected then connect() end
     state.pendingPick = true
     send({ type = 'list' })
   end }
   plugin:newCommand { id = 'SquarelSync', title = 'Sync now', group = group, onclick = function()
-    local slug = slugOf(app.activeSprite)
-    if slug then
-      state.dirty[slug] = true
+    local ref = refOf(app.activeSprite)
+    if ref then
+      state.dirty[ref] = true
       flush()
     else
-      app.alert { title = 'Squarel', text = 'This sprite is not linked to a Squarel project.' }
+      app.alert { title = 'Squarel', text = 'This sprite is not linked to a Squarel art.' }
     end
   end }
   plugin:newCommand { id = 'SquarelExport', title = 'Export…', group = group, onclick = function()
-    local slug = slugOf(app.activeSprite)
-    if not slug then return app.alert { title = 'Squarel', text = 'This sprite is not linked to a Squarel project.' } end
+    local ref = refOf(app.activeSprite)
+    if not ref then return app.alert { title = 'Squarel', text = 'This sprite is not linked to a Squarel art.' } end
     local dlg = Dialog { title = 'Squarel export' }
     dlg:combobox { id = 'preset', label = 'Preset', option = 'game-spritesheet', options = {
       'game-png', 'game-spritesheet', 'game-gif', 'print-png', 'print-svg', 'print-pdf',
@@ -303,7 +311,7 @@ local function setup(plugin)
     dlg:show()
     if dlg.data.ok then
       flush()
-      send({ type = 'tool', id = tostring(os.time()), name = 'export', slug = slug, input = { art = slug, preset = dlg.data.preset } })
+      send({ type = 'tool', id = tostring(os.time()), name = 'export', ref = ref, input = { preset = dlg.data.preset } })
     end
   end }
   plugin:newCommand { id = 'SquarelSettings', title = 'Settings…', group = group, onclick = function()

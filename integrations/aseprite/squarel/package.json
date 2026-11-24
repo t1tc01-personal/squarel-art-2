@@ -2,7 +2,7 @@
   "name": "squarel",
   "displayName": "Squarel",
   "description": "Two-way sync between Aseprite and Squarel Art projects (pixel-art tools for Claude Code)",
-  "version": "0.1.1",
+  "version": "0.4.0",
   "author": { "name": "Squarel Art" },
   "publisher": "squarel",
   "license": "PolyForm-Shield-1.0.0",
