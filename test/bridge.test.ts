@@ -431,7 +431,16 @@ describe('bridge', () => {
     c.send({ type: 'tool', id: 'y', name: 'art_list', input: {} })
     const none = await c.next('tool_result')
     expect(none.ok).toBe(false)
-    expect(none.text).toContain(NO_PROJECT_TEXT)
+    expect(none.text).toBe(`[NO_PROJECT] ${NO_PROJECT_TEXT}`)
+    // even a tool that needs no project is refused without a ref
+    c.send({ type: 'tool', id: 'u', name: 'usage_today', input: {} })
+    const usage = await c.next('tool_result')
+    expect(usage).toEqual({
+      type: 'tool_result',
+      id: 'u',
+      ok: false,
+      text: `[NO_PROJECT] ${NO_PROJECT_TEXT}`,
+    })
     // after open, the client's current ref picks the project
     c.send({ type: 'open', ref: 'a/hero' })
     await c.next('doc')

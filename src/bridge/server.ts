@@ -10,6 +10,7 @@ import { artRef, parseArtRef } from '../shared/ref.ts'
 import type { PixelDocJSON } from '../shared/types.ts'
 import { ConflictError } from '../store/store.ts'
 import { ART_DIR, readWorkspace } from '../store/workspace.ts'
+import { NO_PROJECT_TEXT } from '../tools/common.ts'
 import { runTool } from '../tools/registry.ts'
 import { type EditorHost, type ToolContext, ToolError } from '../tools/types.ts'
 import { SQUAREL_VERSION } from '../version.ts'
@@ -293,10 +294,15 @@ export class BridgeServer implements EditorHost {
       }
       case 'tool': {
         const ref = m.ref ?? c.ref
+        if (!ref)
+          return this.send(c, {
+            type: 'tool_result',
+            id: m.id,
+            ok: false,
+            text: `[NO_PROJECT] ${NO_PROJECT_TEXT}`,
+          })
         try {
-          // Without a ref the tool runs outside any project: art tools fail with NO_PROJECT.
-          const ctx = ref ? await this.toolContext(ref) : { ...this.ctx, session: {} }
-          const res = await runTool(m.name, m.input ?? {}, ctx)
+          const res = await runTool(m.name, m.input ?? {}, await this.toolContext(ref))
           return this.send(c, { type: 'tool_result', id: m.id, ok: true, text: res.text, files: res.files })
         } catch (e: any) {
           return this.send(c, {
