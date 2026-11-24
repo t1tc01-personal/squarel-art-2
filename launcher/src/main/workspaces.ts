@@ -788,7 +788,7 @@ async function detail(ctx: WorkspaceCtx, e: IndexEntry): Promise<WorkspaceDetail
   const sessionList = live.slice(0, 200).map((s) => ({
     title: sessionTitle(e.folder, s.cwd).slice(0, 300),
     busy: !!s.busyWith,
-    subtitle: sessionSubtitle(s).slice(0, 300),
+    subtitle: sessionSubtitle(s, ctx.d.now().getTime()).slice(0, 300),
   }))
   return {
     ...base(e, c, mine, live.length, duplicateFolder(all, e)),

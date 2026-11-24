@@ -24,6 +24,8 @@ export interface CheckCtx {
   smoke?: (squarelDir: string, d: Deps) => Promise<{ ok: boolean; tools: number; ms: number; error?: string }>
   /** Set while an update / build holds the Squarel folder: the MCP smoke test is skipped (N2). */
   squarelBusy?: string
+  /** The launcher's own version; Squarel must not be older (Dự án, refs, protocol). */
+  launcherVersion?: string
 }
 
 export type Draft = Omit<CheckResult, 'id' | 'group' | 'label' | 'description'> &
@@ -100,6 +102,29 @@ export async function claudeSkills(d: Deps, ctx: CheckCtx): Promise<Draft> {
       fix: { ...COPY_SKILLS, label: 'Cập nhật skill' },
     }
   return { result: 'pass', detail: `${s.names.length} skill` }
+}
+
+/**
+ * Squarel's package.json version against the launcher's. An older Squarel (e.g. a clone left on an
+ * earlier tag) has no project folders: art lands in DATA_DIR and the launcher shows none.
+ */
+export async function squarelVersion(d: Deps, ctx: CheckCtx): Promise<Draft> {
+  if (!ctx.squarelDir) return { result: 'fail', detail: 'chưa chọn thư mục Squarel' }
+  if (!ctx.launcherVersion) return { result: 'pass', detail: 'không so được (bản dev)' }
+  let version: string | undefined
+  try {
+    const raw = JSON.parse(
+      String(await d.fs.readFile(join(ctx.squarelDir, 'package.json'), 'utf8')).replace(/^﻿/, ''),
+    )
+    if (typeof raw?.version === 'string') version = raw.version
+  } catch {}
+  if (!version) return { result: 'warn', detail: 'không đọc được phiên bản trong package.json' }
+  if (compareVersions(version, ctx.launcherVersion) >= 0) return { result: 'pass', detail: version }
+  return {
+    result: 'fail',
+    detail: `Squarel ${version} cũ hơn launcher ${ctx.launcherVersion}: Dự án và art trong thư mục dự án sẽ không hoạt động`,
+    fix: { componentId: 'squarel', kind: 'update', id: 'update', label: 'Cập nhật Squarel' },
+  }
 }
 
 export async function mcpStarts(

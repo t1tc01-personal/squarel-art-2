@@ -131,6 +131,7 @@ describe('ProviderRouter', () => {
       'local-sd': new LocalSdProvider('http://127.0.0.1:1'),
     })
     await expect(r.chain('generate', 'free')).rejects.toThrow(/no image provider is configured/)
+    await expect(r.chain('generate', 'free')).rejects.toThrow(/do not write your own image generator/)
     expect((await r.chain('generate', 'high'))[0].id).toBe('retrodiffusion')
     const r2 = new ProviderRouter(cfg({ imageProvider: 'mock' }), usage, { mock: new MockProvider() })
     expect((await r2.chain('generate', 'free')).map((p) => p.id)).toEqual(['mock'])

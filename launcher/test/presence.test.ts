@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BridgeState } from '../src/main/bridge/types'
 import { createDeps } from '../src/main/deps'
 import { parseEnv } from '../src/main/env-store'
-import { buildPresence } from '../src/main/presence'
+import { buildPresence, sessionSubtitle } from '../src/main/presence'
 import type { Registry } from '../src/main/registry/registry'
 
 const NOW = new Date('2026-06-10T12:00:00.000Z')
@@ -97,8 +97,22 @@ describe('connections presence', () => {
     const items = (await run(files, { alive: [1, 2] }))[0]?.items ?? []
     expect(items.map((i) => [i.title, i.status, i.subtitle])).toEqual([
       ['Phiên · my-game', 'busy', 'Đang gọi draw_pixels'],
-      ['Phiên · my-game', 'online', 'Rảnh'],
+      ['Phiên · my-game', 'online', 'Đang mở · gọi Squarel 20 giây trước'],
     ])
+  })
+
+  it('says when Squarel was last called instead of idle', () => {
+    const now = Date.parse('2026-01-01T12:00:00Z')
+    expect(sessionSubtitle({ pid: 1, cwd: 'x' }, now)).toBe('Đang mở · chưa gọi Squarel')
+    expect(sessionSubtitle({ pid: 1, cwd: 'x', lastToolAt: now - 3 * 60_000 }, now)).toBe(
+      'Đang mở · gọi Squarel 3 phút trước',
+    )
+    expect(sessionSubtitle({ pid: 1, cwd: 'x', lastToolAt: now - 2 * 3_600_000 }, now)).toBe(
+      'Đang mở · gọi Squarel 2 giờ trước',
+    )
+    expect(sessionSubtitle({ pid: 1, cwd: 'x', busyWith: 'export', lastToolAt: now }, now)).toBe(
+      'Đang gọi export',
+    )
   })
 
   it('names the session after its workspace when Squarel found one, else after the cwd folder', async () => {

@@ -4,9 +4,11 @@
  *   squarel tools                         list tools
  *   squarel <tool> '{"json":"input"}'      run a tool (JSON input)
  *   squarel <tool> --key value ...         run a tool (flags; values parsed as JSON when possible)
- * Images in results are written next to the cwd as squarel-<tool>-N.png.
+ * Images in results are written to <temp>/squarel-cli/<tool>-N.png (never into the project folder).
  */
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { createToolContext } from '../tools/context.ts'
 import { ALL_TOOLS, runTool } from '../tools/registry.ts'
 import { ToolError } from '../tools/types.ts'
@@ -31,7 +33,9 @@ async function main() {
     const r = await runTool(cmd, input, ctx)
     console.log(r.text)
     r.images?.forEach((im, n) => {
-      const f = `squarel-${cmd}-${n + 1}.png`
+      // Previews go to the temp folder, never into the user's project (cwd is often a project).
+      const f = join(tmpdir(), 'squarel-cli', `${cmd}-${n + 1}.png`)
+      mkdirSync(dirname(f), { recursive: true })
       writeFileSync(f, im.png)
       console.log(`(image → ${f})`)
     })

@@ -280,3 +280,33 @@ describe('checks read .env values like Node', () => {
     expect(retroDiffusionKey(parseEnv('RETRO_DIFFUSION_API_KEY= # nothing\n')).result).toBe('warn')
   })
 })
+
+describe('squarel version matches the launcher', () => {
+  const pkg = (version: string) => ({ files: { [join(SQ, 'package.json')]: JSON.stringify({ version }) } })
+  const run = async (version: string, launcherVersion: string | undefined) => {
+    const rs = await runChecks(
+      noReg,
+      ctx({ squarelDir: SQ, ...(launcherVersion ? { launcherVersion } : {}) }),
+      deps(pkg(version)),
+      ['squarel-version'],
+    )
+    return find(rs, 'squarel-version')
+  }
+  it('fails with an update button when Squarel is older than the launcher', async () => {
+    const r = await run('0.3.0', '0.4.0')
+    expect(r.result).toBe('fail')
+    expect(r.detail).toContain('0.3.0')
+    expect(r.detail).toContain('0.4.0')
+    expect(r.fix?.id).toBe('update')
+  })
+  it('passes when the versions match or Squarel is newer', async () => {
+    expect((await run('0.4.0', '0.4.0')).result).toBe('pass')
+    expect((await run('0.5.0', '0.4.0')).result).toBe('pass')
+  })
+  it('warns when package.json cannot be read', async () => {
+    const rs = await runChecks(noReg, ctx({ squarelDir: SQ, launcherVersion: '0.4.0' }), deps(), [
+      'squarel-version',
+    ])
+    expect(find(rs, 'squarel-version').result).toBe('warn')
+  })
+})

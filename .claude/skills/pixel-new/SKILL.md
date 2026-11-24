@@ -18,5 +18,6 @@ If a project is active (server instructions, or `project_info`), read its brief 
    2. Show the sheet and ask which number to keep.
    3. `accept_variant`.
    4. `canvas_view`.
+   5. If `generate_image` fails with `UNAVAILABLE` (no AI provider), tell the user and stop. Do not write your own generator or push pixels from scripts. Offer a free Cloudflare token (Squarel Art Launcher → Cấu hình), `photo_to_pixel`, `draw_pixels` or `open_in_editor`.
 4. Otherwise show the empty canvas and offer `draw_pixels` or `open_in_editor` (Aseprite).
 5. End by suggesting the next useful step: outline, palette tweak, animation, or export.

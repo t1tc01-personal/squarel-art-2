@@ -12,7 +12,8 @@ Art lives inside a project folder (the user's "Dự án"). Workflow: art_list/ar
 Prefer free deterministic tools (draw_pixels, recolor, add_outline, apply_palette, reduce_colors, remove_background, flip, scale, crop_to_content) over AI tools.
 AI tools (generate_image, edit_image, animate) create PROPOSALS; show the numbered sheet and let the user pick, then accept_variant adds a new layer.
 Never pass confirm_cost: true unless the user approved the quoted price in this conversation.
-open_in_editor shows the art in Aseprite for hand drawing; edits sync back as new versions.`
+open_in_editor shows the art in Aseprite for hand drawing; edits sync back as new versions.
+When an AI tool reports no provider, tell the user and stop: never write your own image generator or push pixels from scripts or the CLI. Offer a free Cloudflare token (Squarel Art Launcher → Cấu hình), photo_to_pixel, draw_pixels or open_in_editor instead.`
 
 /** Server instructions paragraph for the project detected at startup (arts newest first). */
 export function workspaceInstructions(ws: Workspace, arts: ProjectInfo[]): string {

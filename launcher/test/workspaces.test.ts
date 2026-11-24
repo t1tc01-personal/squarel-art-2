@@ -533,7 +533,7 @@ describe('list / get / unassigned', () => {
     const a = await getWorkspace(w.ctx, 'a')
     expect(a.sessions).toBe(2)
     expect(a.sessionList).toEqual([
-      { title: 'sub', busy: false, subtitle: 'Rảnh' },
+      { title: 'sub', busy: false, subtitle: 'Đang mở · chưa gọi Squarel' },
       { title: 'a', busy: true, subtitle: 'Đang gọi draw_pixels' },
     ])
     expect(sessionTitle('D:\\a', 'D:\\a\\x\\y')).toBe('x/y')

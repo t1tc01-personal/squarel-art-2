@@ -62,6 +62,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Launcher: Health checks that Squarel is not older than the launcher ("Squarel cùng phiên bản với launcher") and offers "Cập nhật Squarel". Before, a Squarel clone left on an older tag silently kept saving art in DATA_DIR, and the launcher showed none.
+- When no AI provider is configured, `generate_image` and `animate` (and the skills) tell Claude to explain it and stop. Claude no longer writes its own pixel generator or pushes pixels through the CLI. It offers a Cloudflare token, `photo_to_pixel`, `draw_pixels` or Aseprite instead.
+- CLI preview images go to `<temp>/squarel-cli/` instead of the current folder, so they no longer land in a project folder.
+- Launcher: an open Claude session no longer shows "Rảnh" while Claude works outside Squarel. It now shows when Squarel was last called ("Đang mở · gọi Squarel 3 phút trước").
 - Launcher: after a fix button (Đăng ký lại, Chép skill, …) succeeds, Health runs its checks again. Before, the row kept showing the old failure until you pressed "Chạy lại tất cả".
 - Launcher: Health now checks that the `pixel-*` skills (`/pixel-new`, `/pixel-export`, …) are in `~/.claude/skills` and match the Squarel folder. When they are missing or outdated, a button copies them. Before, a setup that never reached step 4 left Claude Code without the skills, and no check reported it.
 - Launcher: the "Claude Code thấy squarel" check runs `claude mcp list` outside the Squarel folder. That folder's own `.mcp.json` no longer stands in for the user-scope registration that Claude Code needs in other folders.

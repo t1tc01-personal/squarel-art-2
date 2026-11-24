@@ -66,10 +66,10 @@ export class ProviderRouter {
     if (out.length === 0) {
       if (task === 'animate')
         throw new Error(
-          'no free provider can animate; use quality "high" (Retro Diffusion) or IMAGE_PROVIDER=mock',
+          'no free provider can animate; use quality "high" (Retro Diffusion, needs a key and an approved price) or IMAGE_PROVIDER=mock. Tell the user, then stop: do not write your own image generator or push pixels from scripts. Offer instead: add a free Cloudflare token in Squarel Art Launcher (Cấu hình), photo_to_pixel from their picture, drawing with draw_pixels, or open_in_editor (Aseprite).',
         )
       throw new Error(
-        'no image provider is configured: set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN in .env, start services/local-sd, or set IMAGE_PROVIDER=mock',
+        'no image provider is configured: set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN in .env, start services/local-sd, or set IMAGE_PROVIDER=mock. Tell the user, then stop: do not write your own image generator or push pixels from scripts. Offer instead: add a free Cloudflare token in Squarel Art Launcher (Cấu hình), photo_to_pixel from their picture, drawing with draw_pixels, or open_in_editor (Aseprite).',
       )
     }
     return out

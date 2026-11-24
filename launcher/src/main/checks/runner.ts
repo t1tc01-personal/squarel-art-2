@@ -115,6 +115,13 @@ export async function runChecks(
       run: () => B.claudeSkills(d, ctx),
     },
     {
+      id: 'squarel-version',
+      group: 'claude',
+      label: 'Squarel cùng phiên bản với launcher',
+      description: 'Squarel cũ hơn launcher thì Claude không thấy Dự án và art lưu sai chỗ.',
+      run: () => B.squarelVersion(d, ctx),
+    },
+    {
       id: 'mcp-starts',
       group: 'claude',
       label: 'MCP server khởi động',

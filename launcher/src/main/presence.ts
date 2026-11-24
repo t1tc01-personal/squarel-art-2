@@ -44,6 +44,8 @@ export interface LiveSession {
   workspace?: { id: string; name: string; folder?: string }
   /** Tool called in the last 15 s. */
   busyWith?: string
+  /** When Squarel last ran a tool for this session (ms since epoch). */
+  lastToolAt?: number
 }
 
 /** Fresh session files whose pid is alive, sorted by pid. */
@@ -84,21 +86,38 @@ export async function liveSessions(dataDir: string, d: Deps): Promise<LiveSessio
       cwd: j.cwd,
       ...(workspace ? { workspace } : {}),
       ...(busy ? { busyWith: j.lastTool as string } : {}),
+      ...(Number.isFinite(lastAt) && lastAt - now <= FUTURE_SKEW_MS ? { lastToolAt: lastAt } : {}),
     })
   }
   return out.sort((a, b) => a.pid - b.pid)
 }
 
-/** "Đang gọi <tool>" while a tool ran in the last 15 s, else "Rảnh". */
-export function sessionSubtitle(s: LiveSession): string {
-  return s.busyWith ? `Đang gọi ${s.busyWith}` : 'Rảnh'
+/**
+ * "Đang gọi <tool>" while a tool ran in the last 15 s. Otherwise the session is open but Squarel
+ * cannot see what Claude does (thinking, Bash, editing), so say when Squarel was last called
+ * instead of claiming it is idle.
+ */
+export function sessionSubtitle(s: LiveSession, now: number = Date.now()): string {
+  if (s.busyWith) return `Đang gọi ${s.busyWith}`
+  if (s.lastToolAt === undefined) return 'Đang mở · chưa gọi Squarel'
+  return `Đang mở · gọi Squarel ${ago(now - s.lastToolAt)}`
+}
+
+function ago(msAgo: number): string {
+  const s = Math.max(0, Math.round(msAgo / 1000))
+  if (s < 60) return `${s} giây trước`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} phút trước`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h} giờ trước`
+  return `${Math.floor(h / 24)} ngày trước`
 }
 
 async function sessions(dataDir: string, d: Deps): Promise<PresenceItem[]> {
   return (await liveSessions(dataDir, d)).map((s) => ({
     id: `claude-${s.pid}`,
     title: `Phiên · ${s.workspace?.name ?? baseName(s.cwd)}`,
-    subtitle: sessionSubtitle(s),
+    subtitle: sessionSubtitle(s, d.now().getTime()),
     status: s.busyWith ? 'busy' : 'online',
     icon: 'bolt',
   }))

@@ -22,6 +22,7 @@ If the server instructions name an **active project** (or `project_info` returns
    - They return a numbered contact sheet. The canvas does not change yet.
    - Show the sheet, let the user pick, then `accept_variant`. It lands on a **new layer** "AI: …". Offer `layer_merge_down` or hiding afterwards.
    - If every variant has low grid confidence, say so and suggest a simpler prompt, a smaller canvas, or `quality: "high"`.
+   - **No AI provider** (`UNAVAILABLE`): tell the user and stop. Never write your own generator (Python, scripts) or push pixels through the CLI to imitate AI: the result is crude and bypasses Squarel. Offer: a free Cloudflare token in Squarel Art Launcher → Cấu hình (then retry), `photo_to_pixel` from a picture they have, drawing with `draw_pixels`, or `open_in_editor` to draw in Aseprite.
 5. **Hand drawing.** When the user wants to draw themselves, call `open_in_editor`. Aseprite syncs both ways. Their strokes come back as versions with source `editor`; `canvas_view` shows them.
 6. **Mistakes are cheap.** `undo` (repeatable) and `restore_version` never delete history. `history` shows who changed what.
 7. **Export** with `export` (see checklist). Tell the user the file paths you got back.

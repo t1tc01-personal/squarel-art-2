@@ -69,7 +69,7 @@ test('connections panel shows 2 Claude sessions, Aseprite, Bridge, Cloudflare, R
       'Retro Diffusion',
     ])
     await expect(rows.nth(0)).toContainText('Đang gọi generate_image')
-    await expect(rows.nth(1)).toContainText('Rảnh')
+    await expect(rows.nth(1)).toContainText('Đang mở')
     await expect(rows.nth(2)).toContainText('game-dungeon/thu-sync · 1.3.18.6')
     await expect(rows.nth(3)).toContainText('ws://127.0.0.1:4321')
     await expect(rows.nth(4)).toContainText('Còn 9.140 neuron hôm nay')
