@@ -8,7 +8,7 @@ import { Icon, PixelGrid } from '../components/Icon'
 import { ago } from '../format'
 import { useNav } from '../nav'
 
-/** Example sprites from design.md, used as project thumbnails (projects carry no preview). */
+/** Example sprites from design.md: the placeholder for an art that has no thumb.png yet. */
 const SPRITES = [
   {
     rows: ['..####..', '.######.', '.#.##.#.', '.######.', '..####..', '.######.', '#.####.#', '..#..#..'],
@@ -93,9 +93,15 @@ export function Home() {
             const open = openRefs.includes(p.ref)
             return (
               <li key={p.ref} className="card project-card">
-                <span className="project-thumb" style={{ background: s.bg, color: s.fg }}>
-                  <PixelGrid rows={s.rows} cell={7} />
-                </span>
+                {p.thumb ? (
+                  <span className="project-thumb has-image">
+                    <img src={p.thumb} alt="" draggable={false} />
+                  </span>
+                ) : (
+                  <span className="project-thumb" style={{ background: s.bg, color: s.fg }}>
+                    <PixelGrid rows={s.rows} cell={7} />
+                  </span>
+                )}
                 <span className="project-text">
                   <span className="row-title">{p.name}</span>
                   <span className="row-sub">{p.projectName}</span>

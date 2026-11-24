@@ -207,6 +207,8 @@ export const recentArtSchema = z.object({
   height: z.number().int().positive().optional(),
   version: str(40),
   updatedAt: str(40),
+  /** data:image/png URL of <folder>/squarel_art/<art>/thumb.png, when there is a valid one. */
+  thumb: str(100_000).optional(),
 })
 export type RecentArt = z.infer<typeof recentArtSchema>
 

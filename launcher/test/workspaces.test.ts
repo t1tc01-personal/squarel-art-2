@@ -32,6 +32,7 @@ import {
   openClaude,
   readArts,
   readThumb,
+  recentArts,
   removeWorkspace,
   renderAgentsBlock,
   sessionTitle,
@@ -482,6 +483,14 @@ describe('list / get / unassigned', () => {
     expect(a?.recent[0]?.thumb).toBe(`data:image/png;base64,${PNG.toString('base64')}`)
     expect(a?.recent[1]?.thumb).toBeUndefined() // above 64 KB
     expect(a?.recent[2]?.thumb).toBeUndefined() // not a PNG
+  })
+
+  it('recentArts carries the thumb.png of each art (Home shows the real art)', async () => {
+    const w = world(files)
+    const list = await recentArts(w.ctx, 3)
+    expect(list.map((x) => x.ref)).toEqual(['gone/g1', 'a/a2', 'a/a3'])
+    expect(list[1]?.thumb).toBe(`data:image/png;base64,${PNG.toString('base64')}`)
+    expect(list[2]?.thumb).toBeUndefined() // above 64 KB
   })
 
   it('get returns config and every art; unassigned are the arts still in DATA_DIR/projects', async () => {

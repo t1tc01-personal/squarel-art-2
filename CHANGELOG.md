@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-24
+
+### Fixed
+
+- Launcher: "Art gần đây" on Home shows each art's own `thumb.png` instead of a fixed example sprite. The example sprite is only shown for art that has no thumbnail yet.
+
 ## [0.4.2] - 2026-11-24
 
 ### Fixed
@@ -134,7 +140,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.3.0...v0.4.0

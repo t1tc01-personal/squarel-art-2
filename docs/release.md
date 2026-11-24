@@ -65,11 +65,11 @@ Làm theo thứ tự:
 4. Tạo và đẩy tag. **Chỉ làm khi chủ dự án đồng ý**, vì Release là công khai:
 
    ```powershell
-   git tag v0.4.2
+   git tag v0.4.3
    ```
 
    ```powershell
-   git push origin v0.4.2
+   git push origin v0.4.3
    ```
 
 5. GitHub Actions (`.github/workflows/release.yml`) chạy trên `windows-latest`:

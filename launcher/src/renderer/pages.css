@@ -210,6 +210,16 @@
   place-items: center;
   border-radius: var(--radius-md);
 }
+.project-thumb.has-image {
+  overflow: hidden;
+  background: var(--bg-surface-2);
+}
+.project-thumb img {
+  width: 75%;
+  height: 75%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
 .project-text {
   display: flex;
   flex-direction: column;

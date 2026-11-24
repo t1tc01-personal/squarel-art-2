@@ -630,18 +630,23 @@ export async function artRefs(ctx: WorkspaceCtx): Promise<string[]> {
 const pickSize = ({ width, height }: { width?: number; height?: number }) =>
   width && height ? { width, height } : {}
 
-/** The newest `limit` arts across all indexed projects, the top ones with their size. */
+/** The newest `limit` arts across all indexed projects, with their size and thumb.png. */
 export async function recentArts(ctx: WorkspaceCtx, limit: number): Promise<RecentArt[]> {
   const top = (await allArts(ctx)).slice(0, limit)
   return Promise.all(
-    top.map(async ({ ref, entry: e, art: a }) => ({
-      ref,
-      name: a.name,
-      projectName: e.name,
-      version: a.head,
-      updatedAt: a.updatedAt,
-      ...pickSize(await docSize(ctx, artsDirOf(e.folder), a)),
-    })),
+    top.map(async ({ ref, entry: e, art: a }) => {
+      const artsDir = artsDirOf(e.folder)
+      const thumb = await thumbIn(ctx, artsDir, a.slug)
+      return {
+        ref,
+        name: a.name,
+        projectName: e.name,
+        version: a.head,
+        updatedAt: a.updatedAt,
+        ...pickSize(await docSize(ctx, artsDir, a)),
+        ...(thumb ? { thumb } : {}),
+      }
+    }),
   )
 }
 
