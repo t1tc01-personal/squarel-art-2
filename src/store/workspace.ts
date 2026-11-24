@@ -12,7 +12,7 @@ import { PALETTES } from '../shared/palettes.ts'
 import { MAX_SIDE, PURPOSES } from '../shared/types.ts'
 import { exists, readJson, writeAtomic } from './fsutil.ts'
 import type { ProjectInfo, Store } from './store.ts'
-import { mainCheckoutOf } from './worktree.ts'
+import { gitCommonDir, mainCheckoutOf } from './worktree.ts'
 
 export const WORKSPACE_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 export const WORKSPACE_DIR = '.squarel'
@@ -289,6 +289,20 @@ async function folderWorkspaceId(folder: string): Promise<string | undefined> {
   } catch {
     return undefined
   }
+}
+
+/**
+ * The other folder that holds this project id when `ws` is a copy: the index entry for `ws.id` points
+ * elsewhere than `ws.home`, that folder exists and declares the same id, and the two are not the same
+ * git repository (a linked worktree shares its main checkout's git dir, so it is not a copy).
+ */
+export async function duplicateProjectFolder(dataDir: string, ws: Workspace): Promise<string | undefined> {
+  const entry = await readWorkspaceIndex(dataDir, ws.id)
+  if (!entry || samePath(entry.folder, ws.home)) return undefined
+  if (!(await exists(entry.folder)) || (await folderWorkspaceId(entry.folder)) !== ws.id) return undefined
+  const [other, mine] = await Promise.all([gitCommonDir(entry.folder), gitCommonDir(ws.home)])
+  if (other && mine && samePath(other, mine)) return undefined
+  return entry.folder
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   artsDirOf,
   catalogPath,
   detectWorkspace,
+  duplicateProjectFolder,
   ensureWorkspaceIndex,
   exportDirProblem,
   normalizePaletteName,
@@ -512,4 +513,53 @@ describe('MCP instructions and presence', () => {
     expect(readFileSync(catalogPath(folder), 'utf8')).toContain('`slime`')
     await client.close()
   }, 60000)
+})
+
+describe('duplicate project id', () => {
+  it('a copied folder with the same id is a duplicate', async () => {
+    const copy = join(t.dir, 'copy')
+    writeConfig(copy, CONFIG)
+    const copyCtx = await createToolContext({
+      config: { dataDir, imageProvider: 'mock', previewPx: 0 },
+      providers: { mock: new MockProvider() },
+      log: silentLogger,
+      projectStart: copy,
+    })
+    expect(copyCtx.session.duplicateOf).toBe(folder)
+    await expect(runTool('art_create', { name: 'Hero' }, copyCtx)).rejects.toThrow(
+      `Project id "game-dungeon" is also used by ${folder}. Change the id in .squarel/project.json`,
+    )
+    await expect(runTool('art_list', {}, copyCtx)).resolves.toBeDefined()
+    // The registered folder itself is not a duplicate.
+    expect((await makeCtx()).session.duplicateOf).toBeUndefined()
+  })
+
+  it('a worktree of the registered folder is not a duplicate', async () => {
+    const main = join(t.dir, 'main')
+    const wt = join(t.dir, 'wt')
+    mkdirSync(join(main, '.git', 'worktrees', 'wt'), { recursive: true })
+    writeFileSync(join(main, '.git', 'worktrees', 'wt', 'commondir'), '../..\n')
+    mkdirSync(wt, { recursive: true })
+    writeFileSync(join(wt, '.git'), `gitdir: ${join(main, '.git', 'worktrees', 'wt')}\n`)
+    for (const root of [main, wt]) writeConfig(join(root, 'app'), CONFIG)
+    registerIndex(join(main, 'app'))
+    const ws = await detectWorkspace({ start: join(wt, 'app'), dataDir })
+    expect(ws?.home).toBe(join(main, 'app'))
+    expect(await duplicateProjectFolder(dataDir, ws!)).toBeUndefined()
+    const c = await createToolContext({
+      config: { dataDir, imageProvider: 'mock', previewPx: 0 },
+      providers: { mock: new MockProvider() },
+      log: silentLogger,
+      projectStart: join(wt, 'app'),
+    })
+    expect(c.session.duplicateOf).toBeUndefined()
+    await expect(runTool('art_create', { name: 'Hero' }, c)).resolves.toBeDefined()
+  })
+
+  it('instructions name the other folder', async () => {
+    const ws = (await detectWorkspace({ start: folder, dataDir }))!
+    expect(serverInstructions({ workspace: ws, arts: [], legacyCount: 0, duplicateOf: folder })).toContain(
+      folder,
+    )
+  })
 })

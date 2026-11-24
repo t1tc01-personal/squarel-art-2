@@ -5,7 +5,7 @@ import { defaultProviders, type ProviderMap, ProviderRouter } from '../providers
 import type { Source } from '../shared/types.ts'
 import { Store } from '../store/store.ts'
 import { UsageLog } from '../store/usage.ts'
-import { artsDirOf, detectWorkspace } from '../store/workspace.ts'
+import { artsDirOf, detectWorkspace, duplicateProjectFolder } from '../store/workspace.ts'
 import type { EditorHost, ToolContext } from './types.ts'
 
 export interface CreateContextOptions {
@@ -32,9 +32,11 @@ export async function createToolContext(o: CreateContextOptions = {}): Promise<T
   const workspace = o.projectStart
     ? await detectWorkspace({ start: o.projectStart, dataDir: config.dataDir, log })
     : undefined
-  const arts = workspace
-    ? new Store(artsDirOf(workspace), { log, project: workspace, readOnly: o.readOnly })
-    : undefined
+  const duplicateOf = workspace ? await duplicateProjectFolder(config.dataDir, workspace) : undefined
+  const readOnly = duplicateOf
+    ? `Project id "${workspace?.id}" is also used by ${duplicateOf}. Change the id in .squarel/project.json (or in Squarel Art Launcher → project → Cài đặt) to keep drawing here.`
+    : o.readOnly
+  const arts = workspace ? new Store(artsDirOf(workspace), { log, project: workspace, readOnly }) : undefined
   const router = new ProviderRouter(config, usage, o.providers ?? defaultProviders(config, o.fetchImpl))
   return {
     arts,
@@ -43,7 +45,7 @@ export async function createToolContext(o: CreateContextOptions = {}): Promise<T
     router,
     config,
     log,
-    session: { workspace },
+    session: { workspace, duplicateOf },
     source: o.source ?? 'claude',
     editor: o.editor,
   }
