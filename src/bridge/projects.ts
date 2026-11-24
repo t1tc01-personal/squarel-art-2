@@ -64,6 +64,8 @@ export class ProjectDirectory {
   }
 
   async get(id: string): Promise<KnownProject> {
+    // A recorded duplicate may have been fixed since: re-scan before throwing.
+    if (this.duplicates.has(id)) await this.scan()
     this.throwIfDuplicate(id)
     const home = this.known.get(id)
     if (home) {

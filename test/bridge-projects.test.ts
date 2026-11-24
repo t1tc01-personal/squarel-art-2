@@ -125,6 +125,18 @@ describe('ProjectDirectory', () => {
     expect(k.store.project?.name).toBe('New name')
   })
 
+  it('a recorded duplicate resolves again once the copy is gone', async () => {
+    const a = project(join(t.dir, 'a', NAME), 'game')
+    index(a, 'game')
+    const b = project(join(t.dir, 'b', NAME), 'game')
+    presence(b, 'game')
+    const d = dir()
+    await d.refresh()
+    expect(((await code(d.get('game'))) as ToolError).code).toBe('DUPLICATE_PROJECT')
+    rmSync(join(t.dir, 'b'), { recursive: true })
+    expect((await d.get('game')).home).toBe(a)
+  })
+
   it('a cached id turns DUPLICATE_PROJECT once a refresh sees a copy', async () => {
     const a = project(join(t.dir, 'a', NAME), 'game')
     index(a, 'game')
