@@ -39,6 +39,48 @@
 
   --brand-launch-more: #3a3410;
   --accent-aseprite: #ff77a8;
+  --text-on-brand: #0d0e12;
+  --accent-brand-ink: #ffec27;
+  /** Left-to-right wash over the banner art that keeps the title readable (none on the night sky). */
+  --banner-shade: transparent;
+  color-scheme: dark;
+}
+
+/*
+ * Light palette = Figma "Launcher tokens" · Light. Main sets nativeTheme.themeSource from the
+ * Giao diện setting, so this media query follows "Sáng" / "Tối" / "Theo hệ thống".
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-app: #f3f4f8;
+    --bg-sidebar: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-surface-2: #eceef3;
+    --bg-input: #f8f9fb;
+    --border-default: #dde0e7;
+    --border-strong: #c3c8d2;
+    --text-primary: #14161c;
+    --text-secondary: #4b5262;
+    --text-muted: #6a7181;
+    --text-on-accent: #ffffff;
+    --accent-primary: #0b72c4;
+    --accent-primary-soft: #dcecfa;
+    --accent-brand: #d89c00;
+    --status-ok: #067a2e;
+    --status-ok-soft: #dcf5e4;
+    --status-warn: #a85f00;
+    --status-warn-soft: #fdeccc;
+    --status-error: #d4003f;
+    --status-error-soft: #fde0e8;
+    --status-idle: #6a7181;
+    --status-idle-soft: #eceef3;
+
+    --brand-launch-more: #f6e3a3;
+    --text-on-brand: #14161c;
+    --accent-brand-ink: #7a5200;
+    --banner-shade: linear-gradient(90deg, rgb(246 248 251 / 0.92), rgb(246 248 251 / 0.25) 60%, transparent);
+    color-scheme: light;
+  }
 }
 
 * {

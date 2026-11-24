@@ -99,6 +99,32 @@ button:disabled {
   padding-right: 4px;
 }
 
+.theme-toggle {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  margin: 0 6px 0 0;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-app);
+}
+.theme-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+.theme-btn:hover {
+  color: var(--text-primary);
+}
+.theme-btn.is-active {
+  background: var(--bg-surface-2);
+  color: var(--accent-brand);
+}
+
 .winbtn {
   display: grid;
   place-items: center;
@@ -610,7 +636,7 @@ button:disabled {
   padding: 16px 24px 16px 28px;
   border-radius: var(--radius-lg);
   background: var(--accent-brand);
-  color: var(--text-on-accent);
+  color: var(--text-on-brand);
   font: 600 20px / 28px var(--font-ui);
 }
 .launch-more {
@@ -619,7 +645,7 @@ button:disabled {
   place-items: center;
   border-radius: var(--radius-lg);
   background: var(--brand-launch-more);
-  color: var(--accent-brand);
+  color: var(--accent-brand-ink);
 }
 .launch-main:hover:not(:disabled),
 .launch-more:hover {

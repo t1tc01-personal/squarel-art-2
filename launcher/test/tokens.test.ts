@@ -17,4 +17,19 @@ describe('tokens.css', () => {
   ])('defines %s as %s', (name, value) => {
     expect(css).toContain(`${name}: ${value};`)
   })
+
+  it('has a light palette (Figma "Launcher tokens" · Light) behind prefers-color-scheme: light', () => {
+    const at = css.indexOf('@media (prefers-color-scheme: light)')
+    expect(at).toBeGreaterThan(0)
+    const light = css.slice(at)
+    for (const [name, value] of [
+      ['--bg-app', '#f3f4f8'],
+      ['--bg-surface', '#ffffff'],
+      ['--text-primary', '#14161c'],
+      ['--accent-primary', '#0b72c4'],
+      ['--accent-brand', '#d89c00'],
+      ['--status-ok', '#067a2e'],
+    ])
+      expect(light).toContain(`${name}: ${value};`)
+  })
 })

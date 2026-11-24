@@ -2,7 +2,7 @@ import { appendFile, mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import type { EventName, EventPayload } from '../shared/ipc'
 import { type BridgeSupervisor, createBridgeSupervisor } from './bridge/supervisor'
 import type { BridgeState } from './bridge/types'
@@ -21,13 +21,20 @@ import {
 } from './orphan'
 import { appPaths } from './paths'
 import { createScheduler } from './scheduler'
-import { type LauncherState, loadState, saveState } from './state'
+import { type LauncherState, loadState, saveState, type Theme } from './state'
 import { createTray, type LauncherTray } from './tray'
 import type { TrayAction } from './tray-menu'
 import { createElectronUpdaterAdapter } from './updates/electron-updater'
 import { createLauncherUpdater } from './updates/launcher'
 
-const BG_APP = '#0D0E12'
+const BG_APP = { dark: '#0D0E12', light: '#F3F4F8' } as const
+
+/** Giao diện → nativeTheme, which drives prefers-color-scheme in the renderer (tokens.css). */
+function applyTheme(theme: Theme | undefined): void {
+  nativeTheme.themeSource = theme ?? 'dark'
+  const bg = nativeTheme.shouldUseDarkColors ? BG_APP.dark : BG_APP.light
+  for (const w of BrowserWindow.getAllWindows()) w.setBackgroundColor(bg)
+}
 
 const RENDERER_FILE = join(import.meta.dirname, '../renderer/index.html')
 
@@ -158,7 +165,7 @@ function createWindow(show: boolean): BrowserWindow {
     frame: false,
     resizable: false,
     show: false,
-    backgroundColor: BG_APP,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? BG_APP.dark : BG_APP.light,
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.js'),
       sandbox: true,
@@ -312,6 +319,7 @@ async function startServices(): Promise<IpcHandlers> {
   if (fake) state = { ...state, ...fake.state }
   closeToTray = state.closeToTray
   applyAutostart(state.autostart)
+  applyTheme(state.theme)
   const readPort = async (): Promise<number> => {
     if (TEST_BRIDGE_PORT !== undefined) return TEST_BRIDGE_PORT
     if (!state.squarelDir) return DEFAULT_BRIDGE_PORT
@@ -468,10 +476,12 @@ async function startServices(): Promise<IpcHandlers> {
       save: async (s) => {
         const dirChanged = s.squarelDir !== state.squarelDir
         const autostartChanged = s.autostart !== state.autostart
+        const themeChanged = s.theme !== state.theme
         await saveState(paths.stateFile, s)
         state = s
         closeToTray = s.closeToTray
         if (autostartChanged) applyAutostart(s.autostart)
+        if (themeChanged) applyTheme(s.theme)
         if (dirChanged) restartBridge()
       },
     },

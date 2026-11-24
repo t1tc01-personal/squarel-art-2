@@ -128,8 +128,31 @@
   width: 100%;
   height: 100%;
 }
+.banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--banner-shade);
+  pointer-events: none;
+}
+/* One SVG holds both skies; the colour scheme picks which one is drawn. */
+.banner-day {
+  display: none;
+}
+@media (prefers-color-scheme: light) {
+  .banner {
+    background: #d3ecff;
+  }
+  .banner-night {
+    display: none;
+  }
+  .banner-day {
+    display: inline;
+  }
+}
 .banner-body {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;

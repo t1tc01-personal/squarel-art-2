@@ -9,6 +9,7 @@ import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { StatusPill } from '../components/StatusPill'
 import { SubTabs } from '../components/SubTabs'
+import { THEME_TABS, useTheme } from '../theme'
 
 type Drafts = Partial<Record<EnvKey, string>>
 
@@ -64,6 +65,7 @@ function Toggle({
 
 export function Settings() {
   const { state, setState, components } = useData()
+  const { theme, setTheme } = useTheme()
   const { notify } = useTasks()
   const [env, setEnv] = useState<EnvView | null>(null)
   const [drafts, setDrafts] = useState<Drafts>({})
@@ -250,6 +252,13 @@ export function Settings() {
               {secretField('RETRO_DIFFUSION_API_KEY', 'Retro Diffusion key')}
               {plainField('IMAGE_DAILY_BUDGET_USD', 'Trần chi phí / ngày (USD)', { inputMode: 'decimal' })}
             </div>
+          </Card>
+          <Card title="Giao diện">
+            <SubTabs tabs={THEME_TABS} active={theme} onSelect={(t) => void setTheme(t)} label="Giao diện" />
+            <p className="field-hint">
+              Đổi nhanh bằng nút mặt trời / mặt trăng trên thanh tiêu đề. "Theo hệ thống" bám chế độ sáng/tối
+              của Windows.
+            </p>
           </Card>
         </div>
         <div className="settings-col">

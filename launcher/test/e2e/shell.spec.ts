@@ -141,3 +141,29 @@ test('custom title bar buttons minimize/close', async () => {
     await close()
   }
 })
+
+test('theme toggle switches the window to light and Cài đặt → Giao diện follows', async () => {
+  const { app, close } = await launchIsolated({ fake: FAKE })
+  try {
+    const page = await app.firstWindow()
+    // Playwright emulates a light colour scheme by default; let nativeTheme decide.
+    await page.emulateMedia({ colorScheme: null })
+    const isLight = () => page.evaluate(() => window.matchMedia('(prefers-color-scheme: light)').matches)
+    const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+    expect(await isLight()).toBe(false)
+    expect(await bg()).toBe('rgb(13, 14, 18)')
+
+    await page.getByRole('button', { name: 'Giao diện sáng' }).click()
+    await expect.poll(isLight).toBe(true)
+    expect(await bg()).toBe('rgb(243, 244, 248)')
+    await expect(page.getByRole('button', { name: 'Giao diện sáng' })).toHaveAttribute('aria-pressed', 'true')
+
+    await rail(page).getByRole('button', { name: 'Cài đặt' }).click()
+    const tabs = page.getByRole('tablist', { name: 'Giao diện' })
+    await expect(tabs.getByRole('tab', { name: 'Sáng' })).toHaveAttribute('aria-selected', 'true')
+    await tabs.getByRole('tab', { name: 'Tối' }).click()
+    await expect.poll(isLight).toBe(false)
+  } finally {
+    await close()
+  }
+})

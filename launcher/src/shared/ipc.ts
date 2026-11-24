@@ -126,6 +126,7 @@ export const launcherStateSchema = z.object({
   autostart: z.boolean(),
   lastUpdateCheck: z.string().optional(),
   setupCompleted: z.boolean().optional(),
+  theme: z.enum(['system', 'light', 'dark']).optional(),
 })
 export type LauncherStateView = z.infer<typeof launcherStateSchema>
 
@@ -143,6 +144,7 @@ export const statePatchSchema = z
     installChoice: z.record(compId, actionId),
     closeToTray: z.boolean(),
     autostart: z.boolean(),
+    theme: z.enum(['system', 'light', 'dark']),
   })
   .partial()
 export type StatePatch = z.infer<typeof statePatchSchema>

@@ -1,6 +1,9 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+export type Theme = 'system' | 'light' | 'dark'
+export const THEMES: readonly Theme[] = ['system', 'light', 'dark']
+
 export interface LauncherState {
   schema: 1
   squarelDir?: string
@@ -11,6 +14,8 @@ export interface LauncherState {
   closeToTray: boolean
   autostart: boolean
   lastUpdateCheck?: string
+  /** Giao diện: absent = 'dark' (the launcher's look before light mode existed). */
+  theme?: Theme
   /** Set once the wizard reached "done"; a returning user skips steps 3–4 (main only). */
   setupCompleted?: boolean
 }
@@ -57,6 +62,7 @@ export async function loadState(file: string): Promise<LauncherState> {
   if (typeof r.autostart === 'boolean') s.autostart = r.autostart
   if (typeof r.lastUpdateCheck === 'string') s.lastUpdateCheck = r.lastUpdateCheck
   if (r.setupCompleted === true) s.setupCompleted = true
+  if (THEMES.includes(r.theme as Theme)) s.theme = r.theme as Theme
   return s
 }
 

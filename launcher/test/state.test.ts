@@ -37,6 +37,7 @@ describe('state', () => {
       selected: ['aseprite'],
       installChoice: { aseprite: 'build' },
       autostart: true,
+      theme: 'system',
     }
     await saveState(p.stateFile, s)
     expect(await loadState(p.stateFile)).toEqual(s)
@@ -54,6 +55,8 @@ describe('state', () => {
     }
     await writeFile(f, '{"schema":1,"setupStep":9,"selected":"x","closeToTray":"no"}')
     expect(await loadState(f)).toEqual(DEFAULTS)
+    await writeFile(f, '{"schema":1,"setupStep":1,"theme":"neon"}')
+    expect((await loadState(f)).theme).toBeUndefined()
     expect(JSON.parse(await readFile(f, 'utf8')).schema).toBe(1)
   })
 })

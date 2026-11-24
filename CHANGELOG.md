@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-11-25
+
+### Added
+
+- Launcher: light mode. Cài đặt → Giao diện chooses "Theo hệ thống", "Sáng" or "Tối", and the sun / moon switch in the title bar flips between light and dark. The light palette matches the Figma "Launcher tokens" · Light mode, and the banner shows a day sky (sun, clouds, green hills). Existing installs keep the dark look until the setting is changed.
+
 ## [0.4.5] - 2026-11-24
 
 ### Fixed
@@ -153,7 +159,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.2...v0.4.3

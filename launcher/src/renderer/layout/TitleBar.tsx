@@ -1,5 +1,35 @@
 import { api } from '../api'
-import { Logo } from '../components/Icon'
+import { Icon, Logo } from '../components/Icon'
+import { useTheme } from '../theme'
+
+/** Sun / moon switch (Figma ThemeToggle); "Theo hệ thống" stays a choice in Cài đặt → Giao diện. */
+function ThemeToggle() {
+  const { isLight, setTheme } = useTheme()
+  return (
+    <fieldset className="theme-toggle" aria-label="Giao diện">
+      <button
+        type="button"
+        className={`theme-btn${isLight ? ' is-active' : ''}`}
+        aria-pressed={isLight}
+        aria-label="Giao diện sáng"
+        title="Giao diện sáng"
+        onClick={() => void setTheme('light')}
+      >
+        <Icon name="sun" size={14} />
+      </button>
+      <button
+        type="button"
+        className={`theme-btn${isLight ? '' : ' is-active'}`}
+        aria-pressed={!isLight}
+        aria-label="Giao diện tối"
+        title="Giao diện tối"
+        onClick={() => void setTheme('dark')}
+      >
+        <Icon name="moon" size={14} />
+      </button>
+    </fieldset>
+  )
+}
 
 /** Custom title bar (frameless window): drag region, logo + name, minimize / maximize / close. */
 export function TitleBar() {
@@ -8,6 +38,7 @@ export function TitleBar() {
       <Logo height={16} className="titlebar-logo" />
       <span className="titlebar-name">Squarel Art Launcher</span>
       <div className="titlebar-buttons">
+        <ThemeToggle />
         <button
           type="button"
           className="winbtn"

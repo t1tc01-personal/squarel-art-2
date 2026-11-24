@@ -151,6 +151,7 @@ describe('ipc handlers', () => {
     // Wrong types and unknown / read-only fields.
     await expect(h.handle('state:set', APP, { closeToTray: 'yes' })).rejects.toThrow(/không hợp lệ/i)
     await expect(h.handle('state:set', APP, { schema: 2 })).rejects.toThrow(/không hợp lệ/i)
+    await expect(h.handle('state:set', APP, { theme: 'neon' })).rejects.toThrow(/không hợp lệ/i)
     await expect(h.handle('state:set', APP, { selected: ['../../evil'] })).rejects.toThrow(/không hợp lệ/i)
     await expect(h.handle('state:set', APP, { squarelDir: 'relative\\dir' })).rejects.toThrow()
     await expect(h.handle('state:set', APP, { squarelDir: ELSEWHERE })).rejects.toThrow(/hộp thoại/)
@@ -179,6 +180,7 @@ describe('ipc handlers', () => {
     })) as LauncherState
     expect(st.closeToTray).toBe(false)
     expect(st.selected).toEqual(['aseprite'])
+    expect(((await h.handle('state:set', APP, { theme: 'light' })) as LauncherState).theme).toBe('light')
     expect(h.channels).toContain('arts:recent')
   })
 

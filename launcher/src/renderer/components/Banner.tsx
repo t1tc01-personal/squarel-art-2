@@ -1,6 +1,7 @@
 /**
  * Pixel banner of design.md: gradient sky, stars, moon, three sine-wave hill layers and a knight,
- * drawn as SVG rects on an 8px grid (generated at runtime, nothing loaded).
+ * drawn as SVG rects on an 8px grid (generated at runtime, nothing loaded). A day version (sun,
+ * clouds, green hills) sits in the same SVG; pages.css shows it for the light colour scheme.
  */
 import type { ReactNode } from 'react'
 
@@ -39,11 +40,27 @@ function hill(base: number, amp: number, period: number, phase: number): { x: nu
     top: Math.round(base + amp * Math.sin((x / period) * Math.PI * 2 + phase)),
   }))
 }
-const HILLS = [
-  { color: '#1D2B53', cols: hill(19, 3, 46, 0.6) },
-  { color: '#3B2A5A', cols: hill(25, 2, 30, 2.1) },
-  { color: '#0F1A2E', cols: hill(30, 1.5, 22, 4) },
+const HILL_SHAPES = [hill(19, 3, 46, 0.6), hill(25, 2, 30, 2.1), hill(30, 1.5, 22, 4)]
+const NIGHT_HILLS = ['#1D2B53', '#3B2A5A', '#0F1A2E']
+const DAY_HILLS = ['#9DB4E6', '#5DB462', '#2E8A4E']
+
+const SUN = ['..####..', '.######.', '########', '########', '########', '########', '.######.', '..####..']
+const CLOUD = ['..###...', '.######.', '########']
+const CLOUDS = [
+  { x: 30, y: 6 },
+  { x: 52, y: 3 },
+  { x: 98, y: 15 },
 ]
+
+function Hills({ colors }: { colors: readonly string[] }) {
+  return HILL_SHAPES.map((cols, i) => (
+    <g key={colors[i]} fill={colors[i]}>
+      {cols.map((c) => (
+        <rect key={c.x} x={c.x} y={c.top} width={1} height={H - c.top} />
+      ))}
+    </g>
+  ))
+}
 
 /** Set pixels of a bitmap as {x, y}. */
 function cells(rows: readonly string[]): { x: number; y: number }[] {
@@ -76,27 +93,41 @@ export function Banner({ children, className }: { children?: ReactNode; classNam
             <stop offset="0" stopColor="#1C2B54" />
             <stop offset="1" stopColor="#0D0F1C" />
           </linearGradient>
+          <linearGradient id="banner-sky-day" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#7CC4FB" />
+            <stop offset="1" stopColor="#D3ECFF" />
+          </linearGradient>
         </defs>
-        <rect width={W} height={H} fill="url(#banner-sky)" />
-        {STARS.map((s) => (
-          <rect
-            key={`${s.x}-${s.y}`}
-            x={s.x}
-            y={s.y}
-            width={s.big ? 1 : 0.5}
-            height={s.big ? 1 : 0.5}
-            fill="#FFF1E8"
-            opacity={s.big ? 0.85 : 0.55}
+        <g className="banner-night">
+          <rect width={W} height={H} fill="url(#banner-sky)" />
+          {STARS.map((s) => (
+            <rect
+              key={`${s.x}-${s.y}`}
+              x={s.x}
+              y={s.y}
+              width={s.big ? 1 : 0.5}
+              height={s.big ? 1 : 0.5}
+              fill="#FFF1E8"
+              opacity={s.big ? 0.85 : 0.55}
+            />
+          ))}
+          <Sprite rows={MOON} x={86} y={5} color="#FFEC27" />
+          <Hills colors={NIGHT_HILLS} />
+        </g>
+        <g className="banner-day">
+          <rect width={W} height={H} fill="url(#banner-sky-day)" />
+          {CLOUDS.map((c) => (
+            <Sprite key={`${c.x}-${c.y}`} rows={CLOUD} x={c.x} y={c.y} color="#FFFFFF" />
+          ))}
+          <Sprite rows={SUN} x={86} y={5} color="#FFA300" />
+          <Sprite
+            rows={['.####.', '######', '######', '######', '######', '.####.']}
+            x={87}
+            y={6}
+            color="#FFEC27"
           />
-        ))}
-        <Sprite rows={MOON} x={86} y={5} color="#FFEC27" />
-        {HILLS.map((h) => (
-          <g key={h.color} fill={h.color}>
-            {h.cols.map((c) => (
-              <rect key={c.x} x={c.x} y={c.top} width={1} height={H - c.top} />
-            ))}
-          </g>
-        ))}
+          <Hills colors={DAY_HILLS} />
+        </g>
         <Sprite rows={KNIGHT} x={76} y={22} color="#29ADFF" />
       </svg>
       <div className="banner-body">{children}</div>
