@@ -152,7 +152,7 @@ export class Store {
 
   /** Create the root (and, for a project store, its .gitignore unless one exists). */
   async init(): Promise<void> {
-    this.assertWritable()
+    if (this.readOnly) return
     await mkdir(this.root, { recursive: true })
     if (this.project) {
       const ignore = join(this.root, '.gitignore')
@@ -190,6 +190,7 @@ export class Store {
     source: Source
     slug?: string
   }): Promise<ProjectInfo> {
+    this.assertWritable()
     await this.init()
     validateDoc(o.doc)
     const base = o.slug ?? slugify(o.name)

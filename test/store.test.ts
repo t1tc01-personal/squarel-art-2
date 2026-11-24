@@ -151,10 +151,35 @@ describe('store', () => {
     await expect(s.createProject({ name: 'x', doc: spriteDoc(), source: 'claude' })).rejects.toThrow(
       'legacy art',
     )
-    await expect(s.writeProjectFile('x', 'a.txt', 'a')).rejects.toThrow('legacy art')
-    await expect(
+    const meta = {
+      id: 'p_x',
+      createdAt: '',
+      kind: 'generate' as const,
+      baseVersion: '',
+      request: {},
+      provider: 'mock',
+      model: 'mock',
+      costUsd: 0,
+      variants: [],
+      status: 'open' as const,
+    }
+    const writes: Promise<unknown>[] = [
+      s.writeProjectFile('x', 'a.txt', 'a'),
       s.commit('x', { baseVersion: '', doc: spriteDoc(), source: 'claude', label: 'l' }),
-    ).rejects.toThrow('legacy art')
+      s.withHead('x', 'claude', 'l', () => {}),
+      s.restore('x', 'v000001', 'claude'),
+      s.undo('x', 'claude'),
+      s.saveProposal('x', meta, {}),
+      s.updateProposal('x', meta),
+    ]
+    for (const w of writes) await expect(w).rejects.toThrow('legacy art')
+  })
+
+  it('init on a readOnly store is a no-op that creates nothing', async () => {
+    const root = join(t.dir, 'legacy-missing')
+    const ws = { id: 'w', name: 'W', folder: t.dir, home: t.dir, config: {} } as unknown as Workspace
+    await expect(new Store(root, { readOnly: 'r', project: ws }).init()).resolves.toBeUndefined()
+    expect(existsSync(root)).toBe(false)
   })
 
   it('the catalog goes to <home>/.squarel/arts.md', async () => {
