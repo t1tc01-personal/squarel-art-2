@@ -258,9 +258,18 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
     nodeOk,
   })
   const actions: ActionRef[] = []
-  // Squarel moves to the launcher's own tag (updates:apply / squarel:update); offered only when newer.
-  if (c.id === 'squarel' && lv.level === 'warn')
+  // Squarel only ever moves to the launcher's own tag (updates:apply / squarel:update), so a newer
+  // tag than the launcher is reached by updating the launcher first: no button that would do nothing.
+  const squarelUpdatable =
+    c.id === 'squarel' && !ctx.isDev && !!det.version && compareVersions(ctx.launcherVersion, det.version) > 0
+  if (squarelUpdatable)
     actions.push({ componentId: 'squarel', kind: 'update', id: 'update', label: 'Cập nhật' })
+  const squarelWaits = c.id === 'squarel' && lv.level === 'warn' && !squarelUpdatable
+  const launcherFound =
+    c.id === 'launcher' &&
+    !ctx.launcherUpdateReady &&
+    !!ctx.launcherLatest &&
+    compareVersions(ctx.launcherLatest, ctx.launcherVersion) > 0
   // The launcher's own update is offered only once electron-updater downloaded it.
   if (c.id === 'launcher' && ctx.launcherUpdateReady)
     actions.push({
@@ -301,6 +310,10 @@ async function viewCore(c: CoreComponent, ctx: Ctx, d: Deps): Promise<ComponentV
     ...(det.version ? { version: det.version } : {}),
     ...latestFields(latest),
     ...lv,
+    ...(squarelWaits ? { levelLabel: 'Cập nhật launcher trước' } : {}),
+    ...(launcherFound
+      ? { latest: ctx.launcherLatest, level: 'warn' as const, levelLabel: 'Đang tải bản mới' }
+      : {}),
     ...(c.id === 'launcher' && ctx.launcherUpdateReady
       ? { latest: ctx.launcherUpdateReady, level: 'warn' as const, levelLabel: 'Đã tải bản mới' }
       : {}),
@@ -418,7 +431,9 @@ export async function viewComponents(
   state: LauncherState,
   envDoc: EnvDoc,
   d: Deps,
-  ctx: Pick<Ctx, 'launcherVersion' | 'isDev' | 'launcherUpdateReady'> & { recentArt?: string },
+  ctx: Pick<Ctx, 'launcherVersion' | 'isDev' | 'launcherUpdateReady' | 'launcherLatest'> & {
+    recentArt?: string
+  },
 ): Promise<ComponentView[]> {
   const full: Ctx = {
     squarelDir: state.squarelDir,
@@ -426,6 +441,7 @@ export async function viewComponents(
     isDev: ctx.isDev,
     env: envDoc,
     ...(ctx.launcherUpdateReady ? { launcherUpdateReady: ctx.launcherUpdateReady } : {}),
+    ...(ctx.launcherLatest ? { launcherLatest: ctx.launcherLatest } : {}),
   }
   const core = Promise.all(reg.core.map((c) => viewCore(c, full, d)))
   const ints = Promise.all(reg.integrations.map((i) => viewIntegration(i, state, envDoc, d, ctx.recentArt)))

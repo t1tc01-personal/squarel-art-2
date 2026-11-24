@@ -446,6 +446,8 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
     return buildPresence({ dataDir: dataDir(s, env), bridge: ctx.bridge(), reg: await registry(s), env }, d)
   }
 
+  /** Newest launcher version from the last update check (shown while electron-updater downloads it). */
+  let lastLauncherLatest: string | undefined
   async function checkUpdates(): Promise<UpdatesInfo> {
     const s = await getState()
     const launcher = ctx.launcherUpdater
@@ -458,6 +460,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       : Promise.resolve({ kind: 'error', message: 'Chưa chọn thư mục Squarel' })
     const checkedAt = d.now().toISOString()
     const info: UpdatesInfo = { checkedAt, launcher: await launcher, squarel: await squarel }
+    if (info.launcher.ok) lastLauncherLatest = info.launcher.version
     await updateState((st) => ({ ...st, lastUpdateCheck: checkedAt })).catch(() => {})
     push('components:changed', null) // tool rows recompute their `latest`
     return info
@@ -669,6 +672,7 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
         isDev: ctx.isDev,
         ...(recent ? { recentArt: recent } : {}),
         ...(ready ? { launcherUpdateReady: ready } : {}),
+        ...(lastLauncherLatest ? { launcherLatest: lastLauncherLatest } : {}),
       })
     },
     'checks:run': () => runChecksOnce(),

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- Launcher: the Squarel row no longer offers "Cập nhật" when Squarel already matches the launcher. Squarel only moves to the launcher's own tag, so the button did nothing and still reported success. The row now says "Cập nhật launcher trước", and the task text explains it.
+- Launcher: a launcher update found by the update check shows on the launcher row right away ("Đang tải bản mới") while it downloads, not only once the download has finished.
+
 ## [0.4.1] - 2026-11-24
 
 ### Fixed

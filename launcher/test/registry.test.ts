@@ -384,3 +384,54 @@ describe('registry hardening', () => {
     expect(t?.note).toBeTruthy()
   })
 })
+
+describe('launcher and Squarel update rows', () => {
+  const SQD = join('D:', 'sqv')
+  const squarelDeps = (version: string) =>
+    createDeps('fake', {
+      files: { [join(SQD, 'package.json')]: JSON.stringify({ name: 'squarel-art', version }) },
+      run: {
+        'git rev-parse --abbrev-ref HEAD': { code: 0, lines: ['HEAD'] },
+        'git status --porcelain': { code: 0, lines: [] },
+        'git ls-remote --tags --refs https://github.com/t1tc01-personal/squarel-art-2.git': {
+          code: 0,
+          lines: ['0\trefs/tags/v0.4.0', '1\trefs/tags/v0.4.1'],
+        },
+      },
+    })
+  const views = async (version: string, c: Record<string, unknown>) => {
+    const d = squarelDeps(version)
+    const reg = await loadRegistry({ userIntegrationsDir: '/u', platform: 'win32' }, d)
+    const all = await viewComponents(reg, { ...state, squarelDir: SQD }, parseEnv(''), d, {
+      isDev: false,
+      ...c,
+    } as never)
+    return { sq: all.find((v) => v.id === 'squarel'), ln: all.find((v) => v.id === 'launcher') }
+  }
+
+  it('Squarel at the launcher version gets no update button even when a newer tag exists', async () => {
+    const { sq } = await views('0.4.0', { launcherVersion: '0.4.0' })
+    expect(sq?.latest).toBe('0.4.1')
+    expect(sq?.levelLabel).toBe('Cập nhật launcher trước')
+    expect(sq?.actions.some((a) => a.kind === 'update')).toBe(false)
+  })
+
+  it('Squarel older than the launcher is offered the update', async () => {
+    const { sq } = await views('0.4.0', { launcherVersion: '0.4.1' })
+    expect(sq?.level).toBe('warn')
+    expect(sq?.actions.some((a) => a.kind === 'update')).toBe(true)
+  })
+
+  it('the launcher row shows a found update while it downloads, then offers the restart', async () => {
+    const found = await views('0.4.0', { launcherVersion: '0.4.0', launcherLatest: '0.4.1' })
+    expect(found.ln).toMatchObject({ latest: '0.4.1', level: 'warn', levelLabel: 'Đang tải bản mới' })
+    expect(found.ln?.actions).toHaveLength(0)
+    const ready = await views('0.4.0', {
+      launcherVersion: '0.4.0',
+      launcherLatest: '0.4.1',
+      launcherUpdateReady: '0.4.1',
+    })
+    expect(ready.ln).toMatchObject({ latest: '0.4.1', levelLabel: 'Đã tải bản mới' })
+    expect(ready.ln?.actions.map((a) => a.id)).toEqual(['install'])
+  })
+})

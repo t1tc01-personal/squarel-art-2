@@ -162,7 +162,7 @@ test('launch menu keyboard: arrows rove and wrap, Escape returns focus to ▾', 
   }
 })
 
-test('system → components shows update buttons only where latest > installed', async () => {
+test('system → components: Squarel at the launcher version waits for a launcher update', async () => {
   const { page, close } = await open()
   try {
     await rail(page).getByRole('button', { name: 'Hệ thống' }).click()
@@ -172,19 +172,18 @@ test('system → components shows update buttons only where latest > installed',
     const squarel = rows.and(page.locator('[data-id="squarel"]'))
     await expect(squarel).toContainText('0.4.1')
     await expect(squarel).toContainText('0.4.2')
-    await expect(squarel).toContainText('Có bản mới')
+    // Squarel 0.4.1 = the launcher's version: the newer tag 0.4.2 comes with a launcher update, so
+    // the row says so and offers no button (Squarel only ever moves to the launcher's own tag).
+    await expect(squarel).toContainText('Cập nhật launcher trước')
     const node = rows.and(page.locator('[data-id="node"]'))
     await expect(node).toContainText('24.19.0')
-    // Exactly one update button in the table, on the Squarel row; Node (no newer version) and the
-    // launcher have none; integrations are not listed here.
     const updates = content(page)
       .getByRole('region', { name: 'Thành phần' })
       .getByRole('button', { name: 'Cập nhật' })
-    await expect(updates).toHaveCount(1)
-    await expect(squarel.getByRole('button', { name: 'Cập nhật' })).toBeVisible()
+    await expect(updates).toHaveCount(0)
     await expect(node.getByRole('button')).toHaveCount(0)
     await expect(rows.and(page.locator('[data-id="launcher"]')).getByRole('button')).toHaveCount(0)
-    await expect(content(page).getByRole('button', { name: 'Cập nhật (1)' })).toBeVisible()
+    await expect(content(page).getByRole('button', { name: 'Cập nhật (1)' })).toHaveCount(0)
     await expect(rows.and(page.locator('[data-id="aseprite"]'))).toHaveCount(0)
     await settle(page)
     await page.screenshot({ path: `${SHOTS}/task-13-system.png` })

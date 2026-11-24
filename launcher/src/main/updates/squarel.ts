@@ -155,7 +155,12 @@ export async function applySquarelUpdate(
   const fail = (text: string, code?: number) =>
     emit({ taskId, kind: 'error', text: maskCredentials(text), ...(code !== undefined ? { code } : {}) })
   if (plan.kind === 'none')
-    return emit({ taskId, kind: 'done', code: 0, text: 'Squarel đã ở đúng phiên bản' })
+    return emit({
+      taskId,
+      kind: 'done',
+      code: 0,
+      text: 'Squarel đã ở bản đi cùng launcher này. Bản mới hơn cần cập nhật launcher trước.',
+    })
   if (plan.kind === 'blocked') return fail(plan.message)
 
   let gitSteps: string[][]
