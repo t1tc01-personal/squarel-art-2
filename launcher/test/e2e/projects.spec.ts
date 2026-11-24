@@ -93,6 +93,32 @@ test('Dự án: list, create through the form, detail, brief, remove', async () 
     expect(first?.argv.slice(-2)).toEqual(['--add-dir', `${ROOT}\\shared\\assets`])
     await shot(app, page, 'projects-list.png')
 
+    // A live session declares pixel-sea from another folder: warning on the card, link to Cài đặt.
+    const sea = content(page).getByRole('listitem', { name: 'Biển pixel' })
+    await expect(sea.getByTestId('ws-duplicate')).toContainText(`Trùng mã với ${ROOT}\\work\\pixel-sea-copy`)
+    await expect(dungeon.getByTestId('ws-duplicate')).toHaveCount(0)
+    await sea.getByRole('button', { name: 'Đổi mã' }).click()
+    await expect(h1(page)).toHaveText('Biển pixel')
+    await expect(content(page).getByRole('tab', { name: 'Cài đặt' })).toHaveAttribute('aria-selected', 'true')
+    await content(page).getByLabel('Mã dự án').fill('Bad Id')
+    await content(page).getByRole('button', { name: 'Lưu', exact: true }).click()
+    await expect(content(page)).toContainText('Mã chỉ gồm chữ thường')
+    await content(page).getByLabel('Mã dự án').fill('bien-pixel')
+    await content(page).getByRole('button', { name: 'Lưu', exact: true }).click()
+    await expect(page.locator('.toast').filter({ hasText: 'Đã ghi .squarel/project.json' })).toBeVisible()
+    await expect(h1(page)).toHaveText('Biển pixel')
+    await expect(content(page).getByLabel('Mã dự án')).toHaveValue('bien-pixel')
+    await expect(content(page).getByRole('alert')).toHaveCount(0)
+    expect(
+      JSON.parse((await file(app, `${ROOT}\\work\\pixel-sea\\.squarel\\project.json`)) ?? 'null').id,
+    ).toBe('bien-pixel')
+    expect(await file(app, `${ROOT}\\data\\workspaces\\pixel-sea.json`)).toBeNull()
+    expect(await file(app, `${ROOT}\\data\\workspaces\\bien-pixel.json`)).not.toBeNull()
+    await content(page).getByRole('button', { name: '← Dự án' }).click()
+    await expect(h1(page)).toHaveText('Dự án')
+    await expect(content(page).getByRole('listitem', { name: 'Biển pixel' })).toBeVisible()
+    await expect(content(page).getByTestId('ws-duplicate')).toHaveCount(0)
+
     // ---- Dự án mới -----------------------------------------------------------------------------
     await content(page).getByRole('button', { name: 'Dự án mới', exact: true }).click()
     await expect(h1(page)).toHaveText('Dự án mới')
@@ -108,8 +134,14 @@ test('Dự án: list, create through the form, detail, brief, remove', async () 
 
     const info = content(page).getByRole('region', { name: 'Thông tin' })
     await info.getByLabel('Tên dự án').fill('Rừng đêm')
+    // A linked git worktree is refused right under the folder field, naming the main checkout.
+    await stubDialog(app, `${ROOT}\\work\\wt-copy`)
+    await info.getByRole('button', { name: 'Chọn…' }).click()
+    await expect(info).toContainText('Thư mục này là một git worktree. Hãy chọn thư mục dự án ở bản chính:')
+    await expect(info).toContainText(`${ROOT}\\work\\main-repo`)
     await stubDialog(app, `${ROOT}\\work\\parent`)
     await info.getByRole('button', { name: 'Chọn…' }).click()
+    await expect(info).not.toContainText('git worktree')
     await expect(info.getByLabel('Thư mục dự án')).toHaveValue(`${ROOT}\\work\\parent`)
     await info.getByLabel('Tạo thư mục con (tuỳ chọn)').fill('rung-dem')
     const folder = `${ROOT}\\work\\parent\\rung-dem`

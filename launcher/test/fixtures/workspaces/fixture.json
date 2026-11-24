@@ -36,6 +36,31 @@
       "folder": "{root}\\work\\gone",
       "createdAt": "2025-11-01T09:00:00.000Z"
     },
+    "{root}/data/workspaces/pixel-sea.json": {
+      "schema": 1,
+      "id": "pixel-sea",
+      "name": "Biển pixel",
+      "folder": "{root}\\work\\pixel-sea",
+      "createdAt": "2025-11-15T09:00:00.000Z"
+    },
+    "{root}/work/pixel-sea/.squarel/project.json": {
+      "schema": 1,
+      "id": "pixel-sea",
+      "name": "Biển pixel"
+    },
+    "{root}/data/run/mcp-4102.json": {
+      "pid": 4102,
+      "cwd": "{root}\\work\\pixel-sea-copy",
+      "updatedAt": "2026-01-01T11:59:58.000Z",
+      "workspace": {
+        "id": "pixel-sea",
+        "name": "Biển pixel",
+        "folder": "{root}\\work\\pixel-sea-copy"
+      }
+    },
+    "{root}/work/main-repo/.git/HEAD": "ref: refs/heads/main\n",
+    "{root}/work/main-repo/.git/worktrees/wt/commondir": "../..\n",
+    "{root}/work/wt-copy/.git": "gitdir: {root}/work/main-repo/.git/worktrees/wt\n",
     "{root}/work/game-dungeon/.squarel/project.json": {
       "schema": 1,
       "id": "game-dungeon",
@@ -146,7 +171,8 @@
     "claude": "{root}\\bin\\claude.exe"
   },
   "alivePids": [
-    4101
+    4101,
+    4102
   ],
   "bridge": {
     "mode": "down",

@@ -698,6 +698,71 @@ describe('squarel_art, worktree, id', () => {
   })
 })
 
+describe('changing the id survives a failing write', () => {
+  const start = () =>
+    world({
+      'D:\\p\\.squarel\\project.json': json({ schema: 1, id: 'p', name: 'P' }),
+      [`${DATA}\\workspaces\\p.json`]: json({ schema: 1, id: 'p', name: 'P', folder: 'D:\\p' }),
+    })
+  /** The same world, but writes to a path containing `failOn` (or removal of it) throw. */
+  const failing = (w: ReturnType<typeof start>, failOn: string, op: 'writeFile' | 'rm'): WorkspaceCtx => {
+    const fs = w.d.fs
+    const boom = () => Object.assign(new Error('EIO'), { code: 'EIO' })
+    return {
+      ...w.ctx,
+      d: {
+        ...w.d,
+        fs: {
+          ...fs,
+          writeFile: (async (p: string, data: string, o: unknown) => {
+            if (op === 'writeFile' && String(p).includes(failOn)) throw boom()
+            return fs.writeFile(p, data, o as 'utf8')
+          }) as typeof fs.writeFile,
+          rm: (async (p: string, o: unknown) => {
+            if (op === 'rm' && String(p).includes(failOn)) throw boom()
+            return fs.rm(p, o as { force: boolean })
+          }) as typeof fs.rm,
+        },
+      },
+    }
+  }
+  const cfgId = async (w: ReturnType<typeof start>) =>
+    JSON.parse((await w.read('D:\\p\\.squarel\\project.json')) ?? '').id
+
+  it('new index write fails: nothing changed, the project still opens as p', async () => {
+    const w = start()
+    await expect(
+      updateWorkspace(failing(w, 'workspaces\\p-new', 'writeFile'), 'p', { id: 'p-new' }),
+    ).rejects.toThrow(/EIO/)
+    expect(await cfgId(w)).toBe('p')
+    expect((await getWorkspace(w.ctx, 'p')).status).toBe('ok')
+    expect((await listWorkspaces(w.ctx)).map((x) => x.id)).toEqual(['p'])
+  })
+
+  it('project.json write fails: the new index is removed, the project still opens as p', async () => {
+    const w = start()
+    await expect(
+      updateWorkspace(failing(w, 'project.json', 'writeFile'), 'p', { id: 'p-new' }),
+    ).rejects.toThrow(/EIO/)
+    expect(await cfgId(w)).toBe('p')
+    expect(await w.read(`${DATA}\\workspaces\\p-new.json`)).toBeUndefined()
+    expect((await getWorkspace(w.ctx, 'p')).status).toBe('ok')
+    expect((await listWorkspaces(w.ctx)).map((x) => x.id)).toEqual(['p'])
+  })
+
+  it('removing the old index fails: the project opens as p-new, the leftover entry is the only mess', async () => {
+    const w = start()
+    await expect(
+      updateWorkspace(failing(w, 'workspaces\\p.json', 'rm'), 'p', { id: 'p-new' }),
+    ).rejects.toThrow(/EIO/)
+    expect(await cfgId(w)).toBe('p-new')
+    expect((await getWorkspace(w.ctx, 'p-new')).status).toBe('ok')
+    // Retrying the removal (what the user gets by removing the stale entry) leaves one project.
+    await removeWorkspace(w.ctx, 'p')
+    expect((await listWorkspaces(w.ctx)).map((x) => x.id)).toEqual(['p-new'])
+  })
+})
+
 describe('Mở Claude', () => {
   const d = createDeps('fake', {})
   const CMD = 'C:\\Windows\\System32\\cmd.exe'

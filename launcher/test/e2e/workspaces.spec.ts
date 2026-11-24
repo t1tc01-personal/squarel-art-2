@@ -45,13 +45,14 @@ test('workspaces API: list, create with files, open Claude in the folder, remove
     const list = await api<any[]>('listWorkspaces')
     expect(list.map((w) => [w.id, w.status, w.artCount, w.sessions])).toEqual([
       ['game-dungeon', 'ok', 2, 1],
+      ['pixel-sea', 'ok', 0, 1],
       ['old-stickers', 'missing', 0, 0],
     ])
     expect(list[0].recent.map((a: any) => a.slug)).toEqual(['slime', 'kiem-sat'])
     expect(list[0].recent[0].thumb).toMatch(/^data:image\/png;base64,iVBORw0KGgo/)
     expect((await api<any[]>('unassignedArts')).map((a) => a.slug)).toEqual(['hiep-si'])
     const presence = await api<any[]>('getPresence')
-    expect(presence[0].items.map((i: any) => i.title)).toEqual(['Phiên · Game dungeon'])
+    expect(presence[0].items.map((i: any) => i.title)).toEqual(['Phiên · Game dungeon', 'Phiên · Biển pixel'])
 
     // ---- create (folder and outside repo come from the pick dialog) ------------------------------
     const folder = `${ROOT}\\work\\parent\\Trò chơi mới`

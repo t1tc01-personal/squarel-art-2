@@ -937,12 +937,24 @@ export async function updateWorkspace(
       ? { exportDir: patch.exportDir === null ? null : checkExportDir(e.folder, patch.exportDir) }
       : {}),
   }
-  await writeFolderFiles(ctx.d, e.folder, await planFolderFiles(ctx.d, e.folder, c.raw, cfg, false))
+  const writes = await planFolderFiles(ctx.d, e.folder, c.raw, cfg, false)
   const next = { ...e, id: newId, name: cfg.name }
   if (newId !== id) {
+    // The folder and the index must agree at every step, or the project is stuck ("another project
+    // in this folder"): new index first, then project.json (undo the index if that fails), and the
+    // old index last (a leftover old entry is harmless: the folder already says the new id).
     await writeIndex(ctx, next)
+    try {
+      await writeFolderFiles(ctx.d, e.folder, writes)
+    } catch (err) {
+      await ctx.d.fs.rm(indexFile(ctx, newId), { force: true }).catch(() => {})
+      throw err
+    }
     await ctx.d.fs.rm(indexFile(ctx, id), { force: true })
-  } else if (cfg.name !== e.name) await writeIndex(ctx, next)
+  } else {
+    await writeFolderFiles(ctx.d, e.folder, writes)
+    if (cfg.name !== e.name) await writeIndex(ctx, next)
+  }
   return detail(ctx, next)
 }
 
