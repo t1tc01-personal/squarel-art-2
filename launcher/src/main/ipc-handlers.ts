@@ -28,7 +28,7 @@ import {
   type UpdatesInfo,
 } from '../shared/ipc'
 import type { ActionRef, CheckResult, PresenceGroup, TaskEvent } from '../shared/model'
-import { type ActionCtx, type Resolved, resolveAction, squarelUpdate } from './actions'
+import { type ActionCtx, type Resolved, resolveAction, resolveImportArt, squarelUpdate } from './actions'
 import type { BridgeState } from './bridge/types'
 import { type CheckCtx, ON_DEMAND_CHECKS, runChecks } from './checks/runner'
 import type { Deps } from './deps'
@@ -56,10 +56,10 @@ import {
   createWorkspace,
   getWorkspace,
   inspectFolder,
+  legacyArts,
   listWorkspaces,
   openClaude,
   removeWorkspace,
-  unassignedArts,
   updateWorkspace,
   type WorkspaceCtx,
   WorkspaceError,
@@ -849,7 +849,21 @@ export function createIpcHandlers(ctx: IpcContext): IpcHandlers {
       ws(async (c) => {
         await ctx.openFolder(await workspaceFolder(c, id))
       }),
-    'workspaces:unassigned': () => ws((c) => unassignedArts(c)),
+    'arts:legacy': () => ws((c) => legacyArts(c)),
+    'arts:import': async ({ slug, workspaceId }) => {
+      const { actx, secrets } = await actionCtx()
+      const c = await wsCtx()
+      let folder: string
+      try {
+        folder = await workspaceFolder(c, workspaceId)
+        if (!(await legacyArts(c)).some((a) => a.slug === slug))
+          throw new WorkspaceError('Không có art cũ này')
+      } catch (e) {
+        if (e instanceof WorkspaceError) throw new IpcError(e.message)
+        throw e
+      }
+      return startTask(resolveImportArt(actx, slug, folder), secrets)
+    },
     'window:minimize': async () => {
       ctx.window.minimize()
       return undefined

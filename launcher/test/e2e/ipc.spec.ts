@@ -57,7 +57,8 @@ test('window.squarel exposes only the typed API and main validates calls', async
         'removeWorkspace',
         'openWorkspaceClaude',
         'openWorkspaceFolder',
-        'unassignedArts',
+        'legacyArts',
+        'importArt',
       ].sort(),
     )
     expect(r.schema).toBe(1)

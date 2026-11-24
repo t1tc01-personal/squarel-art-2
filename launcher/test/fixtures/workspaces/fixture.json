@@ -123,6 +123,19 @@
     "{root}/work/game-dungeon/squarel_art/slime/thumb.png": "../demo-tool/icon.png"
   },
   "run": {
+    "pnpm cli art_import --slug hiep-si": {
+      "code": 0,
+      "lines": ["Moved \"Hiệp sĩ dungeon\" into Game dungeon as \"hiep-si\" (done)."],
+      "files": {
+        "{root}/work/game-dungeon/squarel_art/hiep-si/project.json": {
+          "slug": "hiep-si",
+          "name": "Hiệp sĩ dungeon",
+          "purpose": "game",
+          "updatedAt": "2025-12-31T10:00:00.000Z",
+          "head": "v000014"
+        }
+      }
+    },
     "{root}\\tools\\aseprite\\Aseprite.exe -b --version": {
       "code": 0,
       "lines": [

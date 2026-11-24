@@ -573,7 +573,7 @@ interface ArtMeta {
 }
 
 const artsDirOf = (folder: string) => join(folder, ART_DIR)
-/** Art of Squarel before the move into project folders (Chưa phân loại). */
+/** Art of Squarel before the move into project folders (Art cũ). */
 const legacyArtsDir = (ctx: WorkspaceCtx) => join(ctx.dataDir, 'projects')
 
 async function readArtsIn(ctx: WorkspaceCtx, dir: string): Promise<ArtMeta[]> {
@@ -768,8 +768,8 @@ export async function getWorkspace(ctx: WorkspaceCtx, id: string): Promise<Works
   return detail(ctx, await entry(ctx, id))
 }
 
-/** Arts still in DATA_DIR/projects ("Chưa phân loại"), newest first; Task 11 replaces this with legacy arts. */
-export async function unassignedArts(ctx: WorkspaceCtx): Promise<ArtView[]> {
+/** Every art still in DATA_DIR/projects ("Art cũ"), newest first; the old `workspace` field is ignored. */
+export async function legacyArts(ctx: WorkspaceCtx): Promise<ArtView[]> {
   const arts = (await readArtsIn(ctx, legacyArtsDir(ctx))).slice(0, 2000)
   const out: ArtView[] = []
   for (const a of arts) out.push(await artView(ctx, legacyArtsDir(ctx), a, false))

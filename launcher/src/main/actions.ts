@@ -429,6 +429,37 @@ function cloneSquarel(ctx: ActionCtx): Resolved {
   }
 }
 
+/**
+ * Moves a legacy art (DATA_DIR/projects/<slug>) into the project folder with Squarel's own CLI.
+ * Starts only from the explicit confirm in the launcher dialog; the output is the visible task log.
+ */
+export function resolveImportArt(ctx: ActionCtx, slug: string, folder: string): Resolved {
+  const dir = ctx.state.squarelDir
+  if (!dir) return { error: 'Chưa chọn thư mục Squarel' }
+  if (!slug || slug.startsWith('-')) return { error: 'Mã art không hợp lệ' }
+  return {
+    key: `squarel:import-art:${slug}`,
+    squarelDir: true,
+    busyText: `Đang chuyển art ${slug}…`,
+    body: async (taskId, emit, signal) => {
+      const code = await runStep(
+        taskId,
+        ['pnpm', 'cli', 'art_import', '--slug', slug],
+        dir,
+        emit,
+        ctx.d,
+        { SQUAREL_PROJECT_DIR: folder },
+        signal,
+      )
+      emit(
+        code === 0
+          ? { taskId, kind: 'done', code: 0, text: `Đã chuyển art ${slug}` }
+          : { taskId, kind: 'error', code, text: `Chuyển art thất bại (mã thoát ${code}), art cũ vẫn còn` },
+      )
+    },
+  }
+}
+
 export function resolveAction(ref: ActionRef, ctx: ActionCtx): Resolved {
   const { componentId: cid, kind, id } = ref
   const unsupported = { error: 'Thao tác không được hỗ trợ' }

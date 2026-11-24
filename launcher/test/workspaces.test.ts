@@ -25,6 +25,7 @@ import {
   ensureClaudeImport,
   getWorkspace,
   inspectFolder,
+  legacyArts,
   listWorkspaces,
   mergeAgentsBlock,
   normalizePalette,
@@ -35,7 +36,6 @@ import {
   renderAgentsBlock,
   sessionTitle,
   slugify,
-  unassignedArts,
   updateWorkspace,
   type WorkspaceConfig,
   type WorkspaceCtx,
@@ -491,7 +491,22 @@ describe('list / get / unassigned', () => {
     expect(a.arts[0]).toMatchObject({ name: 'A2', purpose: 'game', head: 'v000001' })
     expect((await getWorkspace(w.ctx, 'gone')).status).toBe('missing')
     await expect(getWorkspace(w.ctx, 'bad')).rejects.toThrow(/Không có dự án/)
-    expect((await unassignedArts(w.ctx)).map((x) => x.slug)).toEqual(['free'])
+    expect((await legacyArts(w.ctx)).map((x) => x.slug)).toEqual(['free'])
+  })
+
+  it('legacyArts ignores the old workspace field and lists all', async () => {
+    const w = world({
+      ...files,
+      [`${DATA}\\projects\\old\\project.json`]: json({
+        slug: 'old',
+        name: 'OLD',
+        purpose: 'game',
+        updatedAt: '2026-01-06T00:00:00Z',
+        head: 'v000001',
+        workspace: 'a',
+      }),
+    })
+    expect((await legacyArts(w.ctx)).map((x) => x.slug)).toEqual(['old', 'free'])
   })
 
   it('get lists the live sessions of the workspace, busy ones with their tool', async () => {

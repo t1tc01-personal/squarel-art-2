@@ -351,6 +351,41 @@ describe('ipc handlers', () => {
     expect(mine.at(-1)?.kind).toBe('done')
   })
 
+  describe('arts:import', () => {
+    const FOLDER = join(ROOT, 'proj')
+    const argv = 'pnpm cli art_import --slug cat'
+    const files = {
+      [join(DATA, 'workspaces', 'p.json')]: JSON.stringify({ schema: 1, id: 'p', name: 'P', folder: FOLDER }),
+      [join(FOLDER, '.squarel', 'project.json')]: JSON.stringify({ schema: 1, id: 'p', name: 'P' }),
+    }
+
+    it('runs the CLI in the Squarel folder with SQUAREL_PROJECT_DIR', async () => {
+      const { h, d, events } = setup({ files, run: { [argv]: { code: 0, lines: ['Moved'] } } })
+      const calls: { argv: string[]; cwd: string; env?: Record<string, string> }[] = []
+      const run = d.run.bind(d)
+      d.run = (spec) => {
+        calls.push({ argv: spec.argv, cwd: spec.cwd ?? '', env: spec.env })
+        return run(spec)
+      }
+      const taskId = await h.handle('arts:import', APP, { slug: 'cat', workspaceId: 'p' })
+      expect(taskId).toMatch(/^squarel:import-art:cat#/)
+      await h.idle()
+      expect(calls).toEqual([{ argv: argv.split(' '), cwd: SQ, env: { SQUAREL_PROJECT_DIR: FOLDER } }])
+      const last = events.filter((e) => e.event === 'task:event').at(-1)?.payload as { kind: string }
+      expect(last.kind).toBe('done')
+    })
+
+    it('refuses an unknown workspace or slug', async () => {
+      const { h } = setup({ files })
+      await expect(h.handle('arts:import', APP, { slug: 'cat', workspaceId: 'nope' })).rejects.toThrow(
+        /Không có dự án/,
+      )
+      await expect(h.handle('arts:import', APP, { slug: 'ghost', workspaceId: 'p' })).rejects.toThrow(
+        /Không có art cũ/,
+      )
+    })
+  })
+
   it('a fix that succeeds runs the health checks again, so the row shows the new result', async () => {
     const { h, events } = setup()
     await h.handle('checks:run', APP, undefined)

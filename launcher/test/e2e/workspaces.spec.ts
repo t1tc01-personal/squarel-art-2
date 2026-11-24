@@ -50,7 +50,7 @@ test('workspaces API: list, create with files, open Claude in the folder, remove
     ])
     expect(list[0].recent.map((a: any) => a.slug)).toEqual(['slime', 'kiem-sat'])
     expect(list[0].recent[0].thumb).toMatch(/^data:image\/png;base64,iVBORw0KGgo/)
-    expect((await api<any[]>('unassignedArts')).map((a) => a.slug)).toEqual(['hiep-si'])
+    expect((await api<any[]>('legacyArts')).map((a) => a.slug)).toEqual(['hiep-si'])
     const presence = await api<any[]>('getPresence')
     expect(presence[0].items.map((i: any) => i.title)).toEqual(['Phiên · Game dungeon', 'Phiên · Biển pixel'])
 

@@ -49,6 +49,40 @@ async function shot(app: ElectronApplication, page: Page, name: string) {
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1280, 800))
 }
 
+test('Art cũ → Chuyển vào dự án → confirm → task runs', async () => {
+  const { app, close } = await launchIsolated({ fake: FAKE })
+  try {
+    const page = await app.firstWindow()
+    await rail(page).getByRole('button', { name: 'Dự án' }).click()
+    const legacy = content(page).getByTestId('ws-legacy')
+    await legacy.getByRole('button', { name: 'Xem và chuyển…' }).click()
+    await legacy.getByRole('button', { name: 'Chuyển vào dự án…' }).click()
+
+    const dlg = page.getByRole('dialog', { name: 'Chuyển art cũ vào dự án' })
+    await expect(dlg).toContainText('Hiệp sĩ dungeon')
+    await dlg.getByRole('radio', { name: /Game dungeon/ }).check()
+    const target = `${ROOT}\\work\\game-dungeon\\squarel_art`
+    await expect(dlg).toContainText(target)
+    await expect(dlg.getByTestId('import-confirm-text')).toHaveText(
+      `Chuyển "Hiệp sĩ dungeon" vào Game dungeon? Art sẽ được chép sang ${target}, kiểm tra xong mới xoá bản cũ.`,
+    )
+    // Nothing runs before the confirm click.
+    expect((await sink(app)).launched).toHaveLength(0)
+    await dlg.getByRole('button', { name: 'Chuyển vào Game dungeon' }).click()
+    await expect(dlg).toHaveCount(0)
+
+    // The task ran (fake CLI wrote the art into the project folder) and the lists reloaded.
+    await expect(content(page).getByRole('listitem', { name: 'Game dungeon' })).toContainText('3 art')
+    await content(page)
+      .getByRole('listitem', { name: 'Game dungeon' })
+      .getByRole('button', { name: 'Chi tiết' })
+      .click()
+    await expect(content(page).getByRole('listitem', { name: 'Hiệp sĩ dungeon' })).toBeVisible()
+  } finally {
+    await close()
+  }
+})
+
 test('Dự án: list, create through the form, detail, brief, remove', async () => {
   const { app, close } = await launchIsolated({ fake: FAKE })
   try {
@@ -79,10 +113,11 @@ test('Dự án: list, create through the form, detail, brief, remove', async () 
     await expect(missing.getByRole('alert')).toContainText('Không thấy thư mục')
     await expect(missing.getByRole('button')).toHaveText(['Gỡ'])
 
-    const unassigned = content(page).getByRole('listitem', { name: 'Chưa phân loại' })
-    await expect(unassigned).toContainText('1 art tạo trước khi có dự án')
-    await expect(unassigned).toContainText('"chuyển art Hiệp sĩ dungeon vào dự án này"')
-    await expect(unassigned.locator('.ws-thumb')).toHaveCount(1)
+    const legacy = content(page).getByRole('listitem', { name: 'Art cũ' })
+    await expect(legacy).toContainText(
+      '1 art từ bản cũ còn trong DATA_DIR. Chuyển vào một dự án để vẽ tiếp, giữ nguyên lịch sử.',
+    )
+    await expect(legacy.getByRole('button')).toHaveText(['Xem và chuyển…'])
     await expect(content(page).getByRole('listitem', { name: 'Mẹo' })).toContainText('AGENTS.md')
 
     // Mở Claude from the card: cwd = the folder, the outside repo with --add-dir.

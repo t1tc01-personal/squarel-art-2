@@ -476,8 +476,13 @@ export const CHANNELS = {
   /** Visible terminal running claude.exe in the folder, --add-dir for each repo outside it. */
   'workspaces:openClaude': { input: z.strictObject({ id: workspaceId }), output: none },
   'workspaces:openFolder': { input: z.strictObject({ id: workspaceId }), output: none },
-  /** Arts without a workspace ("Chưa phân loại"), newest first. */
-  'workspaces:unassigned': { input: none, output: z.array(artViewSchema).max(2000) },
+  /** Arts still in DATA_DIR/projects ("Art cũ"), newest first. */
+  'arts:legacy': { input: none, output: z.array(artViewSchema).max(2000) },
+  /** Starts the visible task that moves a legacy art into the workspace's squarel_art/; returns the task id. */
+  'arts:import': {
+    input: z.strictObject({ slug: str(64), workspaceId }),
+    output: taskId,
+  },
   'window:minimize': { input: none, output: none },
   /** Hides the window when state.closeToTray, otherwise quits the app. */
   'window:close': { input: none, output: none },
@@ -531,7 +536,8 @@ export interface SquarelApi {
   removeWorkspace(input: { id: string }): Promise<void>
   openWorkspaceClaude(input: { id: string }): Promise<void>
   openWorkspaceFolder(input: { id: string }): Promise<void>
-  unassignedArts(): Promise<ArtView[]>
+  legacyArts(): Promise<ArtView[]>
+  importArt(input: { slug: string; workspaceId: string }): Promise<string>
   minimizeWindow(): Promise<void>
   closeWindow(): Promise<void>
   onPresenceChanged(cb: (groups: PresenceGroup[]) => void): Unsubscribe

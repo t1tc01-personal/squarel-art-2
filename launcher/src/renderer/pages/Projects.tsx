@@ -1,4 +1,4 @@
-/** Dự án: one card per workspace, "Chưa phân loại", "Dự án mới" and a tip (spec §5.2). */
+/** Dự án: one card per workspace, "Art cũ", "Dự án mới" and a tip (spec §5.2). */
 import { useCallback, useEffect, useState } from 'react'
 import type { ArtView, WorkspaceSummary } from '../../shared/ipc'
 import { api } from '../api'
@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon'
 import { StatusPill } from '../components/StatusPill'
 import { ago } from '../format'
 import { useNav } from '../nav'
+import { LegacyCard } from './LegacyArts'
 import { ArtThumb, ConfirmRemove, PURPOSE_LABEL } from './project-ui'
 
 /** Mở Claude in a workspace folder, with a toast either way. */
@@ -102,30 +103,6 @@ function ProjectCard({ w, onRemove }: { w: WorkspaceSummary; onRemove(): void })
   )
 }
 
-function UnassignedCard({ arts }: { arts: ArtView[] }) {
-  const example = arts[0]?.name ?? '<tên>'
-  return (
-    <li className="card ws-card ws-dashed" aria-label="Chưa phân loại" data-testid="ws-unassigned">
-      <h3 className="ws-name ws-name-icon">
-        <Icon name="list" />
-        Chưa phân loại
-      </h3>
-      <p className="ws-desc">
-        {arts.length === 0
-          ? 'Mọi art đều đã thuộc một dự án.'
-          : `${arts.length} art tạo trước khi có dự án. Mở một dự án rồi bảo Claude: "chuyển art ${example} vào dự án này".`}
-      </p>
-      {arts.length > 0 && (
-        <span className="ws-thumbs ws-thumbs-sm">
-          {arts.slice(0, 6).map((a) => (
-            <ArtThumb key={a.slug} art={a} size={32} />
-          ))}
-        </span>
-      )}
-    </li>
-  )
-}
-
 function TipCard() {
   return (
     <li className="card ws-card ws-tip" aria-label="Mẹo">
@@ -143,17 +120,18 @@ function TipCard() {
 
 export function Projects() {
   const { go } = useNav()
-  const { notify } = useTasks()
+  const { notify, track, last } = useTasks()
   const [list, setList] = useState<WorkspaceSummary[] | null>(null)
-  const [unassigned, setUnassigned] = useState<ArtView[]>([])
+  const [legacy, setLegacy] = useState<ArtView[]>([])
+  const [importing, setImporting] = useState<string | null>(null)
   const [removing, setRemoving] = useState<WorkspaceSummary | null>(null)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [l, u] = await Promise.all([api.listWorkspaces(), api.unassignedArts()])
+      const [l, u] = await Promise.all([api.listWorkspaces(), api.legacyArts()])
       setList(l)
-      setUnassigned(u)
+      setLegacy(u)
     } catch (e) {
       setList((cur) => cur ?? [])
       notify({ label: 'Đọc danh sách dự án', kind: 'error', text: errorText(e) })
@@ -162,6 +140,19 @@ export function Projects() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Reload the lists once the import task ends (done or failed: a failure leaves the old art in place).
+  const importEnd = importing ? last[importing]?.kind : undefined
+  useEffect(() => {
+    if (importEnd !== 'done' && importEnd !== 'error') return
+    setImporting(null)
+    void load()
+  }, [importEnd, load])
+
+  const importArt = async (slug: string, workspaceId: string) => {
+    const id = await track(`Chuyển art ${slug}`, () => api.importArt({ slug, workspaceId }))
+    if (id) setImporting(id)
+  }
 
   const remove = async () => {
     if (!removing) return
@@ -214,7 +205,14 @@ export function Projects() {
             {list.map((w) => (
               <ProjectCard key={w.id} w={w} onRemove={() => setRemoving(w)} />
             ))}
-            {(list.length > 0 || unassigned.length > 0) && <UnassignedCard arts={unassigned} />}
+            {legacy.length > 0 && (
+              <LegacyCard
+                arts={legacy}
+                projects={list.filter((w) => w.status === 'ok')}
+                busy={importing !== null}
+                onImport={(slug, id) => void importArt(slug, id)}
+              />
+            )}
             {list.length > 0 && (
               <li className="ws-new-slot">
                 <button
