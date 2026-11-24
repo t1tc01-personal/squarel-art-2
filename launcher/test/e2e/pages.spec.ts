@@ -170,8 +170,8 @@ test('system → components shows update buttons only where latest > installed',
     const rows = content(page).getByTestId('component-row')
     await expect(rows.first()).toBeVisible()
     const squarel = rows.and(page.locator('[data-id="squarel"]'))
-    await expect(squarel).toContainText('0.3.0')
-    await expect(squarel).toContainText('0.3.1')
+    await expect(squarel).toContainText('0.4.0')
+    await expect(squarel).toContainText('0.4.1')
     await expect(squarel).toContainText('Có bản mới')
     const node = rows.and(page.locator('[data-id="node"]'))
     await expect(node).toContainText('24.19.0')
@@ -275,8 +275,8 @@ test('about section shows both versions and opens the bundled LICENSE.md', async
   try {
     await rail(page).getByRole('button', { name: 'Cài đặt' }).click()
     const about = content(page).getByTestId('about')
-    await expect(about).toContainText('Launcherv0.3.0')
-    await expect(about).toContainText('Squarelv0.3.0')
+    await expect(about).toContainText('Launcherv0.4.0')
+    await expect(about).toContainText('Squarelv0.4.0')
     await about.getByRole('button', { name: /LICENSE\.md/ }).click()
     await expect
       .poll(async () => (await sink(app)).opened)
@@ -344,7 +344,7 @@ test('screenshots: home and library', async () => {
     await expect(content(page).getByRole('list', { name: 'Art gần đây' }).getByRole('listitem')).toHaveCount(
       2,
     )
-    await expect(content(page)).toContainText('Squarel Art v0.3.0 đã sẵn sàng')
+    await expect(content(page)).toContainText('Squarel Art v0.4.0 đã sẵn sàng')
     await settle(page)
     await page.screenshot({ path: `${SHOTS}/task-13-home.png` })
     await rail(page).getByRole('button', { name: 'Thư viện tích hợp' }).click()

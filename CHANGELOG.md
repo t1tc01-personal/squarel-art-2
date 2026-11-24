@@ -4,23 +4,61 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-24
+
+### Changed (breaking)
+
+- **Art lives in the project folder.** Each art is now `<project folder>/squarel_art/<art id>/`, with the same layout as before (`project.json`, `versions/`, `proposals/`, `exports/`, `work.aseprite`, `thumb.png`). Squarel creates `squarel_art/` on the first write, together with a `.gitignore` that tracks `project.json` and `versions/` and ignores proposals, exports, the Aseprite work file and thumbnails. Git is a backup only: keep one writer per art. `DATA_DIR` keeps only logs, `usage.jsonl`, session files, `inbox/` and the project registry. The old `DATA_DIR/projects` is now read-only legacy art.
+- **A project is required for art tools.** Art can only be created, edited or exported while Claude (or the CLI) runs inside a project folder. Outside one, art tools fail with instructions to create a project in the launcher (Dự án → Dự án mới) and open Claude in its folder. Tools that do not touch art (`usage_today`, `export_presets`) and `art_list { legacy: true }` still work.
+- **Tools renamed** to match the interface wording (Dự án = project, Art = art):
+
+  | Old | New |
+  |---|---|
+  | `project_list` | `art_list` (art of the current project; `legacy: true` lists old art waiting to move) |
+  | `project_create` | `art_create` |
+  | `project_open` | `art_open` |
+  | `project_info` | `art_info` |
+  | `workspace_info` | `project_info` (describes the Dự án) |
+  | `workspace_add_art` | `art_import` `{ slug }` (moves one legacy art into the current project) |
+
+  `project_list { all: true }` is gone: `art_list` shows the current project's art only.
+- **The `project` parameter is now `art`** on every tool that took an art slug. The old name is not accepted.
+- **Bridge protocol 2 and Aseprite extension 0.4.0.** Messages carry `ref` = `<project id>/<art id>` instead of `slug`, and one bridge serves art from many project folders. An extension that does not declare protocol 2 is refused with `extension-outdated`. Update the extension (launcher Health offers the button), restart Aseprite, and reopen any sprite you had linked with the old extension from the Squarel menu, because its link was a slug.
+- Art that is still in `DATA_DIR/projects` cannot be opened in Aseprite until it is moved into a project.
+
 ### Added
+
+- `art_import` tool and an equivalent CLI command: moves a legacy art, with its history, into the current project. It copies to a temporary folder, verifies file count, size and `head`, renames into `squarel_art/<id>` (adding `-2`, `-3` on a clash), drops the old `workspace` field, and only then deletes the source. Any failure removes the temporary folder and keeps the source.
+- Launcher: the **Art cũ** card (it replaces the Unassigned card, Chưa phân loại) appears while `DATA_DIR/projects` still holds art. Each art has **Chuyển vào dự án…**, which runs the move as a task with progress.
+- Launcher: art lists read from `<folder>/squarel_art`. "Project gần đây" on Home became "Art gần đây", and the Aseprite page picker became "Mở art…". Both gather art from every project, each with its project name, and open art by `ref`. Connections show the open art as `<project>/<art>`.
+- Launcher: new projects get `squarel_art/` and its `.gitignore` (listed in "Launcher sẽ ghi"). Removing a project confirms that art stays in the folder's `squarel_art/`.
+- Git worktree support: a session in a worktree of the project (for example `claude --worktree`) is the same project, and art is written to `squarel_art/` of the main checkout. Server instructions in a worktree say where the real art is.
+- Duplicate project id guard: when two different folders (a copied folder or a second clone) declare the same id, the bridge refuses that id, MCP write tools are blocked and the instructions warn, and the launcher card shows a warning. Fix it by changing the id.
+- Launcher: Settings of a project can change its id, and the registry is updated.
+- Launcher Health checks that the Aseprite extension supports protocol 2, with an update button.
 
 - **Dự án (workspaces):** a project groups many arts and is tied to a folder. Open Claude Code in that folder, or in any subfolder, and Squarel recognises the project on its own.
   - The folder holds `AGENTS.md`, which carries the project's brief for every coding agent. It also holds `CLAUDE.md` with an `@AGENTS.md` import, `.squarel/project.json` (defaults, repos, export folder) and `.squarel/arts.md`, an art catalog Squarel keeps up to date.
   - Squarel's MCP server describes the project in its instructions.
-  - `project_list` shows only the project's art; pass `all: true` to see everything.
-  - `project_create` fills in the project's purpose, size and palette.
-  - New tools `workspace_info` and `workspace_add_art`.
+  - `art_list` shows the project's art.
+  - `art_create` fills in the art's purpose, size and palette from the project.
   - `export` also copies files into the project's export folder.
   - Each art gets a `thumb.png`.
 - Launcher:
-  - A new **Dự án** page with a project list and an Unassigned card (Chưa phân loại).
+  - A new **Dự án** page with a project list.
   - A **Dự án mới** form: folder, description, brief for AI, defaults, attached repos, export folder, and a preview of the files to be written.
   - A project page with Overview, Brief and Settings tabs (Tổng quan, Brief, Cài đặt).
   - **Mở Claude** opens a terminal in the project folder and adds outside repos with `--add-dir`.
   - Sessions in the connections panel show the project name.
   - The launcher never overwrites the user's own text in `AGENTS.md` or `CLAUDE.md`. Removing a project from the launcher keeps its files and art.
+
+### Migration from 0.3.x
+
+1. Update Squarel and the launcher to 0.4.0, then update the Aseprite extension (launcher Health, or reinstall the integration) and restart Aseprite.
+2. Create a project for your art in the launcher (Dự án → Dự án mới), or use an existing one.
+3. Move old art in. Either open the **Art cũ** card in the launcher and press **Chuyển vào dự án…** on each art, or open Claude in the project folder and ask it to run `art_import` with the art's slug (find slugs with `art_list { legacy: true }`).
+4. Update anything of yours that calls the old tool names or the `project` parameter, using the table above.
+5. Reopen sprites in Aseprite from the Squarel menu (Mở art…).
 
 ### Fixed
 
@@ -79,7 +117,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `pnpm aseprite:build` to build Aseprite from source for personal use.
 - CLI and Claude Code skills (`/pixel-new`, `/pixel-from-photo`, `/pixel-export`).
 
-[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/t1tc01-personal/squarel-art-2/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/t1tc01-personal/squarel-art-2/releases/tag/v0.2.0
 [0.1.0]: https://github.com/t1tc01-personal/squarel-art-2/commits/main
